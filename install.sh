@@ -430,31 +430,9 @@ ssl_cert_issue() {
         echo -e "${green}使用现有证书，正在安装...${plain}"
     fi
 
-    # Setup reload command
+    # Setup reload command (use default, no prompt)
     reloadCmd="systemctl restart x-ui || rc-service x-ui restart"
-    echo -e "${green}ACME 默认重载命令: ${yellow}systemctl restart x-ui || rc-service x-ui restart${plain}"
-    echo -e "${green}此命令将在每次签发和续期证书时执行。${plain}"
-    read -rp "是否修改 ACME 重载命令？(y/n): " setReloadcmd
-    if [[ "$setReloadcmd" == "y" || "$setReloadcmd" == "Y" ]]; then
-        echo -e "\n${green}\t1.${plain} 预设: systemctl reload nginx ; systemctl restart x-ui"
-        echo -e "${green}\t2.${plain} 输入自定义命令"
-        echo -e "${green}\t0.${plain} 保持默认重载命令"
-        read -rp "请选择操作: " choice
-        case "$choice" in
-        1)
-            echo -e "${green}重载命令: systemctl reload nginx ; systemctl restart x-ui${plain}"
-            reloadCmd="systemctl reload nginx ; systemctl restart x-ui"
-            ;;
-        2)
-            echo -e "${yellow}建议将 x-ui restart 放在末尾${plain}"
-            read -rp "请输入您的自定义重载命令: " reloadCmd
-            echo -e "${green}重载命令: ${reloadCmd}${plain}"
-            ;;
-        *)
-            echo -e "${green}保持默认重载命令${plain}"
-            ;;
-        esac
-    fi
+    echo -e "${green}ACME 重载命令已设置为默认值。${plain}"
 
     # install the certificate
     local installOutput=""
@@ -499,26 +477,22 @@ ssl_cert_issue() {
     # start panel
     systemctl start x-ui 2>/dev/null || rc-service x-ui start 2>/dev/null
 
-    # Prompt user to set panel paths after successful certificate installation
-    read -rp "是否将此证书设置为面板证书？(y/n): " setPanel
-    if [[ "$setPanel" == "y" || "$setPanel" == "Y" ]]; then
-        local webCertFile="/root/cert/${domain}/fullchain.pem"
-        local webKeyFile="/root/cert/${domain}/privkey.pem"
+    # Automatically set certificate as panel certificate (no prompt)
+    echo -e "${green}正在将证书设置为面板证书...${plain}"
+    local webCertFile="/root/cert/${domain}/fullchain.pem"
+    local webKeyFile="/root/cert/${domain}/privkey.pem"
 
-        if [[ -f "$webCertFile" && -f "$webKeyFile" ]]; then
-            ${xui_folder}/x-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile"
-            echo -e "${green}面板证书路径已设置${plain}"
-            echo -e "${green}证书文件: $webCertFile${plain}"
-            echo -e "${green}密钥文件: $webKeyFile${plain}"
-            echo ""
-            echo -e "${green}访问地址: https://${domain}:${existing_port}/${existing_webBasePath}${plain}"
-            echo -e "${yellow}面板将重启以应用 SSL 证书...${plain}"
-            systemctl restart x-ui 2>/dev/null || rc-service x-ui restart 2>/dev/null
-        else
-            echo -e "${red}错误：未找到域名 $domain 的证书或密钥文件。${plain}"
-        fi
+    if [[ -f "$webCertFile" && -f "$webKeyFile" ]]; then
+        ${xui_folder}/x-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile"
+        echo -e "${green}面板证书路径已设置${plain}"
+        echo -e "${green}证书文件: $webCertFile${plain}"
+        echo -e "${green}密钥文件: $webKeyFile${plain}"
+        echo ""
+        echo -e "${green}访问地址: https://${domain}:${existing_port}/${existing_webBasePath}${plain}"
+        echo -e "${yellow}面板将重启以应用 SSL 证书...${plain}"
+        systemctl restart x-ui 2>/dev/null || rc-service x-ui restart 2>/dev/null
     else
-        echo -e "${yellow}跳过面板证书设置。${plain}"
+        echo -e "${red}错误：未找到域名 $domain 的证书或密钥文件。${plain}"
     fi
     
     return 0
@@ -687,10 +661,14 @@ config_after_install() {
     
     if [[ ${#existing_webBasePath} -lt 4 ]]; then
         if [[ "$existing_hasDefaultCredential" == "true" ]]; then
-            local config_webBasePath=$(gen_random_string 18)
-            local config_username=$(gen_random_string 10)
-            local config_password=$(gen_random_string 10)
+            local config_webBasePath=""
+            local config_username=""
+            local config_password=""
             
+            read -rp "请设置面板用户名（默认 admin）: " config_username
+            config_username=${config_username:-admin}
+            read -rp "请设置面板密码（默认 admin）: " config_password
+            config_password=${config_password:-admin}
             read -rp "是否自定义面板端口？（否则将自动生成随机端口）[y/n]: " config_confirm
             if [[ "${config_confirm}" == "y" || "${config_confirm}" == "Y" ]]; then
                 read -rp "请设置面板端口: " config_port
@@ -698,6 +676,13 @@ config_after_install() {
             else
                 local config_port=$(shuf -i 1024-62000 -n 1)
                 echo -e "${yellow}已生成随机端口: ${config_port}${plain}"
+            fi
+            read -rp "请设置面板访问路径（留空自动生成随机路径）: " config_webBasePath
+            if [[ -z "$config_webBasePath" ]]; then
+                config_webBasePath=$(gen_random_string 18)
+                echo -e "${yellow}已生成随机访问路径: ${config_webBasePath}${plain}"
+            else
+                echo -e "${yellow}面板访问路径: ${config_webBasePath}${plain}"
             fi
             
             ${xui_folder}/x-ui setting -username "${config_username}" -password "${config_password}" -port "${config_port}" -webBasePath "${config_webBasePath}"
