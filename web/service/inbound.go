@@ -2933,6 +2933,444 @@ func (s *InboundService) BatchGenerateInbounds(userId int) ([]*model.Inbound, er
 	return created, nil
 }
 
+// GenerateProtocolInbounds generates inbounds based on selected protocol types.
+// Supported protocols: "vless-reality", "vmess-tcp", "shadowsocks", "trojan-tcp",
+// "vless-ws", "vmess-ws", "vless-grpc", "trojan-ws"
+// Each protocol gets inboundsCount inbounds on consecutive ports starting from basePort.
+func (s *InboundService) GenerateProtocolInbounds(userId int, protocols []string, inboundsCount int) ([]*model.Inbound, error) {
+	var created []*model.Inbound
+
+	for pi, protocol := range protocols {
+		basePort := 44301 + (pi * 100)
+		for i := 0; i < inboundsCount; i++ {
+			port := basePort + i
+
+			var inbound *model.Inbound
+			var err error
+
+			switch protocol {
+			case "vless-reality":
+				inbound, err = s.buildVlessReality(userId, port, i)
+			case "vmess-tcp":
+				inbound, err = s.buildVmessTcp(userId, port, i)
+			case "shadowsocks":
+				inbound, err = s.buildShadowsocks(userId, port, i)
+			case "trojan-tcp":
+				inbound, err = s.buildTrojanTcp(userId, port, i)
+			case "vless-ws":
+				inbound, err = s.buildVlessWs(userId, port, i)
+			case "vmess-ws":
+				inbound, err = s.buildVmessWs(userId, port, i)
+			case "vless-grpc":
+				inbound, err = s.buildVlessGrpc(userId, port, i)
+			case "trojan-ws":
+				inbound, err = s.buildTrojanWs(userId, port, i)
+			default:
+				continue
+			}
+
+			if err != nil {
+				logger.Warning("Failed to build inbound for protocol", protocol, "port", port, ":", err)
+				continue
+			}
+
+			createdInbound, _, err := s.AddInbound(inbound)
+			if err != nil {
+				logger.Warning("Failed to create inbound on port", port, ":", err)
+				continue
+			}
+			created = append(created, createdInbound)
+		}
+	}
+
+	return created, nil
+}
+
+// buildVlessReality builds a VLESS+TCP+Reality+Vision inbound
+func (s *InboundService) buildVlessReality(userId, port, index int) (*model.Inbound, error) {
+	targets := []string{
+		"addons.mozilla.org:443", "www.google.com:443", "www.microsoft.com:443",
+		"www.amazon.com:443", "www.cloudflare.com:443", "www.github.com:443",
+		"www.gitlab.com:443", "www.bing.com:443", "www.yahoo.com:443", "www.wikipedia.org:443",
+	}
+	serverNames := []string{
+		"addons.mozilla.org", "www.google.com", "www.microsoft.com",
+		"www.amazon.com", "www.cloudflare.com", "www.github.com",
+		"www.gitlab.com", "www.bing.com", "www.yahoo.com", "www.wikipedia.org",
+	}
+	ti := index % len(targets)
+
+	clientID := uuid.New().String()
+	email := fmt.Sprintf("vless_reality_%d_%s", port, clientID[:8])
+
+	keyPair, err := s.generateX25519Key()
+	if err != nil {
+		return nil, err
+	}
+
+	shortID := fmt.Sprintf("%08x", uuid.New().ID())
+	if len(shortID) > 8 {
+		shortID = shortID[:8]
+	}
+
+	settings := map[string]any{
+		"clients": []map[string]any{
+			{"id": clientID, "flow": "xtls-rprx-vision", "email": email},
+		},
+		"decryption": "none",
+	}
+	settingsJSON, _ := json.MarshalIndent(settings, "", "  ")
+
+	streamSettings := map[string]any{
+		"network":  "tcp",
+		"security": "reality",
+		"realitySettings": map[string]any{
+			"dest":          targets[ti],
+			"target":        targets[ti],
+			"serverNames":   []string{serverNames[ti]},
+			"privateKey":    keyPair["privateKey"],
+			"shortIds":      []string{shortID},
+			"publicKey":     keyPair["publicKey"],
+			"fingerprint":   "chrome",
+			"spiderX":       "",
+			"mldsa65Verify": "",
+			"mldsa65Seed":   "",
+			"show":          false,
+			"xver":          0,
+			"maxTimediff":   0,
+		},
+		"tcpSettings": map[string]any{
+			"header": map[string]any{"type": "none"},
+		},
+	}
+	streamJSON, _ := json.MarshalIndent(streamSettings, "", "  ")
+
+	return &model.Inbound{
+		UserId:         userId,
+		Up:             0,
+		Down:           0,
+		Total:          0,
+		Remark:         fmt.Sprintf("VLESS-Reality-%d", port),
+		Enable:         true,
+		ExpiryTime:     0,
+		TrafficReset:   "never",
+		ResetDay:       1,
+		Listen:         "",
+		Port:           port,
+		Protocol:       "vless",
+		Settings:       string(settingsJSON),
+		StreamSettings: string(streamJSON),
+		Tag:            fmt.Sprintf("inbound-%v", port),
+		Sniffing:       `{"enabled":true,"destOverride":["http","tls","quic"],"metadataOnly":false,"routeOnly":false}`,
+	}, nil
+}
+
+// buildVmessTcp builds a VMess+TCP+TLS inbound
+func (s *InboundService) buildVmessTcp(userId, port, index int) (*model.Inbound, error) {
+	clientID := uuid.New().String()
+	email := fmt.Sprintf("vmess_tcp_%d_%s", port, clientID[:8])
+
+	settings := map[string]any{
+		"clients": []map[string]any{
+			{"id": clientID, "email": email},
+		},
+	}
+	settingsJSON, _ := json.MarshalIndent(settings, "", "  ")
+
+	streamSettings := map[string]any{
+		"network":  "tcp",
+		"security": "none",
+		"tcpSettings": map[string]any{
+			"header": map[string]any{"type": "none"},
+		},
+	}
+	streamJSON, _ := json.MarshalIndent(streamSettings, "", "  ")
+
+	return &model.Inbound{
+		UserId:         userId,
+		Up:             0,
+		Down:           0,
+		Total:          0,
+		Remark:         fmt.Sprintf("VMess-TCP-%d", port),
+		Enable:         true,
+		ExpiryTime:     0,
+		TrafficReset:   "never",
+		ResetDay:       1,
+		Listen:         "",
+		Port:           port,
+		Protocol:       "vmess",
+		Settings:       string(settingsJSON),
+		StreamSettings: string(streamJSON),
+		Tag:            fmt.Sprintf("inbound-%v", port),
+		Sniffing:       `{"enabled":true,"destOverride":["http","tls","quic"],"metadataOnly":false,"routeOnly":false}`,
+	}, nil
+}
+
+// buildShadowsocks builds a Shadowsocks+AEAD inbound
+func (s *InboundService) buildShadowsocks(userId, port, index int) (*model.Inbound, error) {
+	password := uuid.New().String()[:24]
+	email := fmt.Sprintf("ss_%d_%s", port, password[:8])
+
+	settings := map[string]any{
+		"clients": []map[string]any{
+			{
+				"email":    email,
+				"password": password,
+				"method":   "aes-256-gcm",
+			},
+		},
+		"network": "tcp,udp",
+	}
+	settingsJSON, _ := json.MarshalIndent(settings, "", "  ")
+
+	streamSettings := map[string]any{
+		"network":  "tcp",
+		"security": "none",
+		"tcpSettings": map[string]any{
+			"header": map[string]any{"type": "none"},
+		},
+	}
+	streamJSON, _ := json.MarshalIndent(streamSettings, "", "  ")
+
+	return &model.Inbound{
+		UserId:         userId,
+		Up:             0,
+		Down:           0,
+		Total:          0,
+		Remark:         fmt.Sprintf("Shadowsocks-%d", port),
+		Enable:         true,
+		ExpiryTime:     0,
+		TrafficReset:   "never",
+		ResetDay:       1,
+		Listen:         "",
+		Port:           port,
+		Protocol:       "shadowsocks",
+		Settings:       string(settingsJSON),
+		StreamSettings: string(streamJSON),
+		Tag:            fmt.Sprintf("inbound-%v", port),
+		Sniffing:       `{"enabled":true,"destOverride":["http","tls","quic"],"metadataOnly":false,"routeOnly":false}`,
+	}, nil
+}
+
+// buildTrojanTcp builds a Trojan+TCP+TLS inbound
+func (s *InboundService) buildTrojanTcp(userId, port, index int) (*model.Inbound, error) {
+	password := uuid.New().String()[:24]
+	email := fmt.Sprintf("trojan_tcp_%d_%s", port, password[:8])
+
+	settings := map[string]any{
+		"clients": []map[string]any{
+			{
+				"password": password,
+				"email":    email,
+				"flow":     "",
+			},
+		},
+	}
+	settingsJSON, _ := json.MarshalIndent(settings, "", "  ")
+
+	streamSettings := map[string]any{
+		"network":  "tcp",
+		"security": "none",
+		"tcpSettings": map[string]any{
+			"header": map[string]any{"type": "none"},
+		},
+	}
+	streamJSON, _ := json.MarshalIndent(streamSettings, "", "  ")
+
+	return &model.Inbound{
+		UserId:         userId,
+		Up:             0,
+		Down:           0,
+		Total:          0,
+		Remark:         fmt.Sprintf("Trojan-TCP-%d", port),
+		Enable:         true,
+		ExpiryTime:     0,
+		TrafficReset:   "never",
+		ResetDay:       1,
+		Listen:         "",
+		Port:           port,
+		Protocol:       "trojan",
+		Settings:       string(settingsJSON),
+		StreamSettings: string(streamJSON),
+		Tag:            fmt.Sprintf("inbound-%v", port),
+		Sniffing:       `{"enabled":true,"destOverride":["http","tls","quic"],"metadataOnly":false,"routeOnly":false}`,
+	}, nil
+}
+
+// buildVlessWs builds a VLESS+WS+TLS inbound
+func (s *InboundService) buildVlessWs(userId, port, index int) (*model.Inbound, error) {
+	clientID := uuid.New().String()
+	email := fmt.Sprintf("vless_ws_%d_%s", port, clientID[:8])
+
+	settings := map[string]any{
+		"clients": []map[string]any{
+			{"id": clientID, "email": email},
+		},
+		"decryption": "none",
+	}
+	settingsJSON, _ := json.MarshalIndent(settings, "", "  ")
+
+	streamSettings := map[string]any{
+		"network":  "ws",
+		"security": "none",
+		"wsSettings": map[string]any{
+			"path":     fmt.Sprintf("/vless-ws-%d", port),
+			"headers":  map[string]any{},
+		},
+	}
+	streamJSON, _ := json.MarshalIndent(streamSettings, "", "  ")
+
+	return &model.Inbound{
+		UserId:         userId,
+		Up:             0,
+		Down:           0,
+		Total:          0,
+		Remark:         fmt.Sprintf("VLESS-WS-%d", port),
+		Enable:         true,
+		ExpiryTime:     0,
+		TrafficReset:   "never",
+		ResetDay:       1,
+		Listen:         "",
+		Port:           port,
+		Protocol:       "vless",
+		Settings:       string(settingsJSON),
+		StreamSettings: string(streamJSON),
+		Tag:            fmt.Sprintf("inbound-%v", port),
+		Sniffing:       `{"enabled":true,"destOverride":["http","tls","quic"],"metadataOnly":false,"routeOnly":false}`,
+	}, nil
+}
+
+// buildVmessWs builds a VMess+WS+TLS inbound
+func (s *InboundService) buildVmessWs(userId, port, index int) (*model.Inbound, error) {
+	clientID := uuid.New().String()
+	email := fmt.Sprintf("vmess_ws_%d_%s", port, clientID[:8])
+
+	settings := map[string]any{
+		"clients": []map[string]any{
+			{"id": clientID, "email": email},
+		},
+	}
+	settingsJSON, _ := json.MarshalIndent(settings, "", "  ")
+
+	streamSettings := map[string]any{
+		"network":  "ws",
+		"security": "none",
+		"wsSettings": map[string]any{
+			"path":     fmt.Sprintf("/vmess-ws-%d", port),
+			"headers":  map[string]any{},
+		},
+	}
+	streamJSON, _ := json.MarshalIndent(streamSettings, "", "  ")
+
+	return &model.Inbound{
+		UserId:         userId,
+		Up:             0,
+		Down:           0,
+		Total:          0,
+		Remark:         fmt.Sprintf("VMess-WS-%d", port),
+		Enable:         true,
+		ExpiryTime:     0,
+		TrafficReset:   "never",
+		ResetDay:       1,
+		Listen:         "",
+		Port:           port,
+		Protocol:       "vmess",
+		Settings:       string(settingsJSON),
+		StreamSettings: string(streamJSON),
+		Tag:            fmt.Sprintf("inbound-%v", port),
+		Sniffing:       `{"enabled":true,"destOverride":["http","tls","quic"],"metadataOnly":false,"routeOnly":false}`,
+	}, nil
+}
+
+// buildVlessGrpc builds a VLESS+gRPC+TLS inbound
+func (s *InboundService) buildVlessGrpc(userId, port, index int) (*model.Inbound, error) {
+	clientID := uuid.New().String()
+	email := fmt.Sprintf("vless_grpc_%d_%s", port, clientID[:8])
+
+	settings := map[string]any{
+		"clients": []map[string]any{
+			{"id": clientID, "email": email},
+		},
+		"decryption": "none",
+	}
+	settingsJSON, _ := json.MarshalIndent(settings, "", "  ")
+
+	streamSettings := map[string]any{
+		"network":  "grpc",
+		"security": "none",
+		"grpcSettings": map[string]any{
+			"serviceName": fmt.Sprintf("vless-grpc-%d", port),
+			"multiMode":   false,
+		},
+	}
+	streamJSON, _ := json.MarshalIndent(streamSettings, "", "  ")
+
+	return &model.Inbound{
+		UserId:         userId,
+		Up:             0,
+		Down:           0,
+		Total:          0,
+		Remark:         fmt.Sprintf("VLESS-gRPC-%d", port),
+		Enable:         true,
+		ExpiryTime:     0,
+		TrafficReset:   "never",
+		ResetDay:       1,
+		Listen:         "",
+		Port:           port,
+		Protocol:       "vless",
+		Settings:       string(settingsJSON),
+		StreamSettings: string(streamJSON),
+		Tag:            fmt.Sprintf("inbound-%v", port),
+		Sniffing:       `{"enabled":true,"destOverride":["http","tls","quic"],"metadataOnly":false,"routeOnly":false}`,
+	}, nil
+}
+
+// buildTrojanWs builds a Trojan+WS+TLS inbound
+func (s *InboundService) buildTrojanWs(userId, port, index int) (*model.Inbound, error) {
+	password := uuid.New().String()[:24]
+	email := fmt.Sprintf("trojan_ws_%d_%s", port, password[:8])
+
+	settings := map[string]any{
+		"clients": []map[string]any{
+			{
+				"password": password,
+				"email":    email,
+				"flow":     "",
+			},
+		},
+	}
+	settingsJSON, _ := json.MarshalIndent(settings, "", "  ")
+
+	streamSettings := map[string]any{
+		"network":  "ws",
+		"security": "none",
+		"wsSettings": map[string]any{
+			"path":     fmt.Sprintf("/trojan-ws-%d", port),
+			"headers":  map[string]any{},
+		},
+	}
+	streamJSON, _ := json.MarshalIndent(streamSettings, "", "  ")
+
+	return &model.Inbound{
+		UserId:         userId,
+		Up:             0,
+		Down:           0,
+		Total:          0,
+		Remark:         fmt.Sprintf("Trojan-WS-%d", port),
+		Enable:         true,
+		ExpiryTime:     0,
+		TrafficReset:   "never",
+		ResetDay:       1,
+		Listen:         "",
+		Port:           port,
+		Protocol:       "trojan",
+		Settings:       string(settingsJSON),
+		StreamSettings: string(streamJSON),
+		Tag:            fmt.Sprintf("inbound-%v", port),
+		Sniffing:       `{"enabled":true,"destOverride":["http","tls","quic"],"metadataOnly":false,"routeOnly":false}`,
+	}, nil
+}
+
 // generateX25519Key runs the xray x25519 command and returns the key pair.
 func (s *InboundService) generateX25519Key() (map[string]any, error) {
 	cmd := exec.Command(xray.GetBinaryPath(), "x25519")

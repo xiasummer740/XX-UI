@@ -828,7 +828,35 @@
       </a-form-item>
     </a-form>
   </a-modal>
-</a-layout>
+    <!-- 协议选择配置弹窗 -->
+    <a-modal :title="'生成协议节点'" :visible="protocolSelector.visible" @ok="generateProtocols" @cancel="protocolSelector.visible = false" ok-text="生成" cancel-text="取消" :confirm-loading="protocolSelector.saving" :class="themeSwitcher.currentTheme" width="650px">
+      <a-form layout="vertical">
+        <a-form-item label="选择要生成的协议类型（可多选）">
+          <a-checkbox-group v-model="protocolSelector.selected">
+            <a-row :gutter="[8, 8]">
+              <a-col :span="12" v-for="p in protocolSelector.options" :key="p.key">
+                <a-checkbox :value="p.key">
+                  <span style="font-weight:500;">[[ p.label ]]</span>
+                  <span style="color:#999;font-size:12px;">（起始端口: [[ p.basePort ]]）</span>
+                </a-checkbox>
+              </a-col>
+            </a-row>
+          </a-checkbox-group>
+        </a-form-item>
+        <a-form-item label="每组生成数量">
+          <a-input-number v-model="protocolSelector.count" :min="1" :max="10" :style="{ width: '100px' }" />
+          <span style="margin-left: 8px; color: #888;">（每个协议从起始端口开始连续生成 N 个节点）</span>
+        </a-form-item>
+        <div v-if="protocolSelector.selected.length > 0 && protocolSelector.count > 0" style="padding: 12px; background: #f6f8fa; border-radius: 4px; border: 1px solid #e8e8e8;">
+          <div style="font-weight: bold; margin-bottom: 8px; color: #333;">&#x1F4E1; 端口范围预览：</div>
+          <div v-for="p in getSelectedProtocols()" :key="p.key" style="margin-bottom: 6px; display: flex; align-items: center;">
+            <a-tag color="blue" style="min-width: 120px; text-align: center;">[[ p.label ]]</a-tag>
+            <span style="color: #666;">[[ p.basePort ]] ~ [[ p.basePort + protocolSelector.count - 1 ]]</span>
+          </div>
+        </div>
+      </a-form>
+    </a-modal>
+  </a-layout>
 {{template "page/body_scripts" .}}
 <script
   src="{{ .base_path }}assets/qrcode/qrious2.min.js?{{ .cur_ver }}"></script>
@@ -1165,6 +1193,22 @@
     el: '#app',
     mixins: [MediaQueryMixin],
     data: {
+      protocolSelector: {
+        visible: false,
+        saving: false,
+        count: 3,
+        selected: [],
+        options: [
+          { key: 'vless-reality', label: 'VLESS+Reality', basePort: 44301 },
+          { key: 'vmess-tcp', label: 'VMess+TCP', basePort: 44302 },
+          { key: 'shadowsocks', label: 'Shadowsocks', basePort: 44303 },
+          { key: 'trojan-tcp', label: 'Trojan+TCP', basePort: 44304 },
+          { key: 'vless-ws', label: 'VLESS+WS', basePort: 44305 },
+          { key: 'vmess-ws', label: 'VMess+WS', basePort: 44306 },
+          { key: 'vless-grpc', label: 'VLESS+gRPC', basePort: 44307 },
+          { key: 'trojan-ws', label: 'Trojan+WS', basePort: 44308 },
+        ],
+      },
       themeSwitcher,
       persianDatepicker,
       loadingStates: {
@@ -2074,24 +2118,41 @@
           dbInbound.remark + "-Subs");
       },
       async batchGenerate() {
-        this.$confirm({
-          title: '{{ i18n "pages.inbounds.batchGenerateConfirmTitle" }}',
-          content: '{{ i18n "pages.inbounds.batchGenerateConfirmContent" }}',
-          class: themeSwitcher.currentTheme,
-          okText: '{{ i18n "create" }}',
-          cancelText: '{{ i18n "cancel" }}',
-          onOk: async () => {
-            const msg = await HttpUtil.post('/panel/api/inbounds/batchGenerate');
-            if (msg.success) {
-              this.$message.success(msg.obj && msg.obj.length > 0
-                ? '{{ i18n "pages.inbounds.batchGenerateSuccess" }}' + msg.obj.length
-                : '{{ i18n "pages.inbounds.batchGenerateSuccess" }}');
-              await this.getDBInbounds();
-            } else {
-              this.$message.error(msg.msg);
-            }
-          },
-        });
+        this.protocolSelector.selected = [];
+        this.protocolSelector.count = 3;
+        this.protocolSelector.visible = true;
+      },
+      async generateProtocols() {
+        if (this.protocolSelector.selected.length === 0) {
+          this.$message.warning('请至少选择一种协议类型');
+          return;
+        }
+        if (this.protocolSelector.count < 1 || this.protocolSelector.count > 10) {
+          this.$message.warning('生成数量请在 1-10 之间');
+          return;
+        }
+        this.protocolSelector.saving = true;
+        try {
+          const msg = await HttpUtil.post('/panel/api/inbounds/generateProtocol', {
+            protocols: this.protocolSelector.selected,
+            count: this.protocolSelector.count,
+          });
+          if (msg.success) {
+            const count = msg.obj && msg.obj.length > 0 ? msg.obj.length : 0;
+            this.$message.success('成功生成 ' + count + ' 个节点');
+            this.protocolSelector.visible = false;
+            await this.getDBInbounds();
+          } else {
+            this.$message.error(msg.msg || '生成失败');
+          }
+        } catch (err) {
+          this.$message.error('请求失败: ' + (err.message || '未知错误'));
+        } finally {
+          this.protocolSelector.saving = false;
+        }
+      },
+      getSelectedProtocols() {
+        return this.protocolSelector.options.filter(p => this.protocolSelector.selected.includes(p.key));
       },
       importInbound() {
         promptModal.open({

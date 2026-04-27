@@ -50,6 +50,7 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/delDepletedClients/:id", a.delDepletedClients)
 	g.POST("/import", a.importInbound)
 	g.POST("/batchGenerate", a.batchGenerate)
+	g.POST("/generateProtocol", a.generateProtocol)
 	g.POST("/onlines", a.onlines)
 	g.POST("/lastOnline", a.lastOnline)
 	g.POST("/updateClientTraffic/:email", a.updateClientTraffic)
@@ -435,6 +436,42 @@ func (a *InboundController) batchGenerate(c *gin.Context) {
 	if len(result) > 0 {
 		a.xrayService.SetToNeedRestart()
 		// Broadcast inbounds update via WebSocket
+		inbounds, _ := a.inboundService.GetInbounds(user.Id)
+		websocket.BroadcastInbounds(inbounds)
+	}
+}
+
+// generateProtocol generates inbounds based on selected protocol types from the frontend.
+func (a *InboundController) generateProtocol(c *gin.Context) {
+	user := session.GetLoginUser(c)
+
+	var req struct {
+		Protocols []string `json:"protocols"`
+		Count     int      `json:"count"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+
+	if len(req.Protocols) == 0 {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), fmt.Errorf("no protocols selected"))
+		return
+	}
+
+	if req.Count < 1 || req.Count > 10 {
+		req.Count = 3
+	}
+
+	result, err := a.inboundService.GenerateProtocolInbounds(user.Id, req.Protocols, req.Count)
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+
+	jsonMsgObj(c, I18nWeb(c, "pages.inbounds.toasts.inboundCreateSuccess"), result, nil)
+	if len(result) > 0 {
+		a.xrayService.SetToNeedRestart()
 		inbounds, _ := a.inboundService.GetInbounds(user.Id)
 		websocket.BroadcastInbounds(inbounds)
 	}

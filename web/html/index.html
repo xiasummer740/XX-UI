@@ -221,7 +221,7 @@
                         </a-button>
                       </a-tooltip>
                       <a-tooltip title='{{ i18n "pages.index.ipCheck" }}'>
-                        <a-button size="small" icon="global" href="https://ippure.com/" target="_blank">
+                        <a-button size="small" icon="global" @click="openIpCheck">
                           {{ i18n "pages.index.ipCheck" }}
                         </a-button>
                       </a-tooltip>
@@ -1400,6 +1400,10 @@
         } catch (err) {
           this.$message.error('{{ i18n "pages.index.portCheckError" }}: ' + (err.message || ''));
         }
+      },
+      openIpCheck() {
+        const ip = this.status && this.status.publicIP && this.status.publicIP.ipv4 ? this.status.publicIP.ipv4 : '';
+        window.open('https://ippure.com/?ip=' + encodeURIComponent(ip), '_blank');
       },
       startPolling() {
         // Fallback polling mechanism

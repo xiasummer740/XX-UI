@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="{{ .base_path }}assets/ant-design-vue/antd.min.css">
   <link rel="stylesheet" href="{{ .base_path }}assets/css/custom.min.css?{{ .cur_ver }}">
   <style>
-    /* Flowing gradient light effect */
+    /* ===== VIBRANT FLOWING GRADIENT ===== */
     @keyframes flowGradient {
       0% { background-position: 0% 50%; }
       50% { background-position: 100% 50%; }
@@ -37,12 +37,12 @@
     .vps-card .ant-calendar-picker {
       width: 100% !important;
     }
-    /* ===== SITE-WIDE FLOWING GRADIENT: Light blue-purple with flow & glow ===== */
+    /* ===== SITE-WIDE VIBRANT FLOWING GRADIENT ===== */
     html {
-      background: linear-gradient(135deg, #7ec8e3, #a8d4f0, #d4b8e8, #c8a0e0, #b8d8f0, #e0c8f0) !important;
-      background-size: 600% 600% !important;
+      background: linear-gradient(135deg, #ff6b9d, #a855f7, #3b82f6, #14b8a6, #f97316, #ec4899, #8b5cf6) !important;
+      background-size: 800% 800% !important;
       background-attachment: fixed !important;
-      animation: pageFlowGradient 14s ease infinite !important;
+      animation: pageFlowGradient 10s ease infinite !important;
       min-height: 100%;
     }
     body {
@@ -51,10 +51,31 @@
     }
     @keyframes pageFlowGradient {
       0%   { background-position: 0% 50%; }
-      25%  { background-position: 100% 0%; }
-      50%  { background-position: 100% 100%; }
-      75%  { background-position: 0% 100%; }
+      12%  { background-position: 25% 25%; }
+      25%  { background-position: 50% 0%; }
+      37%  { background-position: 75% 25%; }
+      50%  { background-position: 100% 50%; }
+      62%  { background-position: 75% 75%; }
+      75%  { background-position: 50% 100%; }
+      87%  { background-position: 25% 75%; }
       100% { background-position: 0% 50%; }
+    }
+    /* Subtle animated overlay for extra depth */
+    html::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.06) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+      animation: pulseGlow 4s ease-in-out infinite alternate;
+    }
+    @keyframes pulseGlow {
+      0%   { opacity: 0.4; transform: scale(1); }
+      100% { opacity: 0.8; transform: scale(1.1); }
     }
 
     /* ===== LIGHT THEME: transparent layout backgrounds (all pages) ===== */
@@ -213,10 +234,10 @@
       function applyGradient() {
         try {
           var doc = document.documentElement;
-          doc.style.background = 'linear-gradient(135deg, #7ec8e3, #a8d4f0, #d4b8e8, #c8a0e0, #b8d8f0, #e0c8f0)';
-          doc.style.backgroundSize = '600% 600%';
+          doc.style.background = 'linear-gradient(135deg, #ff6b9d, #a855f7, #3b82f6, #14b8a6, #f97316, #ec4899, #8b5cf6)';
+          doc.style.backgroundSize = '800% 800%';
           doc.style.backgroundAttachment = 'fixed';
-          doc.style.animation = 'pageFlowGradient 14s ease infinite';
+          doc.style.animation = 'pageFlowGradient 10s ease infinite';
           doc.style.minHeight = '100%';
           document.body.style.background = 'transparent';
           var observer = new MutationObserver(function() {
