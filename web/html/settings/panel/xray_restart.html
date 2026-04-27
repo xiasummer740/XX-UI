@@ -1,0 +1,27 @@
+{{define "settings/panel/xray_restart"}}
+<a-collapse default-active-key="1">
+    <a-collapse-panel key="1" header='{{ i18n "pages.settings.xrayRestartSettings"}}'>
+        <a-setting-list-item paddings="small">
+            <template #title>{{ i18n "pages.settings.xrayRestartEnable"}}</template>
+            <template #description>{{ i18n "pages.settings.xrayRestartEnableDesc"}}</template>
+            <template #control>
+                <a-switch v-model="allSetting.xrayRestartEnable"></a-switch>
+            </template>
+        </a-setting-list-item>
+        <a-setting-list-item paddings="small">
+            <template #title>{{ i18n "pages.settings.xrayRestartCron"}}</template>
+            <template #description>{{ i18n "pages.settings.xrayRestartCronDesc"}}</template>
+            <template #control>
+                <a-select v-model="allSetting.xrayRestartCron" :style="{ minWidth: '200px' }">
+                    <a-select-option value="@every 1h">{{ i18n "pages.settings.xrayRestartInterval1h"}}</a-select-option>
+                    <a-select-option value="@every 2h">{{ i18n "pages.settings.xrayRestartInterval2h"}}</a-select-option>
+                    <a-select-option value="@every 3h">{{ i18n "pages.settings.xrayRestartInterval3h"}}</a-select-option>
+                    <a-select-option value="@every 6h">{{ i18n "pages.settings.xrayRestartInterval6h"}}</a-select-option>
+                    <a-select-option value="@every 12h">{{ i18n "pages.settings.xrayRestartInterval12h"}}</a-select-option>
+                    <a-select-option value="@daily">{{ i18n "pages.settings.xrayRestartIntervalDaily"}}</a-select-option>
+                </a-select>
+            </template>
+        </a-setting-list-item>
+    </a-collapse-panel>
+</a-collapse>
+{{end}}

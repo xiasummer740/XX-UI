@@ -485,6 +485,7 @@
 "information" = "Thông tin"
 "language" = "Ngôn ngữ"
 "telegramBotLanguage" = "Ngôn ngữ của Bot Telegram"
+"vpsConfigure" = "Cấu hình VPS"
 
 [pages.xray]
 "title" = "Cài đặt Xray"

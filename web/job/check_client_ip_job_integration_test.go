@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v2/database"
-	"github.com/mhsanaei/3x-ui/v2/database/model"
-	xuilogger "github.com/mhsanaei/3x-ui/v2/logger"
+	"github.com/XiaSummer740/XX-UI/database"
+	"github.com/XiaSummer740/XX-UI/database/model"
+	xuilogger "github.com/XiaSummer740/XX-UI/logger"
 	"github.com/op/go-logging"
 )
 

@@ -21,6 +21,8 @@
     uploadByte: parseInt(el.getAttribute('data-uploadbyte') || '0', 10) || 0,
     totalByte: parseInt(el.getAttribute('data-totalbyte') || '0', 10) || 0,
     datepicker: el.getAttribute('data-datepicker') || 'gregorian',
+    trafficReset: el.getAttribute('data-traffic-reset') || '',
+    resetDay: parseInt(el.getAttribute('data-reset-day') || '1', 10) || 1,
   };
 
   // Normalize lastOnline to milliseconds if it looks like seconds
@@ -122,6 +124,18 @@
     computed: {
       isMobile() {
         return this.viewportWidth < 576;
+      },
+      trafficResetLabel() {
+        const el = document.getElementById('subscription-data');
+        if (!el) return '';
+        const attrMap = {
+          'hourly': 'data-traffic-reset-hourly',
+          'daily': 'data-traffic-reset-daily',
+          'weekly': 'data-traffic-reset-weekly',
+          'monthly': 'data-traffic-reset-monthly',
+        };
+        const attr = attrMap[this.app.trafficReset];
+        return attr ? (el.getAttribute(attr) || '') : '';
       },
       isUnlimited() {
         return !this.app.totalByte;

@@ -11,15 +11,15 @@ import (
 	"syscall"
 	_ "unsafe"
 
-	"github.com/mhsanaei/3x-ui/v2/config"
-	"github.com/mhsanaei/3x-ui/v2/database"
-	"github.com/mhsanaei/3x-ui/v2/logger"
-	"github.com/mhsanaei/3x-ui/v2/sub"
-	"github.com/mhsanaei/3x-ui/v2/util/crypto"
-	"github.com/mhsanaei/3x-ui/v2/util/sys"
-	"github.com/mhsanaei/3x-ui/v2/web"
-	"github.com/mhsanaei/3x-ui/v2/web/global"
-	"github.com/mhsanaei/3x-ui/v2/web/service"
+	"github.com/XiaSummer740/XX-UI/config"
+	"github.com/XiaSummer740/XX-UI/database"
+	"github.com/XiaSummer740/XX-UI/logger"
+	"github.com/XiaSummer740/XX-UI/sub"
+	"github.com/XiaSummer740/XX-UI/util/crypto"
+	"github.com/XiaSummer740/XX-UI/util/sys"
+	"github.com/XiaSummer740/XX-UI/web"
+	"github.com/XiaSummer740/XX-UI/web/global"
+	"github.com/XiaSummer740/XX-UI/web/service"
 
 	"github.com/joho/godotenv"
 	"github.com/op/go-logging"
@@ -27,7 +27,7 @@ import (
 
 // runWebServer initializes and starts the web server for the 3x-ui panel.
 func runWebServer() {
-	log.Printf("Starting %v %v", config.GetName(), config.GetVersion())
+	log.Printf("Starting XX-UI %v", config.GetVersion())
 
 	switch config.GetLogLevel() {
 	case config.Debug:

@@ -25,6 +25,7 @@
             dbInbound = null,
             confirm = (inbound, dbInbound) => { },
             isEdit = false,
+            onShow = null,
         }) {
             this.title = title;
             this.okText = okText;
@@ -53,6 +54,9 @@
             this.confirm = confirm;
             this.visible = true;
             this.isEdit = isEdit;
+            if (typeof onShow === 'function') {
+                setTimeout(onShow, 50);
+            }
         },
         close() {
             inModal.visible = false;

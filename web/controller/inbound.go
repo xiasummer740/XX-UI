@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v2/database/model"
-	"github.com/mhsanaei/3x-ui/v2/web/service"
-	"github.com/mhsanaei/3x-ui/v2/web/session"
-	"github.com/mhsanaei/3x-ui/v2/web/websocket"
+	"github.com/XiaSummer740/XX-UI/database/model"
+	"github.com/XiaSummer740/XX-UI/web/service"
+	"github.com/XiaSummer740/XX-UI/web/session"
+	"github.com/XiaSummer740/XX-UI/web/websocket"
 
 	"github.com/gin-gonic/gin"
 )
@@ -49,10 +49,12 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/resetAllClientTraffics/:id", a.resetAllClientTraffics)
 	g.POST("/delDepletedClients/:id", a.delDepletedClients)
 	g.POST("/import", a.importInbound)
+	g.POST("/batchGenerate", a.batchGenerate)
 	g.POST("/onlines", a.onlines)
 	g.POST("/lastOnline", a.lastOnline)
 	g.POST("/updateClientTraffic/:email", a.updateClientTraffic)
 	g.POST("/:id/delClientByEmail/:email", a.delInboundClientByEmail)
+	g.POST("/checkPort", a.checkPort)
 }
 
 type CopyInboundClientsRequest struct {
@@ -419,6 +421,25 @@ func (a *InboundController) importInbound(c *gin.Context) {
 	}
 }
 
+// batchGenerate generates multiple VLESS+TCP+Reality+Vision inbounds (10 inbounds on ports 44301-44310).
+func (a *InboundController) batchGenerate(c *gin.Context) {
+	user := session.GetLoginUser(c)
+
+	result, err := a.inboundService.BatchGenerateInbounds(user.Id)
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+
+	jsonMsgObj(c, I18nWeb(c, "pages.inbounds.toasts.inboundCreateSuccess"), result, nil)
+	if len(result) > 0 {
+		a.xrayService.SetToNeedRestart()
+		// Broadcast inbounds update via WebSocket
+		inbounds, _ := a.inboundService.GetInbounds(user.Id)
+		websocket.BroadcastInbounds(inbounds)
+	}
+}
+
 // delDepletedClients deletes clients in an inbound who have exhausted their traffic limits.
 func (a *InboundController) delDepletedClients(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
@@ -437,6 +458,20 @@ func (a *InboundController) delDepletedClients(c *gin.Context) {
 // onlines retrieves the list of currently online clients.
 func (a *InboundController) onlines(c *gin.Context) {
 	jsonObj(c, a.inboundService.GetOnlineClients(), nil)
+}
+
+// checkPort checks TCP connectivity to a specified port from the local machine.
+func (a *InboundController) checkPort(c *gin.Context) {
+	var req struct {
+		Port int `json:"port" form:"port"`
+	}
+	// Use ShouldBind to support both JSON and form-encoded data (axios sends form-encoded)
+	if err := c.ShouldBind(&req); err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	result := a.inboundService.CheckPort(req.Port)
+	jsonObj(c, result, nil)
 }
 
 // lastOnline retrieves the last online timestamps for clients.

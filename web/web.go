@@ -16,16 +16,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v2/config"
-	"github.com/mhsanaei/3x-ui/v2/logger"
-	"github.com/mhsanaei/3x-ui/v2/util/common"
-	"github.com/mhsanaei/3x-ui/v2/web/controller"
-	"github.com/mhsanaei/3x-ui/v2/web/job"
-	"github.com/mhsanaei/3x-ui/v2/web/locale"
-	"github.com/mhsanaei/3x-ui/v2/web/middleware"
-	"github.com/mhsanaei/3x-ui/v2/web/network"
-	"github.com/mhsanaei/3x-ui/v2/web/service"
-	"github.com/mhsanaei/3x-ui/v2/web/websocket"
+	"github.com/XiaSummer740/XX-UI/config"
+	"github.com/XiaSummer740/XX-UI/logger"
+	"github.com/XiaSummer740/XX-UI/util/common"
+	"github.com/XiaSummer740/XX-UI/util/random"
+	"github.com/XiaSummer740/XX-UI/web/controller"
+	"github.com/XiaSummer740/XX-UI/web/job"
+	"github.com/XiaSummer740/XX-UI/web/locale"
+	"github.com/XiaSummer740/XX-UI/web/middleware"
+	"github.com/XiaSummer740/XX-UI/web/network"
+	"github.com/XiaSummer740/XX-UI/web/service"
+	"github.com/XiaSummer740/XX-UI/web/websocket"
 
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-contrib/sessions"
@@ -336,6 +337,29 @@ func (s *Server) startTask() {
 	s.cron.AddJob("@weekly", job.NewPeriodicTrafficResetJob("weekly"))
 	// Run once a month, midnight, first of month
 	s.cron.AddJob("@monthly", job.NewPeriodicTrafficResetJob("monthly"))
+	// Run once a day for custom_date inbounds (check if today matches resetDay)
+	s.cron.AddJob("@daily", job.NewPeriodicTrafficResetJob("custom_date"))
+
+	// Database auto backup scheduling - runs daily at midnight
+	s.cron.AddJob("@daily", job.NewDbBackupJob())
+
+	// Xray periodic restart scheduling
+	if xrayRestartEnabled, _ := s.settingService.GetXrayRestartEnabled(); xrayRestartEnabled {
+		xrayRestartCron, err := s.settingService.GetXrayRestartCron()
+		if err != nil || xrayRestartCron == "" {
+			xrayRestartCron = "@every 6h"
+		}
+		s.cron.AddFunc(xrayRestartCron, func() {
+			logger.Info("Periodic xray restart triggered by cron schedule")
+			err := s.xrayService.RestartXray(true)
+			if err != nil {
+				logger.Warning("Periodic xray restart failed:", err)
+			} else {
+				logger.Info("Periodic xray restart completed successfully")
+			}
+		})
+		logger.Infof("Xray periodic restart enabled, running at: %s", xrayRestartCron)
+	}
 
 	// LDAP sync scheduling
 	if ldapEnabled, _ := s.settingService.GetLdapEnable(); ldapEnabled {
@@ -394,6 +418,22 @@ func (s *Server) Start() (err error) {
 	s.cron.Start()
 
 	s.customGeoService = service.NewCustomGeoService()
+
+	// Panel URI path randomization
+	uriRandomize, _ := s.settingService.GetUriRandomizeEnable()
+	if uriRandomize {
+		currentBasePath, _ := s.settingService.GetBasePath()
+		// Generate random base path (e.g., /a7x3k9m2/)
+		randomPath := "/" + random.Seq(8) + "/"
+		if currentBasePath != randomPath {
+			err := s.settingService.SetBasePath(randomPath)
+			if err != nil {
+				logger.Warning("Failed to set randomized base path:", err)
+			} else {
+				logger.Infof("Panel URI randomized to: %s", randomPath)
+			}
+		}
+	}
 
 	engine, err := s.initRouter()
 	if err != nil {

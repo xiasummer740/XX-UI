@@ -86,6 +86,20 @@
                     </template>
                     {{ template "settings/panel/subscription/json" . }}
                   </a-tab-pane>
+                  <a-tab-pane key="6" :style="{ paddingTop: '20px' }">
+                    <template #tab>
+                      <a-icon type="database"></a-icon>
+                      <span>{{ i18n "pages.settings.backupSettings" }}</span>
+                    </template>
+                    {{ template "settings/panel/backup" . }}
+                  </a-tab-pane>
+                  <a-tab-pane key="7" :style="{ paddingTop: '20px' }">
+                    <template #tab>
+                      <a-icon type="sync"></a-icon>
+                      <span>{{ i18n "pages.settings.xrayRestartSettings" }}</span>
+                    </template>
+                    {{ template "settings/panel/xray_restart" . }}
+                  </a-tab-pane>
                 </a-tabs>
               </a-col>
             </a-row>
@@ -592,6 +606,17 @@
             if (subJsonPath == '/json/') alerts.push('{{ i18n "secAlertSubJsonURI" }}');
           }
           return alerts
+        }
+      },
+      vpsPurchaseDateMoment: {
+        get: function () {
+          const ts = this.allSetting.vpsPurchaseDate;
+          if (!ts) return null;
+          const numTs = Number(ts);
+          return numTs ? moment(numTs * 1000) : null;
+        },
+        set: function (val) {
+          this.allSetting.vpsPurchaseDate = val ? String(Math.floor(val / 1000)) : '';
         }
       }
     },

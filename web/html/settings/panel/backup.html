@@ -1,0 +1,27 @@
+{{define "settings/panel/backup"}}
+<a-collapse default-active-key="1">
+    <a-collapse-panel key="1" header='{{ i18n "pages.settings.backupSettings"}}'>
+        <a-setting-list-item paddings="small">
+            <template #title>{{ i18n "pages.settings.dbBackupEnable"}}</template>
+            <template #description>{{ i18n "pages.settings.dbBackupEnableDesc"}}</template>
+            <template #control>
+                <a-switch v-model="allSetting.dbBackupEnable"></a-switch>
+            </template>
+        </a-setting-list-item>
+        <a-setting-list-item paddings="small">
+            <template #title>{{ i18n "pages.settings.dbBackupPath"}}</template>
+            <template #description>{{ i18n "pages.settings.dbBackupPathDesc"}}</template>
+            <template #control>
+                <a-input type="text" v-model="allSetting.dbBackupPath"></a-input>
+            </template>
+        </a-setting-list-item>
+        <a-setting-list-item paddings="small">
+            <template #title>{{ i18n "pages.settings.dbBackupRetention"}}</template>
+            <template #description>{{ i18n "pages.settings.dbBackupRetentionDesc"}}</template>
+            <template #control>
+                <a-input-number :min="1" :max="365" v-model="allSetting.dbBackupRetention"></a-input-number>
+            </template>
+        </a-setting-list-item>
+    </a-collapse-panel>
+</a-collapse>
+{{end}}

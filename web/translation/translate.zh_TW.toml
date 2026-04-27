@@ -485,6 +485,7 @@
 "information" = "資訊"
 "language" = "語言"
 "telegramBotLanguage" = "Telegram 機器人語言"
+"vpsConfigure" = "VPS 配置"
 
 [pages.xray]
 "title" = "Xray 配置"

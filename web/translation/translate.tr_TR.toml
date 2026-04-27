@@ -485,6 +485,7 @@
 "information" = "Bilgi"
 "language" = "Dil"
 "telegramBotLanguage" = "Telegram Bot Dili"
+"vpsConfigure" = "VPS Yapılandırma"
 
 [pages.xray]
 "title" = "Xray Yapılandırmaları"

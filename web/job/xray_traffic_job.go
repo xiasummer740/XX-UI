@@ -3,10 +3,10 @@ package job
 import (
 	"encoding/json"
 
-	"github.com/mhsanaei/3x-ui/v2/logger"
-	"github.com/mhsanaei/3x-ui/v2/web/service"
-	"github.com/mhsanaei/3x-ui/v2/web/websocket"
-	"github.com/mhsanaei/3x-ui/v2/xray"
+	"github.com/XiaSummer740/XX-UI/logger"
+	"github.com/XiaSummer740/XX-UI/web/service"
+	"github.com/XiaSummer740/XX-UI/web/websocket"
+	"github.com/XiaSummer740/XX-UI/xray"
 
 	"github.com/valyala/fasthttp"
 )

@@ -15,6 +15,14 @@
     background: var(--dark-color-surface-700, #111929);
     border-color: var(--dark-color-stroke, #2c3950);
   }
+
+  /* Brand card text colors */
+  .light.index-page .brand-card-text {
+    color: #1a1a2e !important;
+  }
+  .dark.index-page .brand-card-text {
+    color: #ffffff !important;
+  }
 </style>
 <a-layout id="app" v-cloak :class="themeSwitcher.currentTheme + ' index-page'">
   <a-sidebar></a-sidebar>
@@ -26,6 +34,27 @@
             message='{{ i18n "secAlertTitle" }}' color="red" description='{{ i18n "secAlertSsl" }}' show-icon closable>
           </a-alert>
         </transition>
+        <!-- XX-UI Brand Identity - Top center (always visible) -->
+        <a-row :gutter="[isMobile ? 8 : 16, isMobile ? 0 : 12]" :style="{ marginBottom: '12px' }">
+          <a-col :span="24">
+            <a-card class="brand-card" :bordered="false" :style="{
+              borderRadius: '12px',
+              padding: '16px 0',
+              textAlign: 'center'
+            }">
+              <span class="brand-card-text" :style="{
+                fontSize: '28px',
+                fontWeight: '700',
+                letterSpacing: '3px',
+              }">XX-UI</span>
+              <span class="brand-card-text" :style="{
+                fontSize: '13px',
+                marginLeft: '12px',
+                fontWeight: '400'
+              }">v{{ .cur_ver }}</span>
+            </a-card>
+          </a-col>
+        </a-row>
         <transition name="list" appear>
           <template>
             <a-row v-if="!loadingStates.fetched">
@@ -168,48 +197,57 @@
                 </a-card>
               </a-col>
               <a-col :sm="24" :lg="12">
-                <a-card title='3X-UI' hoverable>
-                  <a rel="noopener" href="https://github.com/MHSanaei/3x-ui/releases" target="_blank">
-                    <a-tag color="green">
-                      <span>v{{ .cur_ver }}</span>
-                    </a-tag>
-                  </a>
-                  <a rel="noopener" href="https://t.me/XrayUI" target="_blank">
-                    <a-tag color="green">
-                      <span>@XrayUI</span>
-                    </a-tag>
-                  </a>
-                  <a rel="noopener" href="https://github.com/MHSanaei/3x-ui/wiki" target="_blank">
-                    <a-tag color="purple">
-                      <span>{{ i18n "pages.index.documentation" }}</span>
-                    </a-tag>
-                  </a>
-                </a-card>
-              </a-col>
-              <a-col :sm="24" :lg="12">
-                <a-card title='{{ i18n "pages.index.operationHours" }}' hoverable>
-                  <a-tag :color="status.xray.color">Xray: [[ TimeFormatter.formatSecond(status.appStats.uptime)
-                    ]]</a-tag>
-                  <a-tag color="green">OS: [[ TimeFormatter.formatSecond(status.uptime) ]]</a-tag>
-                </a-card>
-              </a-col>
-              <a-col :sm="24" :lg="12">
                 <a-card title='{{ i18n "pages.index.systemLoad" }}' hoverable>
-                  <a-tag color="green">
-                    <a-tooltip>
-                      [[ status.loads[0] ]] | [[ status.loads[1] ]] | [[ status.loads[2] ]]
-                      <template slot="title">
-                        {{ i18n "pages.index.systemLoadDesc" }}
-                      </template>
-                    </a-tooltip>
-                  </a-tag>
+                  <a-space direction="vertical" style="width:100%">
+                    <a-space>
+                      <a-tag color="green">
+                        <a-tooltip>
+                          [[ status.loads[0] ]] | [[ status.loads[1] ]] | [[ status.loads[2] ]]
+                          <template slot="title">
+                            {{ i18n "pages.index.systemLoadDesc" }}
+                          </template>
+                        </a-tooltip>
+                      </a-tag>
+                    </a-space>
+                    <a-space>
+                      <a-tooltip title='{{ i18n "pages.index.portCheck" }}'>
+                        <a-button size="small" icon="search" @click="checkPort">
+                          {{ i18n "pages.index.portCheck" }}
+                        </a-button>
+                      </a-tooltip>
+                      <a-tooltip title='{{ i18n "pages.index.speedTest" }}'>
+                        <a-button size="small" icon="thunderbolt" href="https://www.speedtest.net/" target="_blank">
+                          {{ i18n "pages.index.speedTest" }}
+                        </a-button>
+                      </a-tooltip>
+                      <a-tooltip title='{{ i18n "pages.index.ipCheck" }}'>
+                        <a-button size="small" icon="global" href="https://ippure.com/" target="_blank">
+                          {{ i18n "pages.index.ipCheck" }}
+                        </a-button>
+                      </a-tooltip>
+                    </a-space>
+                  </a-space>
                 </a-card>
               </a-col>
               <a-col :sm="24" :lg="12">
-                <a-card title='{{ i18n "usage"}}' hoverable>
-                  <a-tag color="green"> {{ i18n "pages.index.memory" }}: [[
-                    SizeFormatter.sizeFormat(status.appStats.mem) ]] </a-tag>
-                  <a-tag color="green"> {{ i18n "pages.index.threads" }}: [[ status.appStats.threads ]] </a-tag>
+                <a-card title='系统状态' hoverable>
+                  <a-space direction="vertical" style="width:100%">
+                    <div>
+                      <small style="opacity:0.65;display:block;margin-bottom:4px">{{ i18n "pages.index.operationHours" }}</small>
+                      <div>
+                        <a-tag :color="status.xray.color">Xray: [[ TimeFormatter.formatSecond(status.appStats.uptime) ]]</a-tag>
+                        <a-tag color="green">OS: [[ TimeFormatter.formatSecond(status.uptime) ]]</a-tag>
+                      </div>
+                    </div>
+                    <a-divider style="margin:6px 0"></a-divider>
+                    <div>
+                      <small style="opacity:0.65;display:block;margin-bottom:4px">{{ i18n "usage" }}</small>
+                      <div>
+                        <a-tag color="green">{{ i18n "pages.index.memory" }}: [[ SizeFormatter.sizeFormat(status.appStats.mem) ]]</a-tag>
+                        <a-tag color="green">{{ i18n "pages.index.threads" }}: [[ status.appStats.threads ]]</a-tag>
+                      </div>
+                    </div>
+                  </a-space>
                 </a-card>
               </a-col>
               <a-col :sm="24" :lg="12">
@@ -265,6 +303,13 @@
               <a-col :sm="24" :lg="12">
                 <a-card title='{{ i18n "pages.index.ipAddresses" }}' hoverable>
                   <template #extra>
+                    <a-tooltip :placement="isMobile ? 'topRight' : 'top'">
+                      <template #title>
+                        {{ i18n "pages.index.refreshIp" }}
+                      </template>
+                      <a-icon type="sync" :spin="refreshingIp" style="margin-right:8px;font-size:1rem"
+                        @click="refreshIpAddresses"></a-icon>
+                    </a-tooltip>
                     <a-tooltip :placement="isMobile ? 'topRight' : 'top'">
                       <template #title>
                         {{ i18n "pages.index.toggleIpVisibility" }}
@@ -849,7 +894,7 @@
           if (message.startsWith("XRAY:"))
             message = "<b>XRAY: </b>" + message.substring(5);
           else
-            message = "<b>X-UI: </b>" + message;
+            message = "<b>XX-UI: </b>" + message;
         }
 
         formattedLogs += message ? ' - ' + message : '';
@@ -969,6 +1014,7 @@
       loadingTip: '{{ i18n "loading"}}',
       showAlert: false,
       showIp: false,
+      refreshingIp: false,
       ipLimitEnable: false,
       customGeoColumns,
       customGeoList: [],
@@ -1021,6 +1067,20 @@
         // If modal open, refresh current bucketed data
         if (this.cpuHistoryModal.visible) {
           this.fetchCpuHistoryBucket()
+        }
+      },
+      async refreshIpAddresses() {
+        this.refreshingIp = true;
+        try {
+          const msg = await HttpUtil.get('/panel/api/server/refreshIP');
+          if (msg.success && msg.obj) {
+            this.status.publicIP.ipv4 = msg.obj.ipv4;
+            this.status.publicIP.ipv6 = msg.obj.ipv6;
+          }
+        } catch (e) {
+          console.error('Failed to refresh IP addresses:', e);
+        } finally {
+          this.refreshingIp = false;
         }
       },
       openCpuHistory() {
@@ -1317,6 +1377,29 @@
           }
         });
         fileInput.click();
+      },
+      async checkPort() {
+        const portStr = window.prompt('{{ i18n "pages.index.portCheckPrompt" }}', '');
+        if (!portStr) return;
+        const port = parseInt(portStr, 10);
+        if (isNaN(port) || port < 1 || port > 65535) {
+          this.$message.error('{{ i18n "pages.index.portCheckInvalid" }}');
+          return;
+        }
+        try {
+          const msg = await HttpUtil.post('/panel/api/inbounds/checkPort', { port });
+          if (msg.success && msg.obj) {
+            if (msg.obj.reachable) {
+              this.$message.success('{{ i18n "pages.index.portCheckReachable" }}' + ' ' + port + ' (' + msg.obj.latency + 'ms)');
+            } else {
+              this.$message.warning('{{ i18n "pages.index.portCheckUnreachable" }}' + ' ' + port + (msg.obj.error ? ': ' + msg.obj.error : ''));
+            }
+          } else {
+            this.$message.error(msg.msg || '{{ i18n "pages.index.portCheckError" }}');
+          }
+        } catch (err) {
+          this.$message.error('{{ i18n "pages.index.portCheckError" }}: ' + (err.message || ''));
+        }
       },
       startPolling() {
         // Fallback polling mechanism

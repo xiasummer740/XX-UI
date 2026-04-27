@@ -7,10 +7,10 @@ import (
 	"github.com/goccy/go-json"
 	yaml "github.com/goccy/go-yaml"
 
-	"github.com/mhsanaei/3x-ui/v2/database/model"
-	"github.com/mhsanaei/3x-ui/v2/logger"
-	"github.com/mhsanaei/3x-ui/v2/web/service"
-	"github.com/mhsanaei/3x-ui/v2/xray"
+	"github.com/XiaSummer740/XX-UI/database/model"
+	"github.com/XiaSummer740/XX-UI/logger"
+	"github.com/XiaSummer740/XX-UI/web/service"
+	"github.com/XiaSummer740/XX-UI/xray"
 )
 
 type SubClashService struct {

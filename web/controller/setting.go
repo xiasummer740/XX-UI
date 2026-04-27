@@ -4,10 +4,10 @@ import (
 	"errors"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v2/util/crypto"
-	"github.com/mhsanaei/3x-ui/v2/web/entity"
-	"github.com/mhsanaei/3x-ui/v2/web/service"
-	"github.com/mhsanaei/3x-ui/v2/web/session"
+	"github.com/XiaSummer740/XX-UI/util/crypto"
+	"github.com/XiaSummer740/XX-UI/web/entity"
+	"github.com/XiaSummer740/XX-UI/web/service"
+	"github.com/XiaSummer740/XX-UI/web/session"
 
 	"github.com/gin-gonic/gin"
 )

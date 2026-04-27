@@ -6,16 +6,17 @@
         <a-icon type="bulb" :theme="themeSwitcher.isDarkTheme ? 'filled' : 'outlined'"></a-icon>
         <span>{{ i18n "menu.theme" }}</span>
       </span>
-      <a-menu-item id="change-theme" class="ant-menu-theme-switch" @mousedown="themeSwitcher.animationsOff()">
-        <span>{{ i18n "menu.dark" }}</span>
-        <a-switch :style="{ marginLeft: '2px' }" size="small" :default-checked="themeSwitcher.isDarkTheme"
-          @change="themeSwitcher.toggleTheme()"></a-switch>
+      <a-menu-item key="standard" class="ant-menu-theme-switch"
+        @click="themeSwitcher.selectTheme('standard')">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;background:#1890ff;"></span>
+        <span>{{ i18n "menu.themeLight" }}</span>
+        <a-icon v-if="themeSwitcher.currentThemeKey === 'standard'" type="check" style="float:right;color:#52c41a;"></a-icon>
       </a-menu-item>
-      <a-menu-item id="change-theme-ultra" v-if="themeSwitcher.isDarkTheme" class="ant-menu-theme-switch"
-        @mousedown="themeSwitcher.animationsOffUltra()">
-        <span>{{ i18n "menu.ultraDark" }}</span>
-        <a-checkbox :style="{ marginLeft: '2px' }" :checked="themeSwitcher.isUltra"
-          @click="themeSwitcher.toggleUltra()"></a-checkbox>
+      <a-menu-item key="colorful" class="ant-menu-theme-switch"
+        @click="themeSwitcher.selectTheme('colorful')">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;background:#ff4d4f;"></span>
+        <span>{{ i18n "menu.themeDark" }}</span>
+        <a-icon v-if="themeSwitcher.currentThemeKey === 'colorful'" type="check" style="float:right;color:#52c41a;"></a-icon>
       </a-menu-item>
     </a-sub-menu>
   </a-menu>
@@ -25,68 +26,90 @@
 {{define "component/themeSwitchTemplateLogin"}}
 <template>
   <a-space @mousedown="themeSwitcher.animationsOff()" id="change-theme" direction="vertical" :size="10" :style="{ width: '100%' }">
-    <a-space direction="horizontal" size="small">
-      <a-switch size="small" :default-checked="themeSwitcher.isDarkTheme" @change="themeSwitcher.toggleTheme()"></a-switch>
-      <span>{{ i18n "menu.dark" }}</span>
-    </a-space>
-    <a-space v-if="themeSwitcher.isDarkTheme" direction="horizontal" size="small">
-      <a-checkbox :checked="themeSwitcher.isUltra" @click="themeSwitcher.toggleUltra()"></a-checkbox>
-      <span>{{ i18n "menu.ultraDark" }}</span>
-    </a-space>
+    <a-radio-group :value="themeSwitcher.currentThemeKey" @change="(e) => themeSwitcher.selectTheme(e.target.value)" button-style="solid" size="small" style="width:100%;">
+      <a-radio-button key="standard" :value="'standard'" :style="{ borderColor: '#1890ff', color: '#1890ff' }">
+        {{ i18n "menu.themeLight" }}
+      </a-radio-button>
+      <a-radio-button key="colorful" :value="'colorful'" :style="{ borderColor: '#ff4d4f', color: '#ff4d4f' }">
+        {{ i18n "menu.themeDark" }}
+      </a-radio-button>
+    </a-radio-group>
   </a-space>
 </template>
 {{end}}
 
 {{define "component/aThemeSwitch"}}
 <script>
+  // Set global Vue delimiters to [[ ]] for all components
+  Vue.config.delimiters = ['[[', ']]'];
+
   function createThemeSwitcher() {
-    const isDarkTheme = localStorage.getItem('dark-mode') === 'true';
-    const isUltra = localStorage.getItem('isUltraDarkThemeEnabled') === 'true';
-    if (isUltra) {
-      document.documentElement.setAttribute('data-theme', 'ultra-dark');
+    const savedTheme = localStorage.getItem('theme-name') || 'standard';
+    
+    function applyTheme(themeKey) {
+      const isDark = themeKey !== 'standard';
+      document.querySelector('body').setAttribute('class', isDark ? 'dark' : 'light');
+      if (themeKey === 'standard') {
+        document.documentElement.removeAttribute('data-theme');
+      } else {
+        document.documentElement.setAttribute('data-theme', themeKey);
+      }
+      document.documentElement.setAttribute('data-theme-name', themeKey);
     }
-    const theme = isDarkTheme ? 'dark' : 'light';
-    document.querySelector('body').setAttribute('class', theme);
+    
+    // Apply saved theme on load
+    applyTheme(savedTheme);
+    
     return {
-      animationsOff() {
-        document.documentElement.setAttribute('data-theme-animations', 'off');
-        const themeAnimations = document.querySelector('#change-theme');
-        themeAnimations.addEventListener('mouseleave', () => {
-          document.documentElement.removeAttribute('data-theme-animations');
-        });
-        themeAnimations.addEventListener('touchend', () => {
-          document.documentElement.removeAttribute('data-theme-animations');
-        });
+      currentThemeKey: savedTheme,
+      get isDarkTheme() {
+        return this.currentThemeKey !== 'standard';
       },
-      animationsOffUltra() {
-        document.documentElement.setAttribute('data-theme-animations', 'off');
-        const themeAnimationsUltra = document.querySelector('#change-theme-ultra');
-        themeAnimationsUltra.addEventListener('mouseleave', () => {
-          document.documentElement.removeAttribute('data-theme-animations');
-        });
-        themeAnimationsUltra.addEventListener('touchend', () => {
-          document.documentElement.removeAttribute('data-theme-animations');
-        });
+      get isUltra() {
+        return this.currentThemeKey !== 'standard';
       },
-      isDarkTheme,
-      isUltra,
       get currentTheme() {
         return this.isDarkTheme ? 'dark' : 'light';
       },
+      animationsOff() {
+        document.documentElement.setAttribute('data-theme-animations', 'off');
+        const themeAnimations = document.querySelector('#change-theme');
+        if (themeAnimations) {
+          themeAnimations.addEventListener('mouseleave', () => {
+            document.documentElement.removeAttribute('data-theme-animations');
+          });
+          themeAnimations.addEventListener('touchend', () => {
+            document.documentElement.removeAttribute('data-theme-animations');
+          });
+        }
+      },
+      animationsOffUltra() {
+        document.documentElement.setAttribute('data-theme-animations', 'off');
+        const el = document.querySelector('#change-theme-ultra');
+        if (el) {
+          el.addEventListener('mouseleave', () => {
+            document.documentElement.removeAttribute('data-theme-animations');
+          });
+          el.addEventListener('touchend', () => {
+            document.documentElement.removeAttribute('data-theme-animations');
+          });
+        }
+      },
+      selectTheme(themeKey) {
+        this.currentThemeKey = themeKey;
+        localStorage.setItem('theme-name', themeKey);
+        applyTheme(themeKey);
+        document.getElementById('message').className = this.currentTheme;
+      },
       toggleTheme() {
-        this.isDarkTheme = !this.isDarkTheme;
-        localStorage.setItem('dark-mode', this.isDarkTheme);
-        document.querySelector('body').setAttribute('class', this.isDarkTheme ? 'dark' : 'light');
-        document.getElementById('message').className = themeSwitcher.currentTheme;
+        this.selectTheme(this.currentThemeKey === 'standard' ? 'colorful' : 'standard');
       },
       toggleUltra() {
-        this.isUltra = !this.isUltra;
-        if (this.isUltra) {
-          document.documentElement.setAttribute('data-theme', 'ultra-dark');
+        if (this.currentThemeKey === 'standard') {
+          this.selectTheme('colorful');
         } else {
-          document.documentElement.removeAttribute('data-theme');
+          this.selectTheme('standard');
         }
-        localStorage.setItem('isUltraDarkThemeEnabled', this.isUltra.toString());
       }
     };
   }

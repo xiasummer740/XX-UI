@@ -15,13 +15,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mhsanaei/3x-ui/v2/logger"
-	"github.com/mhsanaei/3x-ui/v2/util/common"
-	webpkg "github.com/mhsanaei/3x-ui/v2/web"
-	"github.com/mhsanaei/3x-ui/v2/web/locale"
-	"github.com/mhsanaei/3x-ui/v2/web/middleware"
-	"github.com/mhsanaei/3x-ui/v2/web/network"
-	"github.com/mhsanaei/3x-ui/v2/web/service"
+	"github.com/XiaSummer740/XX-UI/logger"
+	"github.com/XiaSummer740/XX-UI/util/common"
+	webpkg "github.com/XiaSummer740/XX-UI/web"
+	"github.com/XiaSummer740/XX-UI/web/locale"
+	"github.com/XiaSummer740/XX-UI/web/middleware"
+	"github.com/XiaSummer740/XX-UI/web/network"
+	"github.com/XiaSummer740/XX-UI/web/service"
 
 	"github.com/gin-gonic/gin"
 )

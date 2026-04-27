@@ -485,6 +485,7 @@
 "information" = "Informação"
 "language" = "Idioma"
 "telegramBotLanguage" = "Idioma do Bot do Telegram"
+"vpsConfigure" = "Configurar VPS"
 
 [pages.xray]
 "title" = "Configurações Xray"

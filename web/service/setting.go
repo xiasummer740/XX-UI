@@ -11,14 +11,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v2/database"
-	"github.com/mhsanaei/3x-ui/v2/database/model"
-	"github.com/mhsanaei/3x-ui/v2/logger"
-	"github.com/mhsanaei/3x-ui/v2/util/common"
-	"github.com/mhsanaei/3x-ui/v2/util/random"
-	"github.com/mhsanaei/3x-ui/v2/util/reflect_util"
-	"github.com/mhsanaei/3x-ui/v2/web/entity"
-	"github.com/mhsanaei/3x-ui/v2/xray"
+	"github.com/XiaSummer740/XX-UI/database"
+	"github.com/XiaSummer740/XX-UI/database/model"
+	"github.com/XiaSummer740/XX-UI/logger"
+	"github.com/XiaSummer740/XX-UI/util/common"
+	"github.com/XiaSummer740/XX-UI/util/random"
+	"github.com/XiaSummer740/XX-UI/util/reflect_util"
+	"github.com/XiaSummer740/XX-UI/web/entity"
+	"github.com/XiaSummer740/XX-UI/xray"
 )
 
 //go:embed config.json
@@ -102,10 +102,35 @@ var defaultValueMap = map[string]string{
 	"ldapInvertFlag":        "false",
 	"ldapInboundTags":       "",
 	"ldapAutoCreate":        "false",
+
+	// VPS info defaults
+	"vpsName":         "",
+	"vpsIP":           "",
+	"vpsLocation":     "",
+	"vpsSpecs":        "",
+	"vpsPurchaseDate": "",
+	"vpsNodeInfo":     "",
+	"vpsNotes":        "",
 	"ldapAutoDelete":        "false",
 	"ldapDefaultTotalGB":    "0",
 	"ldapDefaultExpiryDays": "0",
 	"ldapDefaultLimitIP":    "0",
+
+	// Traffic reset defaults
+	"defaultResetMethod": "never",
+	"defaultResetDay":    "1",
+
+	// Database backup defaults
+	"dbBackupEnable":    "false",
+	"dbBackupPath":      "/etc/x-ui/backups/",
+	"dbBackupRetention": "30",
+
+	// Xray periodic restart defaults
+	"xrayRestartEnable": "false",
+	"xrayRestartCron":   "@every 6h",
+
+	// URI randomization defaults
+	"uriRandomizeEnable": "false",
 }
 
 // SettingService provides business logic for application settings management.
@@ -715,6 +740,66 @@ func (s *SettingService) GetLdapDefaultExpiryDays() (int, error) {
 
 func (s *SettingService) GetLdapDefaultLimitIP() (int, error) {
 	return s.getInt("ldapDefaultLimitIP")
+}
+
+// GetDbBackupEnabled returns whether automatic database backup is enabled.
+func (s *SettingService) GetDbBackupEnabled() (bool, error) {
+	return s.getBool("dbBackupEnable")
+}
+
+// SetDbBackupEnabled enables or disables automatic database backup.
+func (s *SettingService) SetDbBackupEnabled(enabled bool) error {
+	return s.setString("dbBackupEnable", fmt.Sprint(enabled))
+}
+
+// GetDbBackupPath returns the directory path for database backups.
+func (s *SettingService) GetDbBackupPath() (string, error) {
+	return s.getString("dbBackupPath")
+}
+
+// SetDbBackupPath sets the directory path for database backups.
+func (s *SettingService) SetDbBackupPath(path string) error {
+	return s.setString("dbBackupPath", path)
+}
+
+// GetDbBackupRetention returns the number of database backups to retain.
+func (s *SettingService) GetDbBackupRetention() (int, error) {
+	return s.getInt("dbBackupRetention")
+}
+
+// SetDbBackupRetention sets the number of database backups to retain.
+func (s *SettingService) SetDbBackupRetention(retention int) error {
+	return s.setString("dbBackupRetention", fmt.Sprint(retention))
+}
+
+// GetXrayRestartEnabled returns whether periodic xray restart is enabled.
+func (s *SettingService) GetXrayRestartEnabled() (bool, error) {
+	return s.getBool("xrayRestartEnable")
+}
+
+// SetXrayRestartEnabled enables or disables periodic xray restart.
+func (s *SettingService) SetXrayRestartEnabled(enabled bool) error {
+	return s.setString("xrayRestartEnable", fmt.Sprint(enabled))
+}
+
+// GetXrayRestartCron returns the cron expression for xray restart schedule.
+func (s *SettingService) GetXrayRestartCron() (string, error) {
+	return s.getString("xrayRestartCron")
+}
+
+// SetXrayRestartCron sets the cron expression for xray restart schedule.
+func (s *SettingService) SetXrayRestartCron(cron string) error {
+	return s.setString("xrayRestartCron", cron)
+}
+
+// GetUriRandomizeEnable returns whether panel URI path randomization is enabled.
+func (s *SettingService) GetUriRandomizeEnable() (bool, error) {
+	return s.getBool("uriRandomizeEnable")
+}
+
+// SetUriRandomizeEnable enables or disables panel URI path randomization.
+func (s *SettingService) SetUriRandomizeEnable(enabled bool) error {
+	return s.setString("uriRandomizeEnable", fmt.Sprint(enabled))
 }
 
 func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting) error {

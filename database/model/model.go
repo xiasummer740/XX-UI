@@ -4,8 +4,8 @@ package model
 import (
 	"fmt"
 
-	"github.com/mhsanaei/3x-ui/v2/util/json_util"
-	"github.com/mhsanaei/3x-ui/v2/xray"
+	"github.com/XiaSummer740/XX-UI/util/json_util"
+	"github.com/XiaSummer740/XX-UI/xray"
 )
 
 // Protocol represents the protocol type for Xray inbounds.
@@ -56,6 +56,7 @@ type Inbound struct {
 	ExpiryTime           int64                `json:"expiryTime" form:"expiryTime"`                                                                    // Expiration timestamp
 	TrafficReset         string               `json:"trafficReset" form:"trafficReset" gorm:"default:never;index:idx_enable_traffic_reset,priority:2"` // Traffic reset schedule
 	LastTrafficResetTime int64                `json:"lastTrafficResetTime" form:"lastTrafficResetTime" gorm:"default:0"`                               // Last traffic reset timestamp
+	ResetDay             int                  `json:"resetDay" form:"resetDay" gorm:"default:1"`                                                       // Custom reset day of month (1-31) for "custom_date" mode
 	ClientStats          []xray.ClientTraffic `gorm:"foreignKey:InboundId;references:Id" json:"clientStats" form:"clientStats"`                        // Client traffic statistics
 
 	// Xray configuration fields

@@ -3,8 +3,8 @@ package controller
 import (
 	"net/http"
 
-	"github.com/mhsanaei/3x-ui/v2/web/service"
-	"github.com/mhsanaei/3x-ui/v2/web/session"
+	"github.com/XiaSummer740/XX-UI/web/service"
+	"github.com/XiaSummer740/XX-UI/web/session"
 
 	"github.com/gin-gonic/gin"
 )

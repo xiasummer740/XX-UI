@@ -9,6 +9,145 @@
   <link rel="stylesheet" href="{{ .base_path }}assets/ant-design-vue/antd.min.css">
   <link rel="stylesheet" href="{{ .base_path }}assets/css/custom.min.css?{{ .cur_ver }}">
   <style>
+    /* Flowing gradient light effect */
+    @keyframes flowGradient {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    .xx-ui-flow-bg {
+      background: linear-gradient(135deg, #667eea, #764ba2, #a78bfa, #667eea) !important;
+      background-size: 300% 300% !important;
+      animation: flowGradient 6s ease infinite !important;
+    }
+    .xx-ui-flow-bg-light {
+      background: linear-gradient(135deg, rgba(102,126,234,0.08), rgba(118,75,162,0.05), rgba(167,139,250,0.08), rgba(102,126,234,0.08)) !important;
+      background-size: 300% 300% !important;
+      animation: flowGradient 8s ease infinite !important;
+    }
+    /* VPS card input styling */
+    .vps-card .ant-input, .vps-card .ant-input-number {
+      background: rgba(255,255,255,0.15) !important;
+      border: 1px solid rgba(255,255,255,0.2) !important;
+      color: #fff !important;
+    }
+    .vps-card .ant-input::placeholder {
+      color: rgba(255,255,255,0.5) !important;
+    }
+    .vps-card .ant-calendar-picker {
+      width: 100% !important;
+    }
+    /* ===== SITE-WIDE FLOWING GRADIENT: Light blue-purple with flow & glow ===== */
+    html {
+      background: linear-gradient(135deg, #7ec8e3, #a8d4f0, #d4b8e8, #c8a0e0, #b8d8f0, #e0c8f0) !important;
+      background-size: 600% 600% !important;
+      background-attachment: fixed !important;
+      animation: pageFlowGradient 14s ease infinite !important;
+      min-height: 100%;
+    }
+    body {
+      background: transparent !important;
+      min-height: 100vh;
+    }
+    @keyframes pageFlowGradient {
+      0%   { background-position: 0% 50%; }
+      25%  { background-position: 100% 0%; }
+      50%  { background-position: 100% 100%; }
+      75%  { background-position: 0% 100%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    /* ===== LIGHT THEME: transparent layout backgrounds (all pages) ===== */
+    .light #app,
+    .light #content-layout,
+    .light #content-layout .ant-layout-content,
+    .light #content-layout .ant-spin-nested-loading,
+    .light #content-layout .ant-spin-container {
+      background: transparent !important;
+    }
+
+    /* ===== LIGHT THEME: sidebar glassmorphism ===== */
+    .light .ant-layout-sider {
+      background: rgba(255, 255, 255, 0.15) !important;
+      backdrop-filter: blur(12px) !important;
+      -webkit-backdrop-filter: blur(12px) !important;
+    }
+    .light .ant-layout-sider .ant-menu {
+      background: transparent !important;
+    }
+
+    /* ===== LIGHT THEME: mobile drawer glassmorphism ===== */
+    .light .ant-drawer-content-wrapper,
+    .light .ant-drawer-content {
+      background: rgba(255, 255, 255, 0.80) !important;
+      backdrop-filter: blur(16px) !important;
+      -webkit-backdrop-filter: blur(16px) !important;
+    }
+    .light .ant-drawer-wrapper-body {
+      background: transparent !important;
+    }
+    .light .ant-drawer .ant-menu {
+      background: transparent !important;
+    }
+
+    /* ===== LIGHT THEME: ALL cards — high transparency glassmorphism ===== */
+    .light #content-layout .ant-card {
+      background: rgba(255, 255, 255, 0.35) !important;
+      backdrop-filter: blur(20px) !important;
+      -webkit-backdrop-filter: blur(20px) !important;
+      border: 1px solid rgba(255, 255, 255, 0.50) !important;
+      box-shadow: 0 4px 24px rgba(120, 140, 220, 0.12) !important;
+    }
+    .light #content-layout .ant-card:hover {
+      background: rgba(255, 255, 255, 0.42) !important;
+      box-shadow: 0 6px 32px rgba(120, 140, 220, 0.20) !important;
+    }
+
+    /* ===== DARK THEME: transparent layouts ===== */
+    .dark #app,
+    .dark #content-layout,
+    .dark #content-layout .ant-layout-content,
+    .dark #content-layout .ant-spin-nested-loading,
+    .dark #content-layout .ant-spin-container {
+      background: transparent !important;
+    }
+
+    /* ===== DARK THEME: sidebar glassmorphism ===== */
+    .dark .ant-layout-sider {
+      background: rgba(10, 18, 34, 0.40) !important;
+      backdrop-filter: blur(12px) !important;
+      -webkit-backdrop-filter: blur(12px) !important;
+    }
+    .dark .ant-layout-sider .ant-menu {
+      background: transparent !important;
+    }
+
+    /* ===== DARK THEME: mobile drawer ===== */
+    .dark .ant-drawer-content-wrapper,
+    .dark .ant-drawer-content {
+      background: rgba(10, 18, 34, 0.85) !important;
+      backdrop-filter: blur(16px) !important;
+      -webkit-backdrop-filter: blur(16px) !important;
+    }
+    .dark .ant-drawer-wrapper-body {
+      background: transparent !important;
+    }
+    .dark .ant-drawer .ant-menu {
+      background: transparent !important;
+    }
+
+    /* ===== DARK THEME: cards glassmorphism ===== */
+    .dark #content-layout .ant-card {
+      background: rgba(15, 25, 45, 0.45) !important;
+      backdrop-filter: blur(20px) !important;
+      -webkit-backdrop-filter: blur(20px) !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25) !important;
+    }
+    .dark #content-layout .ant-card:hover {
+      background: rgba(20, 32, 55, 0.50) !important;
+      box-shadow: 0 6px 32px rgba(0, 0, 0, 0.35) !important;
+    }
     [v-cloak] {
       display: none;
     }
@@ -69,6 +208,44 @@
 {{ define "page/body_start" }}
 <body>
   <div id="message"></div>
+  <script>
+    (function() {
+      function applyGradient() {
+        try {
+          var doc = document.documentElement;
+          doc.style.background = 'linear-gradient(135deg, #7ec8e3, #a8d4f0, #d4b8e8, #c8a0e0, #b8d8f0, #e0c8f0)';
+          doc.style.backgroundSize = '600% 600%';
+          doc.style.backgroundAttachment = 'fixed';
+          doc.style.animation = 'pageFlowGradient 14s ease infinite';
+          doc.style.minHeight = '100%';
+          document.body.style.background = 'transparent';
+          var observer = new MutationObserver(function() {
+            var app = document.getElementById('app');
+            if (app) {
+              app.style.background = 'transparent';
+              var isDark = document.body.classList.contains('dark');
+              var sider = app.querySelector('.ant-layout-sider');
+              if (sider) {
+                sider.style.background = isDark ? 'rgba(10,18,34,0.40)' : 'rgba(255,255,255,0.15)';
+                sider.style.backdropFilter = 'blur(12px)';
+              }
+              var cards = app.querySelectorAll('.ant-card');
+              for (var i = 0; i < cards.length; i++) {
+                cards[i].style.background = isDark ? 'rgba(15,25,45,0.45)' : 'rgba(255,255,255,0.35)';
+                cards[i].style.backdropFilter = 'blur(20px)';
+              }
+            }
+          });
+          observer.observe(document.body, { childList: true, subtree: true });
+        } catch(e) {}
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', applyGradient);
+      } else {
+        applyGradient();
+      }
+    })();
+  </script>
 {{ end }}
 
 {{ define "page/body_scripts" }}

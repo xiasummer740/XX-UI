@@ -1,8 +1,14 @@
 package job
 
 import (
-	"github.com/mhsanaei/3x-ui/v2/logger"
-	"github.com/mhsanaei/3x-ui/v2/web/service"
+	"time"
+
+	"github.com/XiaSummer740/XX-UI/database"
+	"github.com/XiaSummer740/XX-UI/database/model"
+	"github.com/XiaSummer740/XX-UI/logger"
+	"github.com/XiaSummer740/XX-UI/web/service"
+
+	"gorm.io/gorm"
 )
 
 // Period represents the time period for traffic resets.
@@ -23,7 +29,7 @@ func NewPeriodicTrafficResetJob(period Period) *PeriodicTrafficResetJob {
 
 // Run resets traffic statistics for all inbounds that match the configured reset period.
 func (j *PeriodicTrafficResetJob) Run() {
-	inbounds, err := j.inboundService.GetInboundsByTrafficReset(string(j.period))
+	inbounds, err := j.getInboundsForPeriod()
 	if err != nil {
 		logger.Warning("Failed to get inbounds for traffic reset:", err)
 		return
@@ -55,4 +61,47 @@ func (j *PeriodicTrafficResetJob) Run() {
 	if resetCount > 0 {
 		logger.Infof("Periodic traffic reset completed: %d inbounds reset", resetCount)
 	}
+}
+
+// getInboundsForPeriod returns inbounds matching the configured period.
+// For "custom_date", it additionally checks if today matches the inbound's resetDay.
+func (j *PeriodicTrafficResetJob) getInboundsForPeriod() ([]*model.Inbound, error) {
+	db := database.GetDB()
+
+	if j.period == "custom_date" {
+		// custom_date runs daily: find all inbounds with traffic_reset = "custom_date"
+		// and check if today's day of month matches their resetDay
+		var allCustomInbounds []*model.Inbound
+		err := db.Model(model.Inbound{}).
+			Where("traffic_reset = ?", "custom_date").
+			Where("enable = ?", true).
+			Find(&allCustomInbounds).Error
+		if err != nil && err != gorm.ErrRecordNotFound {
+			return nil, err
+		}
+
+		today := time.Now().Day()
+		var matching []*model.Inbound
+		for _, inbound := range allCustomInbounds {
+			resetDay := inbound.ResetDay
+			if resetDay < 1 {
+				resetDay = 1
+			}
+			if resetDay > 31 {
+				resetDay = 31
+			}
+			if today == resetDay {
+				matching = append(matching, inbound)
+			}
+		}
+		return matching, nil
+	}
+
+	// Standard periods: query by exact match
+	var inbounds []*model.Inbound
+	err := db.Model(model.Inbound{}).Where("traffic_reset = ?", string(j.period)).Find(&inbounds).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	return inbounds, nil
 }

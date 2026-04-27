@@ -3,11 +3,11 @@ package service
 import (
 	"errors"
 
-	"github.com/mhsanaei/3x-ui/v2/database"
-	"github.com/mhsanaei/3x-ui/v2/database/model"
-	"github.com/mhsanaei/3x-ui/v2/logger"
-	"github.com/mhsanaei/3x-ui/v2/util/crypto"
-	ldaputil "github.com/mhsanaei/3x-ui/v2/util/ldap"
+	"github.com/XiaSummer740/XX-UI/database"
+	"github.com/XiaSummer740/XX-UI/database/model"
+	"github.com/XiaSummer740/XX-UI/logger"
+	"github.com/XiaSummer740/XX-UI/util/crypto"
+	ldaputil "github.com/XiaSummer740/XX-UI/util/ldap"
 	"github.com/xlzd/gotp"
 	"gorm.io/gorm"
 )

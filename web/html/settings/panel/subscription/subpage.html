@@ -176,6 +176,14 @@
                                         [[ IntlUtil.formatDate(app.expireMs) ]]
                                     </template>
                                 </a-descriptions-item>
+                                <a-descriptions-item v-if="app.trafficReset && app.trafficReset !== 'never'" label='{{ i18n "subscription.trafficReset" }}'>
+                                    <template v-if="app.trafficReset === 'custom_date'">
+                                        {{ i18n "subscription.trafficResetCustom" }} [[ app.resetDay ]] {{ i18n "subscription.trafficResetDay" }}
+                                    </template>
+                                    <template v-else>
+                                        [[ app.trafficResetLabel ]]
+                                    </template>
+                                </a-descriptions-item>
                             </a-descriptions>
                         </a-form-item>
                     </a-form>
@@ -259,7 +267,12 @@
     data-download="{{ .download }}" data-upload="{{ .upload }}" data-used="{{ .used }}" data-total="{{ .total }}"
     data-remained="{{ .remained }}" data-expire="{{ .expire }}" data-lastonline="{{ .lastOnline }}"
     data-downloadbyte="{{ .downloadByte }}" data-uploadbyte="{{ .uploadByte }}" data-totalbyte="{{ .totalByte }}"
-    data-datepicker="{{ .datepicker }}"></template>
+    data-datepicker="{{ .datepicker }}"
+    data-traffic-reset="{{ .trafficReset }}" data-reset-day="{{ .resetDay }}"
+    data-traffic-reset-hourly='{{ i18n "pages.inbounds.periodicTrafficReset.hourly" }}'
+    data-traffic-reset-daily='{{ i18n "pages.inbounds.periodicTrafficReset.daily" }}'
+    data-traffic-reset-weekly='{{ i18n "pages.inbounds.periodicTrafficReset.weekly" }}'
+    data-traffic-reset-monthly='{{ i18n "pages.inbounds.periodicTrafficReset.monthly" }}'></template>
 <textarea id="subscription-links" style="display:none">{{ range .result }}{{ . }}
 {{ end }}</textarea>
 

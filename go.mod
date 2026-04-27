@@ -1,4 +1,4 @@
-module github.com/mhsanaei/3x-ui/v2
+module github.com/XiaSummer740/XX-UI
 
 go 1.26.2
 

@@ -126,48 +126,65 @@
             <a-col>
               <a-card hoverable>
                 <template #title>
-                  <a-space direction="horizontal">
-                    <a-button type="primary" icon="plus"
-                      @click="openAddInbound">
-                      <template v-if="!isMobile">{{ i18n
-                        "pages.inbounds.addInbound" }}</template>
-                    </a-button>
-                    <a-dropdown :trigger="['click']">
-                      <a-button type="primary" icon="menu">
+                  <div :style="{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '8px' }">
+                    <a-space direction="horizontal">
+                      <a-button type="primary" icon="plus"
+                        @click="openAddInbound">
                         <template v-if="!isMobile">{{ i18n
-                          "pages.inbounds.generalActions" }}</template>
+                          "pages.inbounds.addInbound" }}</template>
                       </a-button>
-                      <a-menu slot="overlay" @click="a => generalActions(a)"
-                        :theme="themeSwitcher.currentTheme">
-                        <a-menu-item key="import">
-                          <a-icon type="import"></a-icon>
-                          {{ i18n "pages.inbounds.importInbound" }}
-                        </a-menu-item>
-                        <a-menu-item key="export">
-                          <a-icon type="export"></a-icon>
-                          {{ i18n "pages.inbounds.export" }}
-                        </a-menu-item>
-                        <a-menu-item key="subs" v-if="subSettings.enable">
-                          <a-icon type="export"></a-icon>
-                          {{ i18n "pages.inbounds.export" }} - {{ i18n
-                          "pages.settings.subSettings" }}
-                        </a-menu-item>
-                        <a-menu-item key="resetInbounds">
-                          <a-icon type="reload"></a-icon>
-                          {{ i18n "pages.inbounds.resetAllTraffic" }}
-                        </a-menu-item>
-                        <a-menu-item key="resetClients">
-                          <a-icon type="file-done"></a-icon>
-                          {{ i18n "pages.inbounds.resetAllClientTraffics" }}
-                        </a-menu-item>
-                        <a-menu-item key="delDepletedClients"
-                          :style="{ color: '#FF4D4F' }">
-                          <a-icon type="rest"></a-icon>
-                          {{ i18n "pages.inbounds.delDepletedClients" }}
-                        </a-menu-item>
-                      </a-menu>
-                    </a-dropdown>
-                  </a-space>
+                      <a-button type="primary" icon="rocket"
+                        @click="generalActions({key:'batchGenerate'})">
+                        <template v-if="!isMobile">{{ i18n
+                          "pages.inbounds.batchGenerate" }}</template>
+                      </a-button>
+                      <a-button type="primary" icon="export"
+                        @click="oneClickSubscribe()">
+                        <template v-if="!isMobile">{{ i18n
+                          "pages.inbounds.oneClickSubscribe" }}</template>
+                      </a-button>
+                      <a-dropdown :trigger="['click']">
+                        <a-button type="primary" icon="menu">
+                          <template v-if="!isMobile">{{ i18n
+                            "pages.inbounds.generalActions" }}</template>
+                        </a-button>
+                        <a-menu slot="overlay" @click="a => generalActions(a)"
+                          :theme="themeSwitcher.currentTheme">
+                          <a-menu-item key="import">
+                            <a-icon type="import"></a-icon>
+                            {{ i18n "pages.inbounds.importInbound" }}
+                          </a-menu-item>
+                          <a-menu-item key="export">
+                            <a-icon type="export"></a-icon>
+                            {{ i18n "pages.inbounds.export" }}
+                          </a-menu-item>
+                          <a-menu-item key="subs" v-if="subSettings.enable">
+                            <a-icon type="export"></a-icon>
+                            {{ i18n "pages.inbounds.export" }} - {{ i18n
+                            "pages.settings.subSettings" }}
+                          </a-menu-item>
+                          <a-menu-item key="resetInbounds">
+                            <a-icon type="reload"></a-icon>
+                            {{ i18n "pages.inbounds.resetAllTraffic" }}
+                          </a-menu-item>
+                          <a-menu-item key="resetClients">
+                            <a-icon type="file-done"></a-icon>
+                            {{ i18n "pages.inbounds.resetAllClientTraffics" }}
+                          </a-menu-item>
+                          <a-menu-item key="delDepletedClients"
+                            :style="{ color: '#FF4D4F' }">
+                            <a-icon type="rest"></a-icon>
+                            {{ i18n "pages.inbounds.delDepletedClients" }}
+                          </a-menu-item>
+                        </a-menu>
+                      </a-dropdown>
+                      <!-- VPS 配置按钮 -->
+                      <a-button type="primary" icon="cloud" @click="openVpsModal">
+                        <template v-if="allSetting && allSetting.vpsName">[[ allSetting.vpsName ]]</template>
+                        <template v-else>VPS 配置</template>
+                      </a-button>
+                    </a-space>
+                  </div>
                 </template>
                 <template #extra>
                   <a-button-group>
@@ -505,6 +522,29 @@
                         </svg>
                       </a-tag>
                     </template>
+                    <template slot="ping" slot-scope="text, dbInbound">
+                      <a-tooltip>
+                        <template slot="title">
+                          <span v-if="pingStatus[dbInbound.id] && pingStatus[dbInbound.id].testing">{{ i18n "pages.inbounds.pingTesting" }}</span>
+                          <span v-else-if="pingStatus[dbInbound.id] && pingStatus[dbInbound.id].reachable">{{ i18n "pages.inbounds.pingReachable" }}: [[ pingStatus[dbInbound.id].latency ]]ms</span>
+                          <span v-else-if="pingStatus[dbInbound.id] && !pingStatus[dbInbound.id].reachable">{{ i18n "pages.inbounds.pingUnreachable" }}</span>
+                          <span v-else>{{ i18n "pages.inbounds.pingClick" }}</span>
+                        </template>
+                        <a-icon v-if="pingStatus[dbInbound.id] && pingStatus[dbInbound.id].testing"
+                          type="loading" :style="{ fontSize: '16px', color: '#1890ff' }"></a-icon>
+                        <a-icon v-else-if="pingStatus[dbInbound.id] && pingStatus[dbInbound.id].reachable"
+                          type="check-circle" theme="filled"
+                          :style="{ fontSize: '16px', color: '#52c41a' }"
+                          @click="checkPort(dbInbound.id, dbInbound.port)"></a-icon>
+                        <a-icon v-else-if="pingStatus[dbInbound.id] && !pingStatus[dbInbound.id].reachable"
+                          type="close-circle" theme="filled"
+                          :style="{ fontSize: '16px', color: '#ff4d4f' }"
+                          @click="checkPort(dbInbound.id, dbInbound.port)"></a-icon>
+                        <a-icon v-else
+                          type="api" :style="{ fontSize: '16px', color: '#8c8c8c', cursor: 'pointer' }"
+                          @click="checkPort(dbInbound.id, dbInbound.port)"></a-icon>
+                      </a-tooltip>
+                    </template>
                     <template slot="info" slot-scope="text, dbInbound">
                       <a-popover placement="bottomRight"
                         :overlay-class-name="themeSwitcher.currentTheme"
@@ -753,12 +793,41 @@
                   </a-table>
                 </a-space>
               </a-card>
+              </div>
             </a-col>
           </a-row>
         </transition>
       </a-spin>
     </a-layout-content>
   </a-layout>
+  <!-- VPS 配置弹窗 -->
+  <a-modal :title="'VPS 配置'" :visible="vpsModalVisible" @ok="saveVpsConfig" @cancel="vpsModalVisible = false" ok-text="保存" cancel-text="取消" :confirm-loading="vpsSaving" :class="themeSwitcher.currentTheme" width="500px">
+    <a-form layout="vertical">
+      <a-form-item label="VPS 名称">
+        <a-input v-model="vpsForm.vpsName" placeholder="例如：阿里云香港" />
+      </a-form-item>
+      <a-form-item label="VPS IP 地址">
+        <a-input v-model="vpsForm.vpsIP" placeholder="例如：1.2.3.4" />
+      </a-form-item>
+      <a-form-item label="数据中心 / 位置">
+        <a-input v-model="vpsForm.vpsLocation" placeholder="例如：香港、东京" />
+      </a-form-item>
+      <a-form-item label="配置规格">
+        <a-input v-model="vpsForm.vpsSpecs" placeholder="例如：2核4G 50G SSD" />
+      </a-form-item>
+      <a-form-item label="购买日期">
+        <a-date-picker v-model="vpsPurchaseDateMoment" value-format="x" style="width: 100%;" :placeholder="'选择日期'" />
+      </a-form-item>
+      <a-form-item label="流量重置日（每月几号重置）">
+        <a-select v-model="vpsForm.vpsResetDay" style="width: 100%;">
+          <a-select-option v-for="d in 31" :key="d" :value="d">每月 [[ d ]] 日</a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item label="备注">
+        <a-textarea v-model="vpsForm.vpsNotes" :rows="3" placeholder="备注信息" />
+      </a-form-item>
+    </a-form>
+  </a-modal>
 </a-layout>
 {{template "page/body_scripts" .}}
 <script
@@ -1045,6 +1114,11 @@
     align: 'center',
     width: 40,
     scopedSlots: { customRender: 'expiryTime' },
+  }, {
+    title: '{{ i18n "pages.inbounds.ping" }}',
+    align: 'center',
+    width: 35,
+    scopedSlots: { customRender: 'ping' },
   }];
 
   const mobileColumns = [{
@@ -1126,8 +1200,54 @@
       showAlert: false,
       ipLimitEnable: false,
       pageSize: 0,
+      pingStatus: {},
+      allSetting: {},
+      vpsModalVisible: false,
+      vpsSaving: false,
+      vpsForm: {
+        vpsName: '',
+        vpsIP: '',
+        vpsLocation: '',
+        vpsSpecs: '',
+        vpsPurchaseDate: '',
+        vpsResetDay: 1,
+        vpsNodeInfo: '',
+        vpsNotes: '',
+      },
+      vpsPurchaseDateMoment: null,
     },
     methods: {
+      async checkPort(inboundId, port) {
+        if (!this.pingStatus[inboundId]) {
+          this.$set(this.pingStatus, inboundId, {});
+        }
+        this.pingStatus[inboundId].testing = true;
+        try {
+          const msg = await HttpUtil.post('/panel/api/inbounds/checkPort', { port });
+          if (msg.success && msg.obj) {
+            this.$set(this.pingStatus, inboundId, {
+              reachable: msg.obj.reachable,
+              latency: msg.obj.latency,
+              testing: false,
+              error: msg.obj.error || null,
+            });
+          } else {
+            this.$set(this.pingStatus, inboundId, {
+              reachable: false,
+              latency: 0,
+              testing: false,
+              error: msg.msg || 'Unknown error',
+            });
+          }
+        } catch (err) {
+          this.$set(this.pingStatus, inboundId, {
+            reachable: false,
+            latency: 0,
+            testing: false,
+            error: err.message || 'Request failed',
+          });
+        }
+      },
       loading(spinning = true) {
         this.loadingStates.spinning = spinning;
       },
@@ -1317,6 +1437,9 @@
           case "import":
             this.importInbound();
             break;
+          case "batchGenerate":
+            this.batchGenerate();
+            break;
           case "export":
             this.exportAllLinks();
             break;
@@ -1416,6 +1539,7 @@
         await this.submit('/panel/api/inbounds/add', data, inModal);
       },
       openAddInbound() {
+        const self = this;
         inModal.show({
           title: '{{ i18n "pages.inbounds.addInbound"}}',
           okText: '{{ i18n "create"}}',
@@ -1423,7 +1547,28 @@
           confirm: async (inbound, dbInbound) => {
             await this.addInbound(inbound, dbInbound, inModal);
           },
-          isEdit: false
+          isEdit: false,
+          onShow: async function() {
+            // Auto-populate traffic reset from VPS purchase date
+            try {
+              const msg = await HttpUtil.post('/panel/setting/all');
+              if (msg.success && msg.obj && msg.obj.vpsPurchaseDate) {
+                const purchaseTs = Number(msg.obj.vpsPurchaseDate);
+                if (purchaseTs) {
+                  const d = new Date(purchaseTs * 1000);
+                  const day = d.getDate();
+                  if (day >= 1 && day <= 31) {
+                    self.$nextTick(() => {
+                      inModal.dbInbound.trafficReset = 'custom_date';
+                      inModal.dbInbound.resetDay = day;
+                    });
+                  }
+                }
+              }
+            } catch(e) {
+              // silently fail
+            }
+          }
         });
       },
       openEditInbound(dbInboundId) {
@@ -1451,6 +1596,7 @@
           expiryTime: dbInbound.expiryTime,
           trafficReset: dbInbound.trafficReset,
           lastTrafficResetTime: dbInbound.lastTrafficResetTime,
+          resetDay: dbInbound.resetDay,
 
           listen: inbound.listen,
           port: inbound.port,
@@ -1476,6 +1622,7 @@
           expiryTime: dbInbound.expiryTime,
           trafficReset: dbInbound.trafficReset,
           lastTrafficResetTime: dbInbound.lastTrafficResetTime,
+          resetDay: dbInbound.resetDay,
 
           listen: inbound.listen,
           port: inbound.port,
@@ -1926,6 +2073,26 @@
           [...new Set(subLinks)].join('\n'),
           dbInbound.remark + "-Subs");
       },
+      async batchGenerate() {
+        this.$confirm({
+          title: '{{ i18n "pages.inbounds.batchGenerateConfirmTitle" }}',
+          content: '{{ i18n "pages.inbounds.batchGenerateConfirmContent" }}',
+          class: themeSwitcher.currentTheme,
+          okText: '{{ i18n "create" }}',
+          cancelText: '{{ i18n "cancel" }}',
+          onOk: async () => {
+            const msg = await HttpUtil.post('/panel/api/inbounds/batchGenerate');
+            if (msg.success) {
+              this.$message.success(msg.obj && msg.obj.length > 0
+                ? '{{ i18n "pages.inbounds.batchGenerateSuccess" }}' + msg.obj.length
+                : '{{ i18n "pages.inbounds.batchGenerateSuccess" }}');
+              await this.getDBInbounds();
+            } else {
+              this.$message.error(msg.msg);
+            }
+          },
+        });
+      },
       importInbound() {
         promptModal.open({
           title: '{{ i18n "pages.inbounds.importInbound" }}',
@@ -1960,6 +2127,59 @@
           copyText.push(dbInbound.genInboundLinks(this.remarkModel));
         }
         txtModal.show('{{ i18n "pages.inbounds.export"}}', copyText.join('\r\n'), 'All-Inbounds');
+      },
+      oneClickSubscribe() {
+        // Collect all share links
+        let allLinks = [];
+        for (const dbInbound of this.dbInbounds) {
+          const links = dbInbound.genInboundLinks(this.remarkModel);
+          if (links && links.length > 0) {
+            allLinks.push(links);
+          }
+        }
+        const shareLinksText = allLinks.join('\r\n');
+        
+        // Build output with sections
+        let output = '';
+        
+        // Section 1: Share Links
+        output += '=== {{ i18n "pages.inbounds.subscribeShareLinks" }} ===\r\n';
+        output += shareLinksText;
+        output += '\r\n\r\n';
+        
+        // Section 2: Base64 Subscribe
+        output += '=== {{ i18n "pages.inbounds.subscribeBase64" }} ===\r\n';
+        try {
+          output += btoa(unescape(encodeURIComponent(shareLinksText)));
+        } catch(e) {
+          output += shareLinksText;
+        }
+        output += '\r\n\r\n';
+        
+        // Section 3: Subscription URLs (if enabled)
+        if (this.subSettings.enable) {
+          let subLinks = [];
+          for (const dbInbound of this.dbInbounds) {
+            const clients = this.getInboundClients(dbInbound);
+            if (clients != null) {
+              clients.forEach(c => {
+                if (c.subId && c.subId.length > 0) {
+                  subLinks.push(this.subSettings.subURI + c.subId);
+                }
+              });
+            }
+          }
+          if (subLinks.length > 0) {
+            output += '=== {{ i18n "pages.inbounds.subscribeSubUrls" }} ===\r\n';
+            output += [...new Set(subLinks)].join('\r\n');
+            output += '\r\n\r\n';
+          }
+        }
+        
+        txtModal.show(
+          '{{ i18n "pages.inbounds.oneClickSubscribe" }}',
+          output,
+          'Subscribe-All');
       },
       copy(dbInboundId) {
         dbInbound = this.dbInbounds.find(row => row.id === dbInboundId);
@@ -2017,7 +2237,90 @@
           return p;
         }
         return false
-      }
+      },
+      openVpsModal() {
+        // Populate form from current settings
+        if (this.allSetting && this.allSetting.vpsName) {
+          this.vpsForm.vpsName = this.allSetting.vpsName || '';
+          this.vpsForm.vpsIP = this.allSetting.vpsIP || '';
+          this.vpsForm.vpsLocation = this.allSetting.vpsLocation || '';
+          this.vpsForm.vpsSpecs = this.allSetting.vpsSpecs || '';
+          this.vpsForm.vpsPurchaseDate = this.allSetting.vpsPurchaseDate || '';
+          this.vpsForm.vpsResetDay = this.allSetting.vpsResetDay || 1;
+          this.vpsForm.vpsNodeInfo = this.allSetting.vpsNodeInfo || '';
+          this.vpsForm.vpsNotes = this.allSetting.vpsNotes || '';
+          // Convert purchase date timestamp to moment object for date picker
+          if (this.allSetting.vpsPurchaseDate) {
+            const ts = Number(this.allSetting.vpsPurchaseDate);
+            if (ts > 0) {
+              this.vpsPurchaseDateMoment = moment(ts * 1000);
+            } else {
+              this.vpsPurchaseDateMoment = null;
+            }
+          } else {
+            this.vpsPurchaseDateMoment = null;
+          }
+        } else {
+          // Reset form
+          this.vpsForm = {
+            vpsName: '',
+            vpsIP: '',
+            vpsLocation: '',
+            vpsSpecs: '',
+            vpsPurchaseDate: '',
+            vpsResetDay: 1,
+            vpsNodeInfo: '',
+            vpsNotes: '',
+          };
+          this.vpsPurchaseDateMoment = null;
+        }
+        this.vpsModalVisible = true;
+      },
+      async saveVpsConfig() {
+        this.vpsSaving = true;
+        try {
+          // Convert date picker moment to timestamp string
+          let purchaseDateStr = this.vpsForm.vpsPurchaseDate;
+          if (this.vpsPurchaseDateMoment) {
+            purchaseDateStr = String(Math.floor(this.vpsPurchaseDateMoment.valueOf() / 1000));
+          }
+
+          // Update allSetting with VPS form values (preserve all other settings)
+          this.allSetting.vpsName = this.vpsForm.vpsName;
+          this.allSetting.vpsIP = this.vpsForm.vpsIP;
+          this.allSetting.vpsLocation = this.vpsForm.vpsLocation;
+          this.allSetting.vpsSpecs = this.vpsForm.vpsSpecs;
+          this.allSetting.vpsPurchaseDate = purchaseDateStr;
+          this.allSetting.vpsResetDay = this.vpsForm.vpsResetDay;
+          this.allSetting.vpsNodeInfo = this.vpsForm.vpsNodeInfo;
+          this.allSetting.vpsNotes = this.vpsForm.vpsNotes;
+
+          // 同步流量重置日期到默认订阅设置
+          if (this.vpsForm.vpsResetDay > 0) {
+            this.allSetting.defaultResetMethod = 'custom_date';
+            this.allSetting.defaultResetDay = this.vpsForm.vpsResetDay;
+          }
+
+          // 发送完整 allSetting 对象，避免丢失其他设置（如 WebPort 等）
+          const msg = await HttpUtil.post('/panel/setting/update', this.allSetting);
+          if (msg.success) {
+            this.$message.success('VPS 配置已保存');
+            this.vpsModalVisible = false;
+          } else {
+            this.$message.error('保存失败: ' + (msg.msg || '未知错误'));
+          }
+        } catch (e) {
+          this.$message.error('保存失败: ' + (e.message || '网络错误'));
+        } finally {
+          this.vpsSaving = false;
+        }
+      },
+      formatVpsDate(ts) {
+        if (!ts) return '';
+        const d = new Date(Number(ts) * 1000);
+        if (isNaN(d.getTime())) return ts;
+        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+      },
     },
     watch: {
       searchKey: Utils.debounce(function (newVal) {
@@ -2025,6 +2328,24 @@
       }, 500)
     },
     mounted() {
+      // Fetch VPS settings for the VPS info card
+      HttpUtil.post('/panel/setting/all').then(msg => {
+        if (msg.success && msg.obj) {
+          this.allSetting = msg.obj;
+          // Populate VPS form defaults from saved settings
+          if (msg.obj.vpsName) {
+            this.vpsForm.vpsName = msg.obj.vpsName || '';
+            this.vpsForm.vpsIP = msg.obj.vpsIP || '';
+            this.vpsForm.vpsLocation = msg.obj.vpsLocation || '';
+            this.vpsForm.vpsSpecs = msg.obj.vpsSpecs || '';
+            this.vpsForm.vpsPurchaseDate = msg.obj.vpsPurchaseDate || '';
+            this.vpsForm.vpsResetDay = msg.obj.vpsResetDay || 1;
+            this.vpsForm.vpsNodeInfo = msg.obj.vpsNodeInfo || '';
+            this.vpsForm.vpsNotes = msg.obj.vpsNotes || '';
+          }
+        }
+      }).catch(() => {});
+
       if (window.location.protocol !== "https:") {
         this.showAlert = true;
       }

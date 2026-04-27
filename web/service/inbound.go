@@ -3,19 +3,22 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"net"
+	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/mhsanaei/3x-ui/v2/database"
-	"github.com/mhsanaei/3x-ui/v2/database/model"
-	"github.com/mhsanaei/3x-ui/v2/logger"
-	"github.com/mhsanaei/3x-ui/v2/util/common"
-	"github.com/mhsanaei/3x-ui/v2/xray"
+	"github.com/XiaSummer740/XX-UI/database"
+	"github.com/XiaSummer740/XX-UI/database/model"
+	"github.com/XiaSummer740/XX-UI/logger"
+	"github.com/XiaSummer740/XX-UI/util/common"
+	"github.com/XiaSummer740/XX-UI/xray"
 
 	"gorm.io/gorm"
 )
@@ -2800,4 +2803,185 @@ func (s *InboundService) DelInboundClientByEmail(inboundId int, email string) (b
 	}
 
 	return needRestart, db.Save(oldInbound).Error
+}
+
+// BatchGenerateInbounds generates 10 VLESS+TCP+Reality+Vision inbounds on ports 44301-44310.
+func (s *InboundService) BatchGenerateInbounds(userId int) ([]*model.Inbound, error) {
+	var created []*model.Inbound
+
+	// Reality target (host:port format - NO scheme prefix like https://, xray validates this)
+	targets := []string{
+		"addons.mozilla.org:443",
+		"www.google.com:443",
+		"www.microsoft.com:443",
+		"www.amazon.com:443",
+		"www.cloudflare.com:443",
+		"www.github.com:443",
+		"www.gitlab.com:443",
+		"www.bing.com:443",
+		"www.yahoo.com:443",
+		"www.wikipedia.org:443",
+	}
+
+	// serverNames (used for SNI matching - hostname only, no scheme/port)
+	serverNamesList := []string{
+		"addons.mozilla.org",
+		"www.google.com",
+		"www.microsoft.com",
+		"www.amazon.com",
+		"www.cloudflare.com",
+		"www.github.com",
+		"www.gitlab.com",
+		"www.bing.com",
+		"www.yahoo.com",
+		"www.wikipedia.org",
+	}
+
+	for i := 0; i < 10; i++ {
+		port := 44301 + i
+
+		// Generate UUID for client
+		clientID := uuid.New().String()
+		email := fmt.Sprintf("batch_%d_%s", port, clientID[:8])
+
+		// Generate X25519 key pair via xray x25519
+		keyPair, err := s.generateX25519Key()
+		if err != nil {
+			logger.Warning("Failed to generate X25519 key for port", port, ":", err)
+			continue
+		}
+
+		// Generate short ID (random hex string, up to 8 chars)
+		shortID := fmt.Sprintf("%08x", uuid.New().ID())
+		if len(shortID) > 8 {
+			shortID = shortID[:8]
+		}
+
+		// Build VLESS settings JSON with one client
+		settings := map[string]any{
+			"clients": []map[string]any{
+				{
+					"id":    clientID,
+					"flow":  "xtls-rprx-vision",
+					"email": email,
+				},
+			},
+			"decryption": "none",
+		}
+		settingsJSON, _ := json.MarshalIndent(settings, "", "  ")
+
+		// Build Reality stream settings JSON
+		// IMPORTANT: fingerprint, publicKey, spiderX, mldsa65Verify must be at the TOP LEVEL
+		// of realitySettings, NOT nested under "settings" — because xray.go:182 does
+		// delete(realitySettings, "settings") when building the xray config.
+		streamSettings := map[string]any{
+			"network":  "tcp",
+			"security": "reality",
+			"realitySettings": map[string]any{
+				"dest":           targets[i],
+				"target":         targets[i],
+				"serverNames":    []string{serverNamesList[i]},
+				"privateKey":     keyPair["privateKey"],
+				"shortIds":       []string{shortID},
+				"publicKey":      keyPair["publicKey"],
+				"fingerprint":    "chrome",
+				"spiderX":        "",
+				"mldsa65Verify":  "",
+				"mldsa65Seed":    "",
+				"show":           false,
+				"xver":           0,
+				"maxTimediff":    0,
+			},
+			"tcpSettings": map[string]any{
+				"header": map[string]any{
+					"type": "none",
+				},
+			},
+		}
+		streamJSON, _ := json.MarshalIndent(streamSettings, "", "  ")
+
+		// Build tag
+		tag := fmt.Sprintf("inbound-%v", port)
+
+		inbound := &model.Inbound{
+			UserId:         userId,
+			Up:             0,
+			Down:           0,
+			Total:          0,
+			Remark:         fmt.Sprintf("Batch-%d-VLESS+TCP+Reality+Vision", port),
+			Enable:         true,
+			ExpiryTime:     0,
+			TrafficReset:   "never",
+			ResetDay:       1,
+			Listen:         "",
+			Port:           port,
+			Protocol:       "vless",
+			Settings:       string(settingsJSON),
+			StreamSettings: string(streamJSON),
+			Tag:            tag,
+			Sniffing:       `{"enabled":true,"destOverride":["http","tls","quic"],"metadataOnly":false,"routeOnly":false}`,
+		}
+
+		createdInbound, _, err := s.AddInbound(inbound)
+		if err != nil {
+			logger.Warning("Failed to create inbound on port", port, ":", err)
+			continue
+		}
+		created = append(created, createdInbound)
+	}
+
+	return created, nil
+}
+
+// generateX25519Key runs the xray x25519 command and returns the key pair.
+func (s *InboundService) generateX25519Key() (map[string]any, error) {
+	cmd := exec.Command(xray.GetBinaryPath(), "x25519")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	if err != nil {
+		return nil, err
+	}
+
+	lines := strings.Split(out.String(), "\n")
+	if len(lines) < 2 {
+		return nil, fmt.Errorf("unexpected x25519 output: %s", out.String())
+	}
+
+	privateKeyLine := strings.Split(lines[0], ":")
+	publicKeyLine := strings.Split(lines[1], ":")
+
+	if len(privateKeyLine) < 2 || len(publicKeyLine) < 2 {
+		return nil, fmt.Errorf("unexpected x25519 output format: %s", out.String())
+	}
+
+	privateKey := strings.TrimSpace(privateKeyLine[1])
+	publicKey := strings.TrimSpace(publicKeyLine[1])
+
+	return map[string]any{
+		"privateKey": privateKey,
+		"publicKey":  publicKey,
+	}, nil
+}
+
+// CheckPort checks TCP connectivity to a local port and returns status + latency in milliseconds.
+func (s *InboundService) CheckPort(port int) map[string]any {
+	start := time.Now()
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	conn, err := net.DialTimeout("tcp", addr, 3*time.Second)
+	latency := time.Since(start).Milliseconds()
+	if err != nil {
+		return map[string]any{
+			"port":      port,
+			"reachable": false,
+			"latency":   0,
+			"error":     err.Error(),
+		}
+	}
+	conn.Close()
+	return map[string]any{
+		"port":      port,
+		"reachable": true,
+		"latency":   latency,
+	}
 }

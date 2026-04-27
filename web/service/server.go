@@ -20,12 +20,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v2/config"
-	"github.com/mhsanaei/3x-ui/v2/database"
-	"github.com/mhsanaei/3x-ui/v2/logger"
-	"github.com/mhsanaei/3x-ui/v2/util/common"
-	"github.com/mhsanaei/3x-ui/v2/util/sys"
-	"github.com/mhsanaei/3x-ui/v2/xray"
+	"github.com/XiaSummer740/XX-UI/config"
+	"github.com/XiaSummer740/XX-UI/database"
+	"github.com/XiaSummer740/XX-UI/logger"
+	"github.com/XiaSummer740/XX-UI/util/common"
+	"github.com/XiaSummer740/XX-UI/util/sys"
+	"github.com/XiaSummer740/XX-UI/xray"
 
 	"github.com/google/uuid"
 	"github.com/shirou/gopsutil/v4/cpu"
@@ -415,6 +415,16 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 	}
 
 	return status
+}
+
+// RefreshPublicIP clears cached IP addresses and forces re-detection on next GetStatus call.
+func (s *ServerService) RefreshPublicIP() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cachedIPv4 = ""
+	s.cachedIPv6 = ""
+	s.noIPv6 = false
+	logger.Info("Public IP cache cleared, will re-detect on next status refresh")
 }
 
 func (s *ServerService) AppendCpuSample(t time.Time, v float64) {

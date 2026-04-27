@@ -50,6 +50,13 @@
             </template>
         </a-setting-list-item>
         <a-setting-list-item paddings="small">
+            <template #title>{{ i18n "pages.settings.uriRandomizeEnable"}}</template>
+            <template #description>{{ i18n "pages.settings.uriRandomizeEnableDesc"}}</template>
+            <template #control>
+                <a-switch v-model="allSetting.uriRandomizeEnable"></a-switch>
+            </template>
+        </a-setting-list-item>
+        <a-setting-list-item paddings="small">
             <template #title>{{ i18n "pages.settings.sessionMaxAge" }}</template>
             <template #description>{{ i18n "pages.settings.sessionMaxAgeDesc" }}</template>
             <template #control>
@@ -273,6 +280,50 @@
             <template #title>Default Limit IP</template>
             <template #control>
                 <a-input-number :min="0" v-model="allSetting.ldapDefaultLimitIP" :style="{ width: '100%' }"></a-input-number>
+            </template>
+        </a-setting-list-item>
+    </a-collapse-panel>
+    <a-collapse-panel key="7" header='{{ i18n "pages.settings.vpsInfo" }}'>
+        <a-setting-list-item paddings="small">
+            <template #title>{{ i18n "pages.settings.vpsName" }}</template>
+            <template #control>
+                <a-input type="text" v-model="allSetting.vpsName"></a-input>
+            </template>
+        </a-setting-list-item>
+        <a-setting-list-item paddings="small">
+            <template #title>{{ i18n "pages.settings.vpsIP" }}</template>
+            <template #control>
+                <a-input type="text" v-model="allSetting.vpsIP"></a-input>
+            </template>
+        </a-setting-list-item>
+        <a-setting-list-item paddings="small">
+            <template #title>{{ i18n "pages.settings.vpsLocation" }}</template>
+            <template #control>
+                <a-input type="text" v-model="allSetting.vpsLocation"></a-input>
+            </template>
+        </a-setting-list-item>
+        <a-setting-list-item paddings="small">
+            <template #title>{{ i18n "pages.settings.vpsSpecs" }}</template>
+            <template #control>
+                <a-input type="text" v-model="allSetting.vpsSpecs"></a-input>
+            </template>
+        </a-setting-list-item>
+        <a-setting-list-item paddings="small">
+            <template #title>{{ i18n "pages.settings.vpsPurchaseDate" }}</template>
+            <template #control>
+                <a-date-picker size="small" v-model="vpsPurchaseDateMoment" :style="{ width: '100%' }" :placeholder='{{ i18n "pages.settings.datepickerPlaceholder"}}' />
+            </template>
+        </a-setting-list-item>
+        <a-setting-list-item paddings="small">
+            <template #title>{{ i18n "pages.settings.vpsNodeInfo" }}</template>
+            <template #control>
+                <a-input type="text" v-model="allSetting.vpsNodeInfo"></a-input>
+            </template>
+        </a-setting-list-item>
+        <a-setting-list-item paddings="small">
+            <template #title>{{ i18n "pages.settings.vpsNotes" }}</template>
+            <template #control>
+                <a-textarea v-model="allSetting.vpsNotes" :rows="2"></a-textarea>
             </template>
         </a-setting-list-item>
     </a-collapse-panel>

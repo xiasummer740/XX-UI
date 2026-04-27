@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mhsanaei/3x-ui/v2/database/model"
+	"github.com/XiaSummer740/XX-UI/database/model"
 )
 
 // disableSSRFCheck disables the SSRF guard for the duration of a test,

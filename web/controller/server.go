@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v2/web/global"
-	"github.com/mhsanaei/3x-ui/v2/web/service"
-	"github.com/mhsanaei/3x-ui/v2/web/websocket"
+	"github.com/XiaSummer740/XX-UI/web/global"
+	"github.com/XiaSummer740/XX-UI/web/service"
+	"github.com/XiaSummer740/XX-UI/web/websocket"
 
 	"github.com/gin-gonic/gin"
 )
@@ -50,6 +50,7 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.GET("/getNewmldsa65", a.getNewmldsa65)
 	g.GET("/getNewmlkem768", a.getNewmlkem768)
 	g.GET("/getNewVlessEnc", a.getNewVlessEnc)
+	g.GET("/refreshIP", a.refreshIP)
 
 	g.POST("/stopXrayService", a.stopXrayService)
 	g.POST("/restartXrayService", a.restartXrayService)
@@ -86,6 +87,17 @@ func (a *ServerController) startTask() {
 
 // status returns the current server status information.
 func (a *ServerController) status(c *gin.Context) { jsonObj(c, a.lastStatus, nil) }
+
+// refreshIP clears cached public IP addresses and triggers re-detection.
+func (a *ServerController) refreshIP(c *gin.Context) {
+	a.serverService.RefreshPublicIP()
+	// Force immediate status refresh to re-detect IPs
+	a.refreshStatus()
+	jsonObj(c, map[string]any{
+		"ipv4": a.lastStatus.PublicIP.IPv4,
+		"ipv6": a.lastStatus.PublicIP.IPv6,
+	}, nil)
+}
 
 // getCpuHistoryBucket retrieves aggregated CPU usage history based on the specified time bucket.
 func (a *ServerController) getCpuHistoryBucket(c *gin.Context) {

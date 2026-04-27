@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mhsanaei/3x-ui/v2/config"
+	"github.com/XiaSummer740/XX-UI/config"
 
 	"github.com/gin-gonic/gin"
 )
@@ -98,7 +98,7 @@ func (a *SUBController) initRouter(g *gin.RouterGroup) {
 func (a *SUBController) subs(c *gin.Context) {
 	subId := c.Param("subid")
 	scheme, host, hostWithPort, hostHeader := a.subService.ResolveRequest(c)
-	subs, lastOnline, traffic, err := a.subService.GetSubs(subId, host)
+	subs, lastOnline, traffic, trafficReset, resetDay, err := a.subService.GetSubs(subId, host)
 	if err != nil || len(subs) == 0 {
 		c.String(400, "Error!")
 	} else {
@@ -131,7 +131,7 @@ func (a *SUBController) subs(c *gin.Context) {
 				// Remove trailing slash if exists, add subId, then add trailing slash
 				basePathStr = strings.TrimRight(basePathStr, "/") + "/" + subId + "/"
 			}
-			page := a.subService.BuildPageData(subId, hostHeader, traffic, lastOnline, subs, subURL, subJsonURL, subClashURL, basePathStr)
+			page := a.subService.BuildPageData(subId, hostHeader, traffic, lastOnline, subs, subURL, subJsonURL, subClashURL, basePathStr, trafficReset, resetDay)
 			c.HTML(200, "subpage.html", gin.H{
 				"title":        "subscription.title",
 				"cur_ver":      config.GetVersion(),
@@ -153,6 +153,8 @@ func (a *SUBController) subs(c *gin.Context) {
 				"subJsonUrl":   page.SubJsonUrl,
 				"subClashUrl":  page.SubClashUrl,
 				"result":       page.Result,
+				"trafficReset": page.TrafficReset,
+				"resetDay":     page.ResetDay,
 			})
 			return
 		}

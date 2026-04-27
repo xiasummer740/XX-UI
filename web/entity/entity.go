@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v2/util/common"
+	"github.com/XiaSummer740/XX-UI/util/common"
 )
 
 // Msg represents a standard API response message with success status, message text, and optional data object.
@@ -35,6 +35,10 @@ type AllSetting struct {
 	TrafficDiff int    `json:"trafficDiff" form:"trafficDiff"` // Traffic warning threshold percentage
 	RemarkModel string `json:"remarkModel" form:"remarkModel"` // Remark model pattern for inbounds
 	Datepicker  string `json:"datepicker" form:"datepicker"`   // Date picker format
+
+	// Traffic reset defaults
+	DefaultResetMethod string `json:"defaultResetMethod" form:"defaultResetMethod"` // Default traffic reset method for new inbounds (never/hourly/daily/weekly/monthly/custom_date)
+	DefaultResetDay    int    `json:"defaultResetDay" form:"defaultResetDay"`       // Default reset day of month for "custom_date" mode (1-31)
 
 	// Telegram bot settings
 	TgBotEnable      bool   `json:"tgBotEnable" form:"tgBotEnable"`           // Enable Telegram bot notifications
@@ -106,7 +110,28 @@ type AllSetting struct {
 	LdapDefaultTotalGB    int    `json:"ldapDefaultTotalGB" form:"ldapDefaultTotalGB"`
 	LdapDefaultExpiryDays int    `json:"ldapDefaultExpiryDays" form:"ldapDefaultExpiryDays"`
 	LdapDefaultLimitIP    int    `json:"ldapDefaultLimitIP" form:"ldapDefaultLimitIP"`
-	// JSON subscription routing rules
+
+	// Database backup settings
+	DbBackupEnable    bool   `json:"dbBackupEnable" form:"dbBackupEnable"`       // Enable automatic database backup
+	DbBackupPath      string `json:"dbBackupPath" form:"dbBackupPath"`           // Backup directory path
+	DbBackupRetention int    `json:"dbBackupRetention" form:"dbBackupRetention"` // Number of backups to retain
+
+	// Xray periodic restart settings
+	XrayRestartEnable bool   `json:"xrayRestartEnable" form:"xrayRestartEnable"` // Enable periodic xray restart
+	XrayRestartCron   string `json:"xrayRestartCron" form:"xrayRestartCron"`     // Cron expression for xray restart schedule
+
+	// URI randomization settings
+	UriRandomizeEnable bool `json:"uriRandomizeEnable" form:"uriRandomizeEnable"` // Enable panel URI path randomization on startup
+
+	// VPS information settings
+	VpsName         string `json:"vpsName" form:"vpsName"`                 // VPS name/label
+	VpsIP           string `json:"vpsIP" form:"vpsIP"`                     // VPS IP address
+	VpsLocation     string `json:"vpsLocation" form:"vpsLocation"`         // VPS location/datacenter
+	VpsSpecs        string `json:"vpsSpecs" form:"vpsSpecs"`               // VPS specifications (CPU/RAM/disk)
+	VpsPurchaseDate string `json:"vpsPurchaseDate" form:"vpsPurchaseDate"` // VPS purchase date (Unix timestamp)
+	VpsNodeInfo     string `json:"vpsNodeInfo" form:"vpsNodeInfo"`         // VPS node info for inbound auto-fill
+	VpsNotes        string `json:"vpsNotes" form:"vpsNotes"`               // VPS notes
+	VpsResetDay     int    `json:"vpsResetDay" form:"vpsResetDay"`         // VPS traffic reset day of month (1-31)
 }
 
 // CheckValid validates all settings in the AllSetting struct, checking IP addresses, ports, SSL certificates, and other configuration values.

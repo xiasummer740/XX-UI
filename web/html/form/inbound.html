@@ -77,7 +77,13 @@
             <a-select-option value="monthly">{{ i18n
                 "pages.inbounds.periodicTrafficReset.monthly"
                 }}</a-select-option>
+            <a-select-option value="custom_date">{{ i18n
+                "pages.inbounds.periodicTrafficReset.customDate"
+                }}</a-select-option>
         </a-select>
+        <a-form-item v-if="dbInbound.trafficReset === 'custom_date'" label='{{ i18n "pages.inbounds.periodicTrafficReset.resetDay" }}' :style="{ marginBottom: '0', marginTop: '8px' }">
+            <a-input-number v-model.number="dbInbound.resetDay" :min="1" :max="31" style="width:100%;"></a-input-number>
+        </a-form-item>
     </a-form-item>
 
     <a-form-item>

@@ -485,6 +485,7 @@
 "information" = "اطلاعات"
 "language" = "زبان"
 "telegramBotLanguage" = "زبان ربات تلگرام"
+"vpsConfigure" = "تنظیمات VPS"
 
 [pages.xray]
 "title" = "پیکربندی ایکس‌ری"

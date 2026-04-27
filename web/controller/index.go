@@ -6,9 +6,9 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v2/logger"
-	"github.com/mhsanaei/3x-ui/v2/web/service"
-	"github.com/mhsanaei/3x-ui/v2/web/session"
+	"github.com/XiaSummer740/XX-UI/logger"
+	"github.com/XiaSummer740/XX-UI/web/service"
+	"github.com/XiaSummer740/XX-UI/web/session"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"

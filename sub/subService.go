@@ -11,13 +11,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
 
-	"github.com/mhsanaei/3x-ui/v2/database"
-	"github.com/mhsanaei/3x-ui/v2/database/model"
-	"github.com/mhsanaei/3x-ui/v2/logger"
-	"github.com/mhsanaei/3x-ui/v2/util/common"
-	"github.com/mhsanaei/3x-ui/v2/util/random"
-	"github.com/mhsanaei/3x-ui/v2/web/service"
-	"github.com/mhsanaei/3x-ui/v2/xray"
+	"github.com/XiaSummer740/XX-UI/database"
+	"github.com/XiaSummer740/XX-UI/database/model"
+	"github.com/XiaSummer740/XX-UI/logger"
+	"github.com/XiaSummer740/XX-UI/util/common"
+	"github.com/XiaSummer740/XX-UI/util/random"
+	"github.com/XiaSummer740/XX-UI/web/service"
+	"github.com/XiaSummer740/XX-UI/xray"
 )
 
 // SubService provides business logic for generating subscription links and managing subscription data.
@@ -39,7 +39,8 @@ func NewSubService(showInfo bool, remarkModel string) *SubService {
 }
 
 // GetSubs retrieves subscription links for a given subscription ID and host.
-func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.ClientTraffic, error) {
+// Returns links, lastOnline time, aggregated traffic, traffic reset method, reset day, and error.
+func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.ClientTraffic, string, int, error) {
 	s.address = host
 	var result []string
 	var traffic xray.ClientTraffic
@@ -47,12 +48,16 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.C
 	var clientTraffics []xray.ClientTraffic
 	inbounds, err := s.getInboundsBySubId(subId)
 	if err != nil {
-		return nil, 0, traffic, err
+		return nil, 0, traffic, "", 0, err
 	}
 
 	if len(inbounds) == 0 {
-		return nil, 0, traffic, common.NewError("No inbounds found with ", subId)
+		return nil, 0, traffic, "", 0, common.NewError("No inbounds found with ", subId)
 	}
+
+	// Collect traffic reset info from the first matched inbound
+	trafficReset := inbounds[0].TrafficReset
+	resetDay := inbounds[0].ResetDay
 
 	s.datepicker, err = s.settingService.GetDatepicker()
 	if err != nil {
@@ -109,7 +114,7 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.C
 			}
 		}
 	}
-	return result, lastOnline, traffic, nil
+	return result, lastOnline, traffic, trafficReset, resetDay, nil
 }
 
 func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) {
@@ -1224,6 +1229,13 @@ type PageData struct {
 	SubJsonUrl   string
 	SubClashUrl  string
 	Result       []string
+	TrafficReset string // Traffic reset method (never/hourly/daily/weekly/monthly/custom_date)
+	ResetDay     int    // Custom reset day of month (1-31)
+	VpsName      string // VPS name/label
+	VpsIP        string // VPS IP address
+	VpsLocation  string // VPS location/datacenter
+	VpsSpecs     string // VPS specifications (CPU/RAM/disk)
+	VpsPurchaseDate string // VPS purchase date (Unix timestamp)
 }
 
 // ResolveRequest extracts scheme and host info from request/headers consistently.
@@ -1337,7 +1349,7 @@ func (s *SubService) joinPathWithID(basePath, subId string) string {
 
 // BuildPageData parses header and prepares the template view model.
 // BuildPageData constructs page data for rendering the subscription information page.
-func (s *SubService) BuildPageData(subId string, hostHeader string, traffic xray.ClientTraffic, lastOnline int64, subs []string, subURL, subJsonURL, subClashURL string, basePath string) PageData {
+func (s *SubService) BuildPageData(subId string, hostHeader string, traffic xray.ClientTraffic, lastOnline int64, subs []string, subURL, subJsonURL, subClashURL string, basePath string, trafficReset string, resetDay int) PageData {
 	download := common.FormatTraffic(traffic.Down)
 	upload := common.FormatTraffic(traffic.Up)
 	total := "∞"
@@ -1354,25 +1366,46 @@ func (s *SubService) BuildPageData(subId string, hostHeader string, traffic xray
 		datepicker = "gregorian"
 	}
 
+	// Fetch VPS settings for display in subscription page
+	vpsName := ""
+	vpsIP := ""
+	vpsLocation := ""
+	vpsSpecs := ""
+	vpsPurchaseDate := ""
+	if allSettings, err := s.settingService.GetAllSetting(); err == nil && allSettings != nil {
+		vpsName = allSettings.VpsName
+		vpsIP = allSettings.VpsIP
+		vpsLocation = allSettings.VpsLocation
+		vpsSpecs = allSettings.VpsSpecs
+		vpsPurchaseDate = allSettings.VpsPurchaseDate
+	}
+
 	return PageData{
-		Host:         hostHeader,
-		BasePath:     basePath,
-		SId:          subId,
-		Download:     download,
-		Upload:       upload,
-		Total:        total,
-		Used:         used,
-		Remained:     remained,
-		Expire:       traffic.ExpiryTime / 1000,
-		LastOnline:   lastOnline,
-		Datepicker:   datepicker,
-		DownloadByte: traffic.Down,
-		UploadByte:   traffic.Up,
-		TotalByte:    traffic.Total,
-		SubUrl:       subURL,
-		SubJsonUrl:   subJsonURL,
-		SubClashUrl:  subClashURL,
-		Result:       subs,
+		Host:            hostHeader,
+		BasePath:        basePath,
+		SId:             subId,
+		Download:        download,
+		Upload:          upload,
+		Total:           total,
+		Used:            used,
+		Remained:        remained,
+		Expire:          traffic.ExpiryTime / 1000,
+		LastOnline:      lastOnline,
+		Datepicker:      datepicker,
+		DownloadByte:    traffic.Down,
+		UploadByte:      traffic.Up,
+		TotalByte:       traffic.Total,
+		SubUrl:          subURL,
+		SubJsonUrl:      subJsonURL,
+		SubClashUrl:     subClashURL,
+		Result:          subs,
+		TrafficReset:    trafficReset,
+		ResetDay:        resetDay,
+		VpsName:         vpsName,
+		VpsIP:           vpsIP,
+		VpsLocation:     vpsLocation,
+		VpsSpecs:        vpsSpecs,
+		VpsPurchaseDate: vpsPurchaseDate,
 	}
 }
 
