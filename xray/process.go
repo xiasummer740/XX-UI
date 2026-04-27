@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -297,6 +299,63 @@ func KillOrphanXray() {
 	}
 }
 
+// geoDataURLs provides the download URLs for geoip.dat and geosite.dat files.
+var geoDataURLs = map[string]string{
+	"geoip.dat":   "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat",
+	"geosite.dat": "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat",
+}
+
+// ensureGeoDataFiles checks if geoip.dat and geosite.dat exist in the binary folder.
+// If any are missing, they are downloaded automatically from GitHub to prevent xray
+// from failing to start due to missing route data files (e.g., geoip:private rule).
+func ensureGeoDataFiles() {
+	binFolder := config.GetBinFolderPath()
+
+	// Ensure bin directory exists
+	if err := os.MkdirAll(binFolder, 0o755); err != nil {
+		logger.Warningf("Failed to create bin folder for geo data: %s", err)
+		return
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	for filename, url := range geoDataURLs {
+		filePath := filepath.Join(binFolder, filename)
+
+		// Check if file already exists
+		if _, err := os.Stat(filePath); err == nil {
+			continue // File exists, skip download
+		}
+
+		logger.Infof("Geo data file %s not found at %s, downloading from %s ...", filename, filePath, url)
+
+		resp, err := client.Get(url)
+		if err != nil {
+			logger.Warningf("Failed to download %s: %v", filename, err)
+			continue
+		}
+
+		out, err := os.Create(filePath)
+		if err != nil {
+			logger.Warningf("Failed to create %s: %v", filePath, err)
+			resp.Body.Close()
+			continue
+		}
+
+		written, err := io.Copy(out, resp.Body)
+		resp.Body.Close()
+		out.Close()
+
+		if err != nil {
+			logger.Warningf("Failed to write %s: %v", filename, err)
+			os.Remove(filePath)
+			continue
+		}
+
+		logger.Infof("Successfully downloaded %s (%d bytes)", filename, written)
+	}
+}
+
 // Start launches the Xray process with the current configuration.
 // Returns an error immediately if the binary is missing, the config is invalid,
 // or the process exits within the startup grace period (1 second).
@@ -343,6 +402,11 @@ func (p *process) Start() (err error) {
 	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
 		return common.NewErrorf("Xray binary not found at: %s", binaryPath)
 	}
+
+	// Ensure geoip.dat and geosite.dat are present before starting xray.
+	// These files are required by routing rules like "geoip:private" and
+	// will be downloaded automatically from GitHub if missing.
+	ensureGeoDataFiles()
 
 	cmd := exec.Command(binaryPath, "-c", configPath)
 	p.cmd = cmd
