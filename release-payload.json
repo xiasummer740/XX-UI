@@ -1,0 +1,8 @@
+{
+  "tag_name": "v2.11.0",
+  "target_commitish": "main",
+  "name": "XX-UI v2.11.0",
+  "body": "## XX-UI v2.11.0\n\n### 新功能\n\n1. **🌈 炫彩渐变背景** - 优化背景颜色为更绚丽的彩虹渐变\n2. **🌐 IP检测优化** - 点击IP检测自动获取 VPS 公网 IP\n3. **⚙️ 协议选择器** - 一键配置改为可自由选择协议类型和数量的节点生成器\n   - 支持 8 种协议：VLESS+Reality、VMess+TCP、Shadowsocks、Trojan+TCP、VLESS+WS、VMess+WS、VLESS+gRPC、Trojan+WS\n   - 可选择生成数量（1-10个）\n   - 实时端口范围预览\n\n### 完整变更日志\n- 背景颜色从蓝紫渐变升级为彩虹渐变\n- IP检测按钮现在自动填入 VPS 公网 IP\n- 一键配置替换为协议选择器弹窗\n- 版本号从 v2.10.0 升级到 v2.11.0",
+  "draft": false,
+  "prerelease": false
+}

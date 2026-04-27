@@ -74,7 +74,7 @@ if [ "$1" = "push" ]; then
         RELEASE_NOTES+="- 请在此处填写本次更新的具体内容\n\n"
         RELEASE_NOTES+="### 一键安装\n"
         RELEASE_NOTES+="\`\`\`bash\n"
-        RELEASE_NOTES+="bash <(curl -Ls https://raw.githubusercontent.com/XiaSummer740/XX-UI/main/install.sh)\n"
+        RELEASE_NOTES+="bash <(curl -Ls https://raw.githubusercontent.com/xiasummer740/XX-UI/main/install.sh)\n"
         RELEASE_NOTES+="\`\`\`\n\n"
         RELEASE_NOTES+="### 管理命令\n"
         RELEASE_NOTES+="\`\`\`bash\n"
@@ -88,19 +88,19 @@ if [ "$1" = "push" ]; then
                 -H "Authorization: token $GITHUB_TOKEN" \
                 -H "Accept: application/vnd.github.v3+json" \
                 -d "$PAYLOAD" \
-                "https://api.github.com/repos/XiaSummer740/XX-UI/releases" 2>/dev/null || echo "")
+                "https://api.github.com/repos/xiasummer740/XX-UI/releases" 2>/dev/null || echo "")
 
             if echo "$RESPONSE" | grep -q '"id"'; then
-                echo -e "  ${GREEN}GitHub Release 创建成功: https://github.com/XiaSummer740/XX-UI/releases/tag/$LATEST_TAG${NC}"
+                echo -e "  ${GREEN}GitHub Release 创建成功: https://github.com/xiasummer740/XX-UI/releases/tag/$LATEST_TAG${NC}"
             else
                 echo -e "  ${YELLOW}GitHub Release 需要在网页端手动创建:${NC}"
-                echo -e "     https://github.com/XiaSummer740/XX-UI/releases/new?tag=$LATEST_TAG"
+                echo -e "     https://github.com/xiasummer740/XX-UI/releases/new?tag=$LATEST_TAG"
                 echo -e "  ${YELLOW}或设置 GITHUB_TOKEN 环境变量后重试${NC}"
             fi
         else
             echo -e "  ${YELLOW}未设置 GITHUB_TOKEN 环境变量${NC}"
             echo -e "    请手动创建 Release:"
-            echo -e "     https://github.com/XiaSummer740/XX-UI/releases/new?tag=$LATEST_TAG"
+            echo -e "     https://github.com/xiasummer740/XX-UI/releases/new?tag=$LATEST_TAG"
             echo ""
             echo -e "  设置 Token 后可自动创建:"
             echo -e "    ${GREEN}export GITHUB_TOKEN=\"你的GitHubToken\"${NC}"
