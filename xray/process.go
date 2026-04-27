@@ -298,6 +298,8 @@ func KillOrphanXray() {
 }
 
 // Start launches the Xray process with the current configuration.
+// Returns an error immediately if the binary is missing, the config is invalid,
+// or the process exits within the startup grace period (1 second).
 func (p *process) Start() (err error) {
 	if p.IsRunning() {
 		return errors.New("xray is already running")
@@ -327,38 +329,73 @@ func (p *process) Start() (err error) {
 	if p.configPath != "" {
 		configPath = p.configPath
 	}
+
+	logger.Infof("Writing xray config to: %s", configPath)
 	err = os.WriteFile(configPath, data, fs.ModePerm)
 	if err != nil {
 		return common.NewErrorf("Failed to write configuration file: %v", err)
 	}
 
-	cmd := exec.Command(GetBinaryPath(), "-c", configPath)
+	binaryPath := GetBinaryPath()
+	logger.Infof("Starting xray binary: %s", binaryPath)
+
+	// Check if binary exists before attempting to start
+	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
+		return common.NewErrorf("Xray binary not found at: %s", binaryPath)
+	}
+
+	cmd := exec.Command(binaryPath, "-c", configPath)
 	p.cmd = cmd
 
 	cmd.Stdout = p.logWriter
 	cmd.Stderr = p.logWriter
 
+	// Use Start() instead of Run() so we can monitor the process startup
+	err = cmd.Start()
+	if err != nil {
+		return common.NewErrorf("Failed to start xray process: %v", err)
+	}
+
+	// Channel to signal process exit from the monitoring goroutine
+	processExited := make(chan error, 1)
+
 	go func() {
-		err := cmd.Run()
-		if err != nil {
+		waitErr := cmd.Wait()
+		if waitErr != nil {
 			// On Windows, killing the process results in "exit status 1" which isn't an error for us
 			if runtime.GOOS == "windows" {
-				errStr := strings.ToLower(err.Error())
+				errStr := strings.ToLower(waitErr.Error())
 				if strings.Contains(errStr, "exit status 1") {
 					// Suppress noisy log on graceful stop
-					p.exitErr = err
+					p.exitErr = waitErr
+					processExited <- waitErr
 					return
 				}
 			}
-			logger.Error("Failure in running xray-core:", err)
-			p.exitErr = err
+			logger.Error("Failure in running xray-core:", waitErr)
+			p.exitErr = waitErr
 		}
+		processExited <- waitErr
 	}()
 
-	p.refreshVersion()
-	p.refreshAPIPort()
-
-	return nil
+	// Wait up to 1 second for the process to either stabilize or crash.
+	// This ensures that startup failures (e.g., port conflict, invalid config,
+	// missing binary) are captured and returned to the caller instead of being
+	// silently swallowed in a background goroutine.
+	select {
+	case waitErr := <-processExited:
+		// Process exited within the startup grace period — treat as startup failure
+		errMsg := "xray process exited immediately after start"
+		if waitErr != nil {
+			return common.NewErrorf("%s: %v", errMsg, waitErr)
+		}
+		return common.NewError(errMsg)
+	case <-time.After(1 * time.Second):
+		// Process is still running after the grace period — startup succeeded
+		p.refreshVersion()
+		p.refreshAPIPort()
+		return nil
+	}
 }
 
 // Stop terminates the running Xray process.
