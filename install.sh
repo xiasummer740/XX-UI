@@ -964,6 +964,8 @@ install_x-ui() {
     echo -e "│  ${blue}x-ui install${plain}      - 安装面板                   │"
     echo -e "│  ${blue}x-ui uninstall${plain}    - 卸载面板                   │"
     echo -e "└───────────────────────────────────────────────────────┘"
+    echo -e ""
+    echo -e "${green}输入 x-ui 查看管理菜单页面${plain}"
 }
 
 echo -e "${green}正在运行...${plain}"
