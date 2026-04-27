@@ -138,17 +138,41 @@ func (s *InboundService) checkPortExist(listen string, port int, ignoreId int) (
 }
 
 func (s *InboundService) GetClients(inbound *model.Inbound) ([]model.Client, error) {
-	settings := map[string][]model.Client{}
-	json.Unmarshal([]byte(inbound.Settings), &settings)
+	var settings map[string]any
+	if err := json.Unmarshal([]byte(inbound.Settings), &settings); err != nil {
+		return nil, fmt.Errorf("failed to parse settings: %v", err)
+	}
 	if settings == nil {
 		return nil, fmt.Errorf("setting is null")
 	}
 
-	clients := settings["clients"]
-	if clients == nil {
+	rawClients, ok := settings["clients"]
+	if !ok || rawClients == nil {
 		return nil, nil
 	}
-	return clients, nil
+
+	clientsArr, ok := rawClients.([]any)
+	if !ok {
+		return nil, fmt.Errorf("clients is not an array")
+	}
+
+	var result []model.Client
+	for _, raw := range clientsArr {
+		clientMap, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		bs, err := json.Marshal(clientMap)
+		if err != nil {
+			continue
+		}
+		var c model.Client
+		if err := json.Unmarshal(bs, &c); err != nil {
+			continue
+		}
+		result = append(result, c)
+	}
+	return result, nil
 }
 
 func (s *InboundService) getAllEmails() ([]string, error) {
@@ -2939,6 +2963,7 @@ func (s *InboundService) BatchGenerateInbounds(userId int) ([]*model.Inbound, er
 // Each protocol gets inboundsCount inbounds on consecutive ports starting from basePort.
 func (s *InboundService) GenerateProtocolInbounds(userId int, protocols []string, inboundsCount int) ([]*model.Inbound, error) {
 	var created []*model.Inbound
+	var firstErr error
 
 	for pi, protocol := range protocols {
 		basePort := 44301 + (pi * 100)
@@ -2965,25 +2990,33 @@ func (s *InboundService) GenerateProtocolInbounds(userId int, protocols []string
 				inbound, err = s.buildVlessGrpc(userId, port, i)
 			case "trojan-ws":
 				inbound, err = s.buildTrojanWs(userId, port, i)
+			case "vless-tcp-tls":
+				inbound, err = s.buildVlessTcpTls(userId, port, i)
 			default:
 				continue
 			}
 
 			if err != nil {
 				logger.Warning("Failed to build inbound for protocol", protocol, "port", port, ":", err)
+				if firstErr == nil {
+					firstErr = err
+				}
 				continue
 			}
 
 			createdInbound, _, err := s.AddInbound(inbound)
 			if err != nil {
 				logger.Warning("Failed to create inbound on port", port, ":", err)
+				if firstErr == nil {
+					firstErr = err
+				}
 				continue
 			}
 			created = append(created, createdInbound)
 		}
 	}
 
-	return created, nil
+	return created, firstErr
 }
 
 // buildVlessReality builds a VLESS+TCP+Reality+Vision inbound
@@ -3364,6 +3397,66 @@ func (s *InboundService) buildTrojanWs(userId, port, index int) (*model.Inbound,
 		Listen:         "",
 		Port:           port,
 		Protocol:       "trojan",
+		Settings:       string(settingsJSON),
+		StreamSettings: string(streamJSON),
+		Tag:            fmt.Sprintf("inbound-%v", port),
+		Sniffing:       `{"enabled":true,"destOverride":["http","tls","quic"],"metadataOnly":false,"routeOnly":false}`,
+	}, nil
+}
+
+// buildVlessTcpTls builds a VLESS+TCP+TLS inbound with SNI auto-filled from panel domain
+func (s *InboundService) buildVlessTcpTls(userId, port, index int) (*model.Inbound, error) {
+	clientID := uuid.New().String()
+	email := fmt.Sprintf("vless_tcp_tls_%d_%s", port, clientID[:8])
+
+	// Auto-detect panel domain from settings for SNI
+	sniDomain := ""
+	db := database.GetDB()
+	var setting model.Setting
+	err := db.Model(model.Setting{}).Where("`key` = ?", "webDomain").First(&setting).Error
+	if err == nil && setting.Value != "" {
+		sniDomain = strings.TrimSpace(setting.Value)
+	}
+	// Fallback if no domain is configured
+	if sniDomain == "" {
+		sniDomain = fmt.Sprintf("panel-%d.example.com", port)
+	}
+
+	settings := map[string]any{
+		"clients": []map[string]any{
+			{"id": clientID, "email": email},
+		},
+		"decryption": "none",
+	}
+	settingsJSON, _ := json.MarshalIndent(settings, "", "  ")
+
+	streamSettings := map[string]any{
+		"network":  "tcp",
+		"security": "tls",
+		"tlsSettings": map[string]any{
+			"serverName":    sniDomain,
+			"minVersion":    "1.2",
+			"alpn":          []string{"h2", "http/1.1"},
+		},
+		"tcpSettings": map[string]any{
+			"header": map[string]any{"type": "none"},
+		},
+	}
+	streamJSON, _ := json.MarshalIndent(streamSettings, "", "  ")
+
+	return &model.Inbound{
+		UserId:         userId,
+		Up:             0,
+		Down:           0,
+		Total:          0,
+		Remark:         fmt.Sprintf("VLESS-TCP-TLS-%d", port),
+		Enable:         true,
+		ExpiryTime:     0,
+		TrafficReset:   "never",
+		ResetDay:       1,
+		Listen:         "",
+		Port:           port,
+		Protocol:       "vless",
 		Settings:       string(settingsJSON),
 		StreamSettings: string(streamJSON),
 		Tag:            fmt.Sprintf("inbound-%v", port),
