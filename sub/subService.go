@@ -1211,30 +1211,30 @@ func searchHost(headers any) string {
 // PageData is a view model for subpage.html
 // PageData contains data for rendering the subscription information page.
 type PageData struct {
-	Host         string
-	BasePath     string
-	SId          string
-	Download     string
-	Upload       string
-	Total        string
-	Used         string
-	Remained     string
-	Expire       int64
-	LastOnline   int64
-	Datepicker   string
-	DownloadByte int64
-	UploadByte   int64
-	TotalByte    int64
-	SubUrl       string
-	SubJsonUrl   string
-	SubClashUrl  string
-	Result       []string
-	TrafficReset string // Traffic reset method (never/hourly/daily/weekly/monthly/custom_date)
-	ResetDay     int    // Custom reset day of month (1-31)
-	VpsName      string // VPS name/label
-	VpsIP        string // VPS IP address
-	VpsLocation  string // VPS location/datacenter
-	VpsSpecs     string // VPS specifications (CPU/RAM/disk)
+	Host            string
+	BasePath        string
+	SId             string
+	Download        string
+	Upload          string
+	Total           string
+	Used            string
+	Remained        string
+	Expire          int64
+	LastOnline      int64
+	Datepicker      string
+	DownloadByte    int64
+	UploadByte      int64
+	TotalByte       int64
+	SubUrl          string
+	SubJsonUrl      string
+	SubClashUrl     string
+	Result          []string
+	TrafficReset    string // Traffic reset method (never/hourly/daily/weekly/monthly/custom_date)
+	ResetDay        int    // Custom reset day of month (1-31)
+	VpsName         string // VPS name/label
+	VpsIP           string // VPS IP address
+	VpsLocation     string // VPS location/datacenter
+	VpsSpecs        string // VPS specifications (CPU/RAM/disk)
 	VpsPurchaseDate string // VPS purchase date (Unix timestamp)
 }
 

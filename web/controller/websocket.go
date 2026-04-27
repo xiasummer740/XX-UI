@@ -5,11 +5,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/XiaSummer740/XX-UI/logger"
 	"github.com/XiaSummer740/XX-UI/util/common"
 	"github.com/XiaSummer740/XX-UI/web/session"
 	"github.com/XiaSummer740/XX-UI/web/websocket"
+	"github.com/google/uuid"
 
 	"github.com/gin-gonic/gin"
 	ws "github.com/gorilla/websocket"

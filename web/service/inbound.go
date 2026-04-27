@@ -13,12 +13,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/XiaSummer740/XX-UI/database"
 	"github.com/XiaSummer740/XX-UI/database/model"
 	"github.com/XiaSummer740/XX-UI/logger"
 	"github.com/XiaSummer740/XX-UI/util/common"
 	"github.com/XiaSummer740/XX-UI/xray"
+	"github.com/google/uuid"
 
 	"gorm.io/gorm"
 )
@@ -2902,19 +2902,19 @@ func (s *InboundService) BatchGenerateInbounds(userId int) ([]*model.Inbound, er
 			"network":  "tcp",
 			"security": "reality",
 			"realitySettings": map[string]any{
-				"dest":           targets[i],
-				"target":         targets[i],
-				"serverNames":    []string{serverNamesList[i]},
-				"privateKey":     keyPair["privateKey"],
-				"shortIds":       []string{shortID},
-				"publicKey":      keyPair["publicKey"],
-				"fingerprint":    "chrome",
-				"spiderX":        "",
-				"mldsa65Verify":  "",
-				"mldsa65Seed":    "",
-				"show":           false,
-				"xver":           0,
-				"maxTimediff":    0,
+				"dest":          targets[i],
+				"target":        targets[i],
+				"serverNames":   []string{serverNamesList[i]},
+				"privateKey":    keyPair["privateKey"],
+				"shortIds":      []string{shortID},
+				"publicKey":     keyPair["publicKey"],
+				"fingerprint":   "chrome",
+				"spiderX":       "",
+				"mldsa65Verify": "",
+				"mldsa65Seed":   "",
+				"show":          false,
+				"xver":          0,
+				"maxTimediff":   0,
 			},
 			"tcpSettings": map[string]any{
 				"header": map[string]any{
@@ -3247,8 +3247,8 @@ func (s *InboundService) buildVlessWs(userId, port, index int) (*model.Inbound, 
 		"network":  "ws",
 		"security": "none",
 		"wsSettings": map[string]any{
-			"path":     fmt.Sprintf("/vless-ws-%d", port),
-			"headers":  map[string]any{},
+			"path":    fmt.Sprintf("/vless-ws-%d", port),
+			"headers": map[string]any{},
 		},
 	}
 	streamJSON, _ := json.MarshalIndent(streamSettings, "", "  ")
@@ -3289,8 +3289,8 @@ func (s *InboundService) buildVmessWs(userId, port, index int) (*model.Inbound, 
 		"network":  "ws",
 		"security": "none",
 		"wsSettings": map[string]any{
-			"path":     fmt.Sprintf("/vmess-ws-%d", port),
-			"headers":  map[string]any{},
+			"path":    fmt.Sprintf("/vmess-ws-%d", port),
+			"headers": map[string]any{},
 		},
 	}
 	streamJSON, _ := json.MarshalIndent(streamSettings, "", "  ")
@@ -3378,8 +3378,8 @@ func (s *InboundService) buildTrojanWs(userId, port, index int) (*model.Inbound,
 		"network":  "ws",
 		"security": "none",
 		"wsSettings": map[string]any{
-			"path":     fmt.Sprintf("/trojan-ws-%d", port),
-			"headers":  map[string]any{},
+			"path":    fmt.Sprintf("/trojan-ws-%d", port),
+			"headers": map[string]any{},
 		},
 	}
 	streamJSON, _ := json.MarshalIndent(streamSettings, "", "  ")
@@ -3434,9 +3434,9 @@ func (s *InboundService) buildVlessTcpTls(userId, port, index int) (*model.Inbou
 		"network":  "tcp",
 		"security": "tls",
 		"tlsSettings": map[string]any{
-			"serverName":    sniDomain,
-			"minVersion":    "1.2",
-			"alpn":          []string{"h2", "http/1.1"},
+			"serverName": sniDomain,
+			"minVersion": "1.2",
+			"alpn":       []string{"h2", "http/1.1"},
 		},
 		"tcpSettings": map[string]any{
 			"header": map[string]any{"type": "none"},
