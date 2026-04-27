@@ -8,7 +8,9 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -231,11 +233,78 @@ func (p *process) refreshVersion() {
 	}
 }
 
+// KillOrphanXray kills any orphaned xray processes that might be running
+// from a previous panel instance. On Unix, it uses pkill to find and terminate
+// processes matching the xray binary name, excluding the current process.
+func KillOrphanXray() {
+	if runtime.GOOS == "windows" {
+		return
+	}
+
+	binaryName := GetBinaryName()
+
+	// Use pgrep to find xray process IDs
+	pgrep := exec.Command("pgrep", "-x", binaryName)
+	output, err := pgrep.Output()
+	if err != nil {
+		// pgrep exits with code 1 if no processes found - not an error
+		return
+	}
+
+	currentPID := os.Getpid()
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	for _, line := range lines {
+		pidStr := strings.TrimSpace(line)
+		if pidStr == "" {
+			continue
+		}
+		pid, err := strconv.Atoi(pidStr)
+		if err != nil {
+			continue
+		}
+		if pid == currentPID {
+			continue
+		}
+
+		// Verify it's an orphan (parent PID is 1)
+		ppidBytes, err := os.ReadFile(filepath.Join("/proc", pidStr, "status"))
+		if err != nil {
+			// Process might have exited already
+			continue
+		}
+		isOrphan := false
+		for _, line := range strings.Split(string(ppidBytes), "\n") {
+			if strings.HasPrefix(line, "PPid:") {
+				ppid := strings.TrimSpace(strings.TrimPrefix(line, "PPid:"))
+				if ppid == "1" {
+					isOrphan = true
+				}
+				break
+			}
+		}
+
+		if isOrphan {
+			logger.Warningf("Found orphaned xray process (PID %d), terminating...", pid)
+			proc, err := os.FindProcess(pid)
+			if err == nil {
+				_ = proc.Signal(syscall.SIGTERM)
+				// Wait briefly for graceful shutdown
+				time.Sleep(500 * time.Millisecond)
+				// Force kill if still alive
+				_ = proc.Signal(syscall.SIGKILL)
+			}
+		}
+	}
+}
+
 // Start launches the Xray process with the current configuration.
 func (p *process) Start() (err error) {
 	if p.IsRunning() {
 		return errors.New("xray is already running")
 	}
+
+	// Kill any orphaned xray processes from previous panel instances
+	KillOrphanXray()
 
 	defer func() {
 		if err != nil {
