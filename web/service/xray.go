@@ -121,7 +121,13 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 		}
 		// get settings clients
 		settings := map[string]any{}
-		json.Unmarshal([]byte(inbound.Settings), &settings)
+		if err := json.Unmarshal([]byte(inbound.Settings), &settings); err != nil {
+			preview := inbound.Settings
+			if len(preview) > 200 {
+				preview = preview[:200]
+			}
+			logger.Warningf("[DIAG] GetXrayConfig: inbound=%d Settings json.Unmarshal error: %v, preview[:200]=%s", inbound.Id, err, preview)
+		}
 		clients, ok := settings["clients"].([]any)
 		if ok {
 			// Fast O(N) lookup map for client traffic enablement
@@ -176,7 +182,13 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 		if len(inbound.StreamSettings) > 0 {
 			// Unmarshal stream JSON
 			var stream map[string]any
-			json.Unmarshal([]byte(inbound.StreamSettings), &stream)
+			if err := json.Unmarshal([]byte(inbound.StreamSettings), &stream); err != nil {
+				preview := inbound.StreamSettings
+				if len(preview) > 200 {
+					preview = preview[:200]
+				}
+				logger.Warningf("[DIAG] GetXrayConfig: inbound=%d StreamSettings json.Unmarshal error: %v, preview[:200]=%s", inbound.Id, err, preview)
+			}
 
 			// Remove the "settings" field under "tlsSettings" and "realitySettings"
 			tlsSettings, ok1 := stream["tlsSettings"].(map[string]any)
