@@ -474,7 +474,7 @@ func (a *InboundController) generateProtocol(c *gin.Context) {
 		return
 	}
 
-	logger.Debug("[DIAG] generateProtocol success: created %d inbounds", len(result))
+	logger.Debugf("[DIAG] generateProtocol success: created %d inbounds", len(result))
 	jsonMsgObj(c, I18nWeb(c, "pages.inbounds.toasts.inboundCreateSuccess"), result, nil)
 	if len(result) > 0 {
 		a.xrayService.SetToNeedRestart()
