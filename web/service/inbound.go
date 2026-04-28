@@ -2975,37 +2975,55 @@ func (s *InboundService) BatchGenerateInbounds(userId int) ([]*model.Inbound, er
 // Supported protocols: "vless-reality", "vmess-tcp", "shadowsocks", "trojan-tcp",
 // "vless-ws", "vmess-ws", "vless-grpc", "trojan-ws"
 // Each protocol gets inboundsCount inbounds on consecutive ports starting from basePort.
-func (s *InboundService) GenerateProtocolInbounds(userId int, protocols []string, inboundsCount int) ([]*model.Inbound, error) {
+func (s *InboundService) GenerateProtocolInbounds(userId int, protocols []string, inboundsCount int, subId string, namePrefix string) ([]*model.Inbound, error) {
 	var created []*model.Inbound
 	var firstErr error
 
+	// Read default traffic reset settings from database (VPS config)
+	trafficReset := "never"
+	resetDay := 1
+	db := database.GetDB()
+	var resetMethodSetting model.Setting
+	if err := db.Model(model.Setting{}).Where("`key` = ?", "defaultResetMethod").First(&resetMethodSetting).Error; err == nil && resetMethodSetting.Value != "" {
+		trafficReset = resetMethodSetting.Value
+	}
+	var resetDaySetting model.Setting
+	if err := db.Model(model.Setting{}).Where("`key` = ?", "defaultResetDay").First(&resetDaySetting).Error; err == nil && resetDaySetting.Value != "" {
+		if day, err := strconv.Atoi(resetDaySetting.Value); err == nil && day >= 1 && day <= 31 {
+			resetDay = day
+		}
+	}
+	logger.Debugf("[DIAG] GenerateProtocolInbounds: subId=%s namePrefix=%s trafficReset=%s resetDay=%d", subId, namePrefix, trafficReset, resetDay)
+
+	globalSeq := 0
 	for pi, protocol := range protocols {
 		basePort := 44301 + (pi * 100)
 		for i := 0; i < inboundsCount; i++ {
 			port := basePort + i
+			globalSeq++
 
 			var inbound *model.Inbound
 			var err error
 
 			switch protocol {
 			case "vless-reality":
-				inbound, err = s.buildVlessReality(userId, port, i)
+				inbound, err = s.buildVlessReality(userId, port, i, subId, namePrefix, globalSeq, trafficReset, resetDay)
 			case "vmess-tcp":
-				inbound, err = s.buildVmessTcp(userId, port, i)
+				inbound, err = s.buildVmessTcp(userId, port, i, subId, namePrefix, globalSeq, trafficReset, resetDay)
 			case "shadowsocks":
-				inbound, err = s.buildShadowsocks(userId, port, i)
+				inbound, err = s.buildShadowsocks(userId, port, i, subId, namePrefix, globalSeq, trafficReset, resetDay)
 			case "trojan-tcp":
-				inbound, err = s.buildTrojanTcp(userId, port, i)
+				inbound, err = s.buildTrojanTcp(userId, port, i, subId, namePrefix, globalSeq, trafficReset, resetDay)
 			case "vless-ws":
-				inbound, err = s.buildVlessWs(userId, port, i)
+				inbound, err = s.buildVlessWs(userId, port, i, subId, namePrefix, globalSeq, trafficReset, resetDay)
 			case "vmess-ws":
-				inbound, err = s.buildVmessWs(userId, port, i)
+				inbound, err = s.buildVmessWs(userId, port, i, subId, namePrefix, globalSeq, trafficReset, resetDay)
 			case "vless-grpc":
-				inbound, err = s.buildVlessGrpc(userId, port, i)
+				inbound, err = s.buildVlessGrpc(userId, port, i, subId, namePrefix, globalSeq, trafficReset, resetDay)
 			case "trojan-ws":
-				inbound, err = s.buildTrojanWs(userId, port, i)
+				inbound, err = s.buildTrojanWs(userId, port, i, subId, namePrefix, globalSeq, trafficReset, resetDay)
 			case "vless-tcp-tls":
-				inbound, err = s.buildVlessTcpTls(userId, port, i)
+				inbound, err = s.buildVlessTcpTls(userId, port, i, subId, namePrefix, globalSeq, trafficReset, resetDay)
 			default:
 				continue
 			}
@@ -3034,7 +3052,7 @@ func (s *InboundService) GenerateProtocolInbounds(userId int, protocols []string
 }
 
 // buildVlessReality builds a VLESS+TCP+Reality+Vision inbound
-func (s *InboundService) buildVlessReality(userId, port, index int) (*model.Inbound, error) {
+func (s *InboundService) buildVlessReality(userId, port, index int, subId string, namePrefix string, globalSeq int, trafficReset string, resetDay int) (*model.Inbound, error) {
 	targets := []string{
 		"addons.mozilla.org:443", "www.google.com:443", "www.microsoft.com:443",
 		"www.amazon.com:443", "www.cloudflare.com:443", "www.github.com:443",
@@ -3062,7 +3080,7 @@ func (s *InboundService) buildVlessReality(userId, port, index int) (*model.Inbo
 
 	settings := map[string]any{
 		"clients": []map[string]any{
-			{"id": clientID, "flow": "xtls-rprx-vision", "email": email, "enable": true},
+			{"id": clientID, "flow": "xtls-rprx-vision", "email": email, "enable": true, "subId": subId},
 		},
 		"decryption": "none",
 	}
@@ -3097,11 +3115,11 @@ func (s *InboundService) buildVlessReality(userId, port, index int) (*model.Inbo
 		Up:             0,
 		Down:           0,
 		Total:          0,
-		Remark:         fmt.Sprintf("VLESS-Reality-%d", port),
+		Remark:         fmt.Sprintf("%s-%02d", namePrefix, globalSeq),
 		Enable:         true,
 		ExpiryTime:     0,
-		TrafficReset:   "never",
-		ResetDay:       1,
+		TrafficReset:   trafficReset,
+		ResetDay:       resetDay,
 		Listen:         "",
 		Port:           port,
 		Protocol:       "vless",
@@ -3113,13 +3131,13 @@ func (s *InboundService) buildVlessReality(userId, port, index int) (*model.Inbo
 }
 
 // buildVmessTcp builds a VMess+TCP+TLS inbound
-func (s *InboundService) buildVmessTcp(userId, port, index int) (*model.Inbound, error) {
+func (s *InboundService) buildVmessTcp(userId, port, index int, subId string, namePrefix string, globalSeq int, trafficReset string, resetDay int) (*model.Inbound, error) {
 	clientID := uuid.New().String()
 	email := fmt.Sprintf("vmess_tcp_%d_%s", port, clientID[:8])
 
 	settings := map[string]any{
 		"clients": []map[string]any{
-			{"id": clientID, "email": email, "enable": true},
+			{"id": clientID, "email": email, "enable": true, "subId": subId},
 		},
 	}
 	settingsJSON, _ := json.MarshalIndent(settings, "", "  ")
@@ -3138,11 +3156,11 @@ func (s *InboundService) buildVmessTcp(userId, port, index int) (*model.Inbound,
 		Up:             0,
 		Down:           0,
 		Total:          0,
-		Remark:         fmt.Sprintf("VMess-TCP-%d", port),
+		Remark:         fmt.Sprintf("%s-%02d", namePrefix, globalSeq),
 		Enable:         true,
 		ExpiryTime:     0,
-		TrafficReset:   "never",
-		ResetDay:       1,
+		TrafficReset:   trafficReset,
+		ResetDay:       resetDay,
 		Listen:         "",
 		Port:           port,
 		Protocol:       "vmess",
@@ -3154,7 +3172,7 @@ func (s *InboundService) buildVmessTcp(userId, port, index int) (*model.Inbound,
 }
 
 // buildShadowsocks builds a Shadowsocks+AEAD inbound
-func (s *InboundService) buildShadowsocks(userId, port, index int) (*model.Inbound, error) {
+func (s *InboundService) buildShadowsocks(userId, port, index int, subId string, namePrefix string, globalSeq int, trafficReset string, resetDay int) (*model.Inbound, error) {
 	password := uuid.New().String()[:24]
 	email := fmt.Sprintf("ss_%d_%s", port, password[:8])
 
@@ -3165,6 +3183,7 @@ func (s *InboundService) buildShadowsocks(userId, port, index int) (*model.Inbou
 				"password": password,
 				"method":   "aes-256-gcm",
 				"enable":   true,
+				"subId":    subId,
 			},
 		},
 		"network": "tcp,udp",
@@ -3185,11 +3204,11 @@ func (s *InboundService) buildShadowsocks(userId, port, index int) (*model.Inbou
 		Up:             0,
 		Down:           0,
 		Total:          0,
-		Remark:         fmt.Sprintf("Shadowsocks-%d", port),
+		Remark:         fmt.Sprintf("%s-%02d", namePrefix, globalSeq),
 		Enable:         true,
 		ExpiryTime:     0,
-		TrafficReset:   "never",
-		ResetDay:       1,
+		TrafficReset:   trafficReset,
+		ResetDay:       resetDay,
 		Listen:         "",
 		Port:           port,
 		Protocol:       "shadowsocks",
@@ -3201,7 +3220,7 @@ func (s *InboundService) buildShadowsocks(userId, port, index int) (*model.Inbou
 }
 
 // buildTrojanTcp builds a Trojan+TCP+TLS inbound
-func (s *InboundService) buildTrojanTcp(userId, port, index int) (*model.Inbound, error) {
+func (s *InboundService) buildTrojanTcp(userId, port, index int, subId string, namePrefix string, globalSeq int, trafficReset string, resetDay int) (*model.Inbound, error) {
 	password := uuid.New().String()[:24]
 	email := fmt.Sprintf("trojan_tcp_%d_%s", port, password[:8])
 
@@ -3212,6 +3231,7 @@ func (s *InboundService) buildTrojanTcp(userId, port, index int) (*model.Inbound
 				"email":    email,
 				"flow":     "",
 				"enable":   true,
+				"subId":    subId,
 			},
 		},
 	}
@@ -3231,11 +3251,11 @@ func (s *InboundService) buildTrojanTcp(userId, port, index int) (*model.Inbound
 		Up:             0,
 		Down:           0,
 		Total:          0,
-		Remark:         fmt.Sprintf("Trojan-TCP-%d", port),
+		Remark:         fmt.Sprintf("%s-%02d", namePrefix, globalSeq),
 		Enable:         true,
 		ExpiryTime:     0,
-		TrafficReset:   "never",
-		ResetDay:       1,
+		TrafficReset:   trafficReset,
+		ResetDay:       resetDay,
 		Listen:         "",
 		Port:           port,
 		Protocol:       "trojan",
@@ -3247,13 +3267,13 @@ func (s *InboundService) buildTrojanTcp(userId, port, index int) (*model.Inbound
 }
 
 // buildVlessWs builds a VLESS+WS+TLS inbound
-func (s *InboundService) buildVlessWs(userId, port, index int) (*model.Inbound, error) {
+func (s *InboundService) buildVlessWs(userId, port, index int, subId string, namePrefix string, globalSeq int, trafficReset string, resetDay int) (*model.Inbound, error) {
 	clientID := uuid.New().String()
 	email := fmt.Sprintf("vless_ws_%d_%s", port, clientID[:8])
 
 	settings := map[string]any{
 		"clients": []map[string]any{
-			{"id": clientID, "email": email, "enable": true},
+			{"id": clientID, "email": email, "enable": true, "subId": subId},
 		},
 		"decryption": "none",
 	}
@@ -3274,11 +3294,11 @@ func (s *InboundService) buildVlessWs(userId, port, index int) (*model.Inbound, 
 		Up:             0,
 		Down:           0,
 		Total:          0,
-		Remark:         fmt.Sprintf("VLESS-WS-%d", port),
+		Remark:         fmt.Sprintf("%s-%02d", namePrefix, globalSeq),
 		Enable:         true,
 		ExpiryTime:     0,
-		TrafficReset:   "never",
-		ResetDay:       1,
+		TrafficReset:   trafficReset,
+		ResetDay:       resetDay,
 		Listen:         "",
 		Port:           port,
 		Protocol:       "vless",
@@ -3290,13 +3310,13 @@ func (s *InboundService) buildVlessWs(userId, port, index int) (*model.Inbound, 
 }
 
 // buildVmessWs builds a VMess+WS+TLS inbound
-func (s *InboundService) buildVmessWs(userId, port, index int) (*model.Inbound, error) {
+func (s *InboundService) buildVmessWs(userId, port, index int, subId string, namePrefix string, globalSeq int, trafficReset string, resetDay int) (*model.Inbound, error) {
 	clientID := uuid.New().String()
 	email := fmt.Sprintf("vmess_ws_%d_%s", port, clientID[:8])
 
 	settings := map[string]any{
 		"clients": []map[string]any{
-			{"id": clientID, "email": email, "enable": true},
+			{"id": clientID, "email": email, "enable": true, "subId": subId},
 		},
 	}
 	settingsJSON, _ := json.MarshalIndent(settings, "", "  ")
@@ -3316,11 +3336,11 @@ func (s *InboundService) buildVmessWs(userId, port, index int) (*model.Inbound, 
 		Up:             0,
 		Down:           0,
 		Total:          0,
-		Remark:         fmt.Sprintf("VMess-WS-%d", port),
+		Remark:         fmt.Sprintf("%s-%02d", namePrefix, globalSeq),
 		Enable:         true,
 		ExpiryTime:     0,
-		TrafficReset:   "never",
-		ResetDay:       1,
+		TrafficReset:   trafficReset,
+		ResetDay:       resetDay,
 		Listen:         "",
 		Port:           port,
 		Protocol:       "vmess",
@@ -3332,13 +3352,13 @@ func (s *InboundService) buildVmessWs(userId, port, index int) (*model.Inbound, 
 }
 
 // buildVlessGrpc builds a VLESS+gRPC+TLS inbound
-func (s *InboundService) buildVlessGrpc(userId, port, index int) (*model.Inbound, error) {
+func (s *InboundService) buildVlessGrpc(userId, port, index int, subId string, namePrefix string, globalSeq int, trafficReset string, resetDay int) (*model.Inbound, error) {
 	clientID := uuid.New().String()
 	email := fmt.Sprintf("vless_grpc_%d_%s", port, clientID[:8])
 
 	settings := map[string]any{
 		"clients": []map[string]any{
-			{"id": clientID, "email": email, "enable": true},
+			{"id": clientID, "email": email, "enable": true, "subId": subId},
 		},
 		"decryption": "none",
 	}
@@ -3359,11 +3379,11 @@ func (s *InboundService) buildVlessGrpc(userId, port, index int) (*model.Inbound
 		Up:             0,
 		Down:           0,
 		Total:          0,
-		Remark:         fmt.Sprintf("VLESS-gRPC-%d", port),
+		Remark:         fmt.Sprintf("%s-%02d", namePrefix, globalSeq),
 		Enable:         true,
 		ExpiryTime:     0,
-		TrafficReset:   "never",
-		ResetDay:       1,
+		TrafficReset:   trafficReset,
+		ResetDay:       resetDay,
 		Listen:         "",
 		Port:           port,
 		Protocol:       "vless",
@@ -3375,7 +3395,7 @@ func (s *InboundService) buildVlessGrpc(userId, port, index int) (*model.Inbound
 }
 
 // buildTrojanWs builds a Trojan+WS+TLS inbound
-func (s *InboundService) buildTrojanWs(userId, port, index int) (*model.Inbound, error) {
+func (s *InboundService) buildTrojanWs(userId, port, index int, subId string, namePrefix string, globalSeq int, trafficReset string, resetDay int) (*model.Inbound, error) {
 	password := uuid.New().String()[:24]
 	email := fmt.Sprintf("trojan_ws_%d_%s", port, password[:8])
 
@@ -3386,6 +3406,7 @@ func (s *InboundService) buildTrojanWs(userId, port, index int) (*model.Inbound,
 				"email":    email,
 				"flow":     "",
 				"enable":   true,
+				"subId":    subId,
 			},
 		},
 	}
@@ -3406,11 +3427,11 @@ func (s *InboundService) buildTrojanWs(userId, port, index int) (*model.Inbound,
 		Up:             0,
 		Down:           0,
 		Total:          0,
-		Remark:         fmt.Sprintf("Trojan-WS-%d", port),
+		Remark:         fmt.Sprintf("%s-%02d", namePrefix, globalSeq),
 		Enable:         true,
 		ExpiryTime:     0,
-		TrafficReset:   "never",
-		ResetDay:       1,
+		TrafficReset:   trafficReset,
+		ResetDay:       resetDay,
 		Listen:         "",
 		Port:           port,
 		Protocol:       "trojan",
@@ -3422,7 +3443,7 @@ func (s *InboundService) buildTrojanWs(userId, port, index int) (*model.Inbound,
 }
 
 // buildVlessTcpTls builds a VLESS+TCP+TLS inbound with SNI auto-filled from panel domain
-func (s *InboundService) buildVlessTcpTls(userId, port, index int) (*model.Inbound, error) {
+func (s *InboundService) buildVlessTcpTls(userId, port, index int, subId string, namePrefix string, globalSeq int, trafficReset string, resetDay int) (*model.Inbound, error) {
 	clientID := uuid.New().String()
 	email := fmt.Sprintf("vless_tcp_tls_%d_%s", port, clientID[:8])
 
@@ -3441,7 +3462,7 @@ func (s *InboundService) buildVlessTcpTls(userId, port, index int) (*model.Inbou
 
 	settings := map[string]any{
 		"clients": []map[string]any{
-			{"id": clientID, "email": email, "enable": true},
+			{"id": clientID, "email": email, "enable": true, "subId": subId},
 		},
 		"decryption": "none",
 	}
@@ -3466,11 +3487,11 @@ func (s *InboundService) buildVlessTcpTls(userId, port, index int) (*model.Inbou
 		Up:             0,
 		Down:           0,
 		Total:          0,
-		Remark:         fmt.Sprintf("VLESS-TCP-TLS-%d", port),
+		Remark:         fmt.Sprintf("%s-%02d", namePrefix, globalSeq),
 		Enable:         true,
 		ExpiryTime:     0,
-		TrafficReset:   "never",
-		ResetDay:       1,
+		TrafficReset:   trafficReset,
+		ResetDay:       resetDay,
 		Listen:         "",
 		Port:           port,
 		Protocol:       "vless",

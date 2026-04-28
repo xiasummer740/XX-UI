@@ -460,8 +460,10 @@ func (a *InboundController) generateProtocol(c *gin.Context) {
 	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 	var req struct {
-		Protocols []string `json:"protocols" form:"protocols"`
-		Count     int      `json:"count" form:"count"`
+		Protocols  []string `json:"protocols" form:"protocols"`
+		Count      int      `json:"count" form:"count"`
+		SubId      string   `json:"subId" form:"subId"`
+		NamePrefix string   `json:"namePrefix" form:"namePrefix"`
 	}
 	if err := c.ShouldBind(&req); err != nil {
 		logger.Warningf("[DIAG] generateProtocol ShouldBind failed: %v", err)
@@ -479,8 +481,12 @@ func (a *InboundController) generateProtocol(c *gin.Context) {
 		req.Count = 3
 	}
 
-	logger.Debugf("[DIAG] generateProtocol: protocols=%v count=%d", req.Protocols, req.Count)
-	result, err := a.inboundService.GenerateProtocolInbounds(user.Id, req.Protocols, req.Count)
+	if req.NamePrefix == "" {
+		req.NamePrefix = "rn"
+	}
+
+	logger.Debugf("[DIAG] generateProtocol: protocols=%v count=%d subId=%s namePrefix=%s", req.Protocols, req.Count, req.SubId, req.NamePrefix)
+	result, err := a.inboundService.GenerateProtocolInbounds(user.Id, req.Protocols, req.Count, req.SubId, req.NamePrefix)
 	if err != nil {
 		logger.Warning("[DIAG] generateProtocol GenerateProtocolInbounds error:", err)
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)

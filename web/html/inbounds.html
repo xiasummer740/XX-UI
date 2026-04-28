@@ -847,6 +847,13 @@
           <a-input-number v-model="protocolSelector.count" :min="1" :max="10" :style="{ width: '100px' }" />
           <span style="margin-left: 8px; color: #888;">（每个协议从起始端口开始连续生成 N 个节点）</span>
         </a-form-item>
+        <a-form-item label="订阅 ID（可选，留空则不加入订阅）">
+          <a-input v-model="protocolSelector.subId" placeholder="留空不加入订阅，如：fz4crtmwo09m0xt3" :style="{ width: '280px' }" allow-clear />
+        </a-form-item>
+        <a-form-item label="节点名称前缀">
+          <a-input v-model="protocolSelector.namePrefix" placeholder="默认: rn" :style="{ width: '200px' }" allow-clear />
+          <span style="margin-left: 8px; color: #888;">节点将按 rn-01、rn-02 格式自动排序命名</span>
+        </a-form-item>
         <div v-if="protocolSelector.selected.length > 0 && protocolSelector.count > 0" style="padding: 12px; background: #f6f8fa; border-radius: 4px; border: 1px solid #e8e8e8;">
           <div style="font-weight: bold; margin-bottom: 8px; color: #333;">&#x1F4E1; 端口范围预览：</div>
           <div v-for="p in getSelectedProtocols()" :key="p.key" style="margin-bottom: 6px; display: flex; align-items: center;">
@@ -1198,6 +1205,8 @@
         saving: false,
         count: 3,
         selected: [],
+        subId: '',
+        namePrefix: 'rn',
         options: [
           { key: 'vless-reality', label: 'VLESS+Reality', basePort: 44301 },
           { key: 'vmess-tcp', label: 'VMess+TCP', basePort: 44302 },
@@ -2137,6 +2146,8 @@
           const msg = await HttpUtil.post('/panel/api/inbounds/generateProtocol', {
             protocols: this.protocolSelector.selected,
             count: this.protocolSelector.count,
+            subId: this.protocolSelector.subId,
+            namePrefix: this.protocolSelector.namePrefix || 'rn',
           });
           if (msg.success) {
             const count = msg.obj && msg.obj.length > 0 ? msg.obj.length : 0;
