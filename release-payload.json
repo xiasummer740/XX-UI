@@ -1,8 +1,8 @@
 {
-  "tag_name": "v2.11.0",
+  "tag_name": "v2.12.5",
   "target_commitish": "main",
-  "name": "XX-UI v2.11.0",
-  "body": "## XX-UI v2.11.0\n\n### 新功能\n\n1. **🌈 炫彩渐变背景** - 优化背景颜色为更绚丽的彩虹渐变\n2. **🌐 IP检测优化** - 点击IP检测自动获取 VPS 公网 IP\n3. **⚙️ 协议选择器** - 一键配置改为可自由选择协议类型和数量的节点生成器\n   - 支持 8 种协议：VLESS+Reality、VMess+TCP、Shadowsocks、Trojan+TCP、VLESS+WS、VMess+WS、VLESS+gRPC、Trojan+WS\n   - 可选择生成数量（1-10个）\n   - 实时端口范围预览\n\n### 完整变更日志\n- 背景颜色从蓝紫渐变升级为彩虹渐变\n- IP检测按钮现在自动填入 VPS 公网 IP\n- 一键配置替换为协议选择器弹窗\n- 版本号从 v2.10.0 升级到 v2.11.0",
+  "name": "XX-UI v2.12.5",
+  "body": "## XX-UI v2.12.5\n\n### v2.12.5 新功能\n\n1. **📋 一键配置节点继承 VPS 配置** - 生成节点现在会自动读取面板设置中的流量重置日和重置方式\n2. **✏️ 自定义节点名称前缀** - 弹窗新增 \"节点名称前缀\" 输入框，默认 `rn`，节点将按 `rn-01`、`rn-02` 格式自动排序命名（全局序号，跨协议）\n3. **🔗 订阅 ID 支持** - 弹窗新增 \"订阅 ID\" 输入框，生成的节点自动加入订阅（子 ID 匹配）\n\n### v2.12.4 修复\n\n4. **🐛 修复一键配置 \"invalid character 'p'\" 错误** - 将 `ShouldBindJSON` 改为 `ShouldBind` + `form` 标签，适配 axios 拦截器 URL-encoded 格式\n5. **🐛 修复 `updateClientTraffic` 同样问题** - 同一函数中的相同 Bug 一并修复\n6. **📝 日志优化** - 将 raw body 日志级别从 Debugf 改为 Warningf 以便在生产日志中可见\n\n### v2.12.1 修复\n\n7. **🐛 修复订阅 \"Error!\" 问题** - 所有 build 函数的 client 设置中添加 `\"enable\": true`，修复一键生成节点在订阅中不可用的问题\n\n### v2.12.0 变更\n\n8. **🔄 升级到 Go 1.24 + 依赖更新** - 修复编译兼容性\n\n### v2.11.1 修复\n\n9. **🐛 修复 v2.11.0 编译后无法启动** - 兼容性修复\n\n### 完整变更日志\n- 一键配置节点生成器：新增订阅 ID 输入、自定义名称前缀\n- 生成节点自动继承 VPS 配置的流量重置日和重置方式\n- 节点命名改为全局序号格式 `{prefix}-01`、`{prefix}-02`...\n- 修复 axios 拦截器导致的 ShouldBindJSON 解析失败\n- 所有一键生成 client 默认 enable: true\n- 修复订阅页面显示 Error! 的问题\n- 版本号从 v2.11.0 升级到 v2.12.5",
   "draft": false,
   "prerelease": false
 }
