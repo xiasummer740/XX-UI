@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/XiaSummer740/XX-UI/config"
+	"github.com/XiaSummer740/XX-UI/logger"
 
 	"github.com/gin-gonic/gin"
 )
@@ -100,6 +101,7 @@ func (a *SUBController) subs(c *gin.Context) {
 	scheme, host, hostWithPort, hostHeader := a.subService.ResolveRequest(c)
 	subs, lastOnline, traffic, trafficReset, resetDay, err := a.subService.GetSubs(subId, host)
 	if err != nil || len(subs) == 0 {
+		logger.Warningf("[DIAG] subs: subId=%s err=%v len(subs)=%d", subId, err, len(subs))
 		c.String(400, "Error!")
 	} else {
 		result := ""
@@ -181,6 +183,7 @@ func (a *SUBController) subJsons(c *gin.Context) {
 	scheme, host, hostWithPort, _ := a.subService.ResolveRequest(c)
 	jsonSub, header, err := a.subJsonService.GetJson(subId, host)
 	if err != nil || len(jsonSub) == 0 {
+		logger.Warningf("[DIAG] subJsons: subId=%s err=%v len(jsonSub)=%d", subId, err, len(jsonSub))
 		c.String(400, "Error!")
 	} else {
 		profileUrl := a.subProfileUrl
@@ -198,6 +201,7 @@ func (a *SUBController) subClashs(c *gin.Context) {
 	scheme, host, hostWithPort, _ := a.subService.ResolveRequest(c)
 	clashSub, header, err := a.subClashService.GetClash(subId, host)
 	if err != nil || len(clashSub) == 0 {
+		logger.Warningf("[DIAG] subClashs: subId=%s err=%v len(clashSub)=%d", subId, err, len(clashSub))
 		c.String(400, "Error!")
 	} else {
 		profileUrl := a.subProfileUrl

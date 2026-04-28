@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/XiaSummer740/XX-UI/database/model"
+	"github.com/XiaSummer740/XX-UI/logger"
 	"github.com/XiaSummer740/XX-UI/web/service"
 	"github.com/XiaSummer740/XX-UI/web/session"
 	"github.com/XiaSummer740/XX-UI/web/websocket"
@@ -450,11 +451,13 @@ func (a *InboundController) generateProtocol(c *gin.Context) {
 		Count     int      `json:"count"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.Warningf("[DIAG] generateProtocol ShouldBindJSON failed: %v", err)
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
 
 	if len(req.Protocols) == 0 {
+		logger.Warning("[DIAG] generateProtocol: no protocols selected")
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), fmt.Errorf("no protocols selected"))
 		return
 	}
@@ -463,12 +466,15 @@ func (a *InboundController) generateProtocol(c *gin.Context) {
 		req.Count = 3
 	}
 
+	logger.Debugf("[DIAG] generateProtocol: protocols=%v count=%d", req.Protocols, req.Count)
 	result, err := a.inboundService.GenerateProtocolInbounds(user.Id, req.Protocols, req.Count)
 	if err != nil {
+		logger.Warning("[DIAG] generateProtocol GenerateProtocolInbounds error:", err)
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
 
+	logger.Debug("[DIAG] generateProtocol success: created %d inbounds", len(result))
 	jsonMsgObj(c, I18nWeb(c, "pages.inbounds.toasts.inboundCreateSuccess"), result, nil)
 	if len(result) > 0 {
 		a.xrayService.SetToNeedRestart()
@@ -508,6 +514,7 @@ func (a *InboundController) checkPort(c *gin.Context) {
 		return
 	}
 	result := a.inboundService.CheckPort(req.Port)
+	logger.Debugf("[DIAG] checkPort: port=%d reachable=%v latency=%v", req.Port, result["reachable"], result["latency"])
 	jsonObj(c, result, nil)
 }
 

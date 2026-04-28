@@ -48,12 +48,15 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.C
 	var clientTraffics []xray.ClientTraffic
 	inbounds, err := s.getInboundsBySubId(subId)
 	if err != nil {
+		logger.Warningf("[DIAG] GetSubs: getInboundsBySubId failed subId=%s err=%v", subId, err)
 		return nil, 0, traffic, "", 0, err
 	}
 
 	if len(inbounds) == 0 {
+		logger.Warningf("[DIAG] GetSubs: no inbounds found for subId=%s", subId)
 		return nil, 0, traffic, "", 0, common.NewError("No inbounds found with ", subId)
 	}
+	logger.Debugf("[DIAG] GetSubs: subId=%s found %d inbounds", subId, len(inbounds))
 
 	// Collect traffic reset info from the first matched inbound
 	trafficReset := inbounds[0].TrafficReset
@@ -63,6 +66,7 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.C
 	if err != nil {
 		s.datepicker = "gregorian"
 	}
+	matchedCount := 0
 	for _, inbound := range inbounds {
 		clients, err := s.inboundService.GetClients(inbound)
 		if err != nil {
@@ -81,6 +85,7 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.C
 		}
 		for _, client := range clients {
 			if client.Enable && client.SubID == subId {
+				matchedCount++
 				link := s.getLink(inbound, client.Email)
 				result = append(result, link)
 				ct := s.getClientTraffics(inbound.ClientStats, client.Email)
@@ -91,6 +96,7 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.C
 			}
 		}
 	}
+	logger.Infof("[DIAG] GetSubs: subId=%s matched %d clients from %d inbounds, result=%d links", subId, matchedCount, len(inbounds), len(result))
 
 	// Prepare statistics
 	for index, clientTraffic := range clientTraffics {
@@ -131,8 +137,10 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 			AND JSON_EXTRACT(client.value, '$.subId') = ? AND enable = ?
 	)`, subId, true).Find(&inbounds).Error
 	if err != nil {
+		logger.Warningf("[DIAG] getInboundsBySubId: SQL error subId=%s err=%v", subId, err)
 		return nil, err
 	}
+	logger.Debugf("[DIAG] getInboundsBySubId: subId=%s found %d inbounds", subId, len(inbounds))
 	return inbounds, nil
 }
 

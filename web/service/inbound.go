@@ -140,6 +140,11 @@ func (s *InboundService) checkPortExist(listen string, port int, ignoreId int) (
 func (s *InboundService) GetClients(inbound *model.Inbound) ([]model.Client, error) {
 	var settings map[string]any
 	if err := json.Unmarshal([]byte(inbound.Settings), &settings); err != nil {
+		settingsPreview := inbound.Settings
+		if len(settingsPreview) > 200 {
+			settingsPreview = settingsPreview[:200]
+		}
+		logger.Warningf("[DIAG] GetClients: inbound=%d settings JSON parse error: %v, settings[:200]=%s", inbound.Id, err, settingsPreview)
 		return nil, fmt.Errorf("failed to parse settings: %v", err)
 	}
 	if settings == nil {
@@ -266,6 +271,7 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 
 	clients, err := s.GetClients(inbound)
 	if err != nil {
+		logger.Warningf("[DIAG] AddInbound: GetClients failed for inbound tag=%s port=%d: %v", inbound.Tag, inbound.Port, err)
 		return inbound, false, err
 	}
 
@@ -3460,29 +3466,37 @@ func (s *InboundService) buildVlessTcpTls(userId, port, index int) (*model.Inbou
 
 // generateX25519Key runs the xray x25519 command and returns the key pair.
 func (s *InboundService) generateX25519Key() (map[string]any, error) {
-	cmd := exec.Command(xray.GetBinaryPath(), "x25519")
+	binaryPath := xray.GetBinaryPath()
+	cmd := exec.Command(binaryPath, "x25519")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	err := cmd.Run()
 	if err != nil {
+		logger.Warningf("[DIAG] generateX25519Key: xray binary=%s exec error: %v", binaryPath, err)
 		return nil, err
 	}
 
-	lines := strings.Split(out.String(), "\n")
+	output := out.String()
+	logger.Debugf("[DIAG] generateX25519Key: xray binary=%s output=%s", binaryPath, output)
+
+	lines := strings.Split(output, "\n")
 	if len(lines) < 2 {
-		return nil, fmt.Errorf("unexpected x25519 output: %s", out.String())
+		logger.Warningf("[DIAG] generateX25519Key: unexpected output (len(lines)=%d): %s", len(lines), output)
+		return nil, fmt.Errorf("unexpected x25519 output: %s", output)
 	}
 
 	privateKeyLine := strings.Split(lines[0], ":")
 	publicKeyLine := strings.Split(lines[1], ":")
 
 	if len(privateKeyLine) < 2 || len(publicKeyLine) < 2 {
-		return nil, fmt.Errorf("unexpected x25519 output format: %s", out.String())
+		logger.Warningf("[DIAG] generateX25519Key: unexpected format pvt=%d pub=%d output=%s", len(privateKeyLine), len(publicKeyLine), output)
+		return nil, fmt.Errorf("unexpected x25519 output format: %s", output)
 	}
 
 	privateKey := strings.TrimSpace(privateKeyLine[1])
 	publicKey := strings.TrimSpace(publicKeyLine[1])
 
+	logger.Debugf("[DIAG] generateX25519Key: success privateKey=%s... publicKey=%s...", privateKey[:8], publicKey[:8])
 	return map[string]any{
 		"privateKey": privateKey,
 		"publicKey":  publicKey,

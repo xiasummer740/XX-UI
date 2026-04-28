@@ -94,12 +94,18 @@ func RemoveIndex(s []any, index int) []any {
 func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 	templateConfig, err := s.settingService.GetXrayConfigTemplate()
 	if err != nil {
+		logger.Warningf("[DIAG] GetXrayConfig: GetXrayConfigTemplate failed: %v", err)
 		return nil, err
 	}
 
 	xrayConfig := &xray.Config{}
 	err = json.Unmarshal([]byte(templateConfig), xrayConfig)
 	if err != nil {
+		preview := templateConfig
+		if len(preview) > 200 {
+			preview = preview[:200]
+		}
+		logger.Warningf("[DIAG] GetXrayConfig: template unmarshal failed: %v, preview=%s", err, preview)
 		return nil, err
 	}
 

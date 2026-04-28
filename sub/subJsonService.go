@@ -89,8 +89,10 @@ func NewSubJsonService(fragment string, noises string, mux string, rules string,
 func (s *SubJsonService) GetJson(subId string, host string) (string, string, error) {
 	inbounds, err := s.SubService.getInboundsBySubId(subId)
 	if err != nil || len(inbounds) == 0 {
+		logger.Warningf("[DIAG] GetJson: no inbounds for subId=%s err=%v", subId, err)
 		return "", "", err
 	}
+	logger.Debugf("[DIAG] GetJson: subId=%s found %d inbounds", subId, len(inbounds))
 
 	var header string
 	var traffic xray.ClientTraffic
@@ -115,16 +117,20 @@ func (s *SubJsonService) GetJson(subId string, host string) (string, string, err
 			}
 		}
 
+		jsonMatchCount := 0
 		for _, client := range clients {
 			if client.Enable && client.SubID == subId {
+				jsonMatchCount++
 				clientTraffics = append(clientTraffics, s.SubService.getClientTraffics(inbound.ClientStats, client.Email))
 				newConfigs := s.getConfig(inbound, client, host)
 				configArray = append(configArray, newConfigs...)
 			}
 		}
+		logger.Debugf("[DIAG] GetJson: subId=%s inbound=%d matched %d clients", subId, inbound.Id, jsonMatchCount)
 	}
 
 	if len(configArray) == 0 {
+		logger.Warningf("[DIAG] GetJson: subId=%s no matching clients found (configArray empty)", subId)
 		return "", "", nil
 	}
 

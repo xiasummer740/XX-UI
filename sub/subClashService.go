@@ -31,8 +31,10 @@ func NewSubClashService(subService *SubService) *SubClashService {
 func (s *SubClashService) GetClash(subId string, host string) (string, string, error) {
 	inbounds, err := s.SubService.getInboundsBySubId(subId)
 	if err != nil || len(inbounds) == 0 {
+		logger.Warningf("[DIAG] GetClash: no inbounds for subId=%s err=%v", subId, err)
 		return "", "", err
 	}
+	logger.Debugf("[DIAG] GetClash: subId=%s found %d inbounds", subId, len(inbounds))
 
 	var traffic xray.ClientTraffic
 	var clientTraffics []xray.ClientTraffic
@@ -54,15 +56,19 @@ func (s *SubClashService) GetClash(subId string, host string) (string, string, e
 				inbound.StreamSettings = streamSettings
 			}
 		}
+		clashMatchCount := 0
 		for _, client := range clients {
 			if client.Enable && client.SubID == subId {
+				clashMatchCount++
 				clientTraffics = append(clientTraffics, s.SubService.getClientTraffics(inbound.ClientStats, client.Email))
 				proxies = append(proxies, s.getProxies(inbound, client, host)...)
 			}
 		}
+		logger.Debugf("[DIAG] GetClash: subId=%s inbound=%d matched %d clients", subId, inbound.Id, clashMatchCount)
 	}
 
 	if len(proxies) == 0 {
+		logger.Warningf("[DIAG] GetClash: subId=%s no matching clients found (proxies empty)", subId)
 		return "", "", nil
 	}
 
