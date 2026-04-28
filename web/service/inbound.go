@@ -280,15 +280,29 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 		var settings map[string]any
 		if err2 := json.Unmarshal([]byte(inbound.Settings), &settings); err2 == nil && settings != nil {
 			now := time.Now().Unix() * 1000
-			updatedClients := make([]model.Client, 0, len(clients))
-			for _, c := range clients {
-				if c.CreatedAt == 0 {
-					c.CreatedAt = now
+			// Preserve original raw client map format to avoid model.Client zero-value serialization
+			if rawClients, ok := settings["clients"].([]any); ok {
+				for i := range rawClients {
+					if raw, ok := rawClients[i].(map[string]any); ok {
+						if _, exists := raw["createdAt"]; !exists {
+							raw["createdAt"] = now
+						}
+						raw["updatedAt"] = now
+					}
 				}
-				c.UpdatedAt = now
-				updatedClients = append(updatedClients, c)
+				settings["clients"] = rawClients
+			} else {
+				// Fallback: use model.Client format if raw format unavailable
+				updatedClients := make([]model.Client, 0, len(clients))
+				for _, c := range clients {
+					if c.CreatedAt == 0 {
+						c.CreatedAt = now
+					}
+					c.UpdatedAt = now
+					updatedClients = append(updatedClients, c)
+				}
+				settings["clients"] = updatedClients
 			}
-			settings["clients"] = updatedClients
 			if bs, err3 := json.MarshalIndent(settings, "", "  "); err3 == nil {
 				inbound.Settings = string(bs)
 			} else {
@@ -3048,7 +3062,7 @@ func (s *InboundService) buildVlessReality(userId, port, index int) (*model.Inbo
 
 	settings := map[string]any{
 		"clients": []map[string]any{
-			{"id": clientID, "flow": "xtls-rprx-vision", "email": email},
+			{"id": clientID, "flow": "xtls-rprx-vision", "email": email, "enable": true},
 		},
 		"decryption": "none",
 	}
@@ -3105,7 +3119,7 @@ func (s *InboundService) buildVmessTcp(userId, port, index int) (*model.Inbound,
 
 	settings := map[string]any{
 		"clients": []map[string]any{
-			{"id": clientID, "email": email},
+			{"id": clientID, "email": email, "enable": true},
 		},
 	}
 	settingsJSON, _ := json.MarshalIndent(settings, "", "  ")
@@ -3150,6 +3164,7 @@ func (s *InboundService) buildShadowsocks(userId, port, index int) (*model.Inbou
 				"email":    email,
 				"password": password,
 				"method":   "aes-256-gcm",
+				"enable":   true,
 			},
 		},
 		"network": "tcp,udp",
@@ -3196,6 +3211,7 @@ func (s *InboundService) buildTrojanTcp(userId, port, index int) (*model.Inbound
 				"password": password,
 				"email":    email,
 				"flow":     "",
+				"enable":   true,
 			},
 		},
 	}
@@ -3237,7 +3253,7 @@ func (s *InboundService) buildVlessWs(userId, port, index int) (*model.Inbound, 
 
 	settings := map[string]any{
 		"clients": []map[string]any{
-			{"id": clientID, "email": email},
+			{"id": clientID, "email": email, "enable": true},
 		},
 		"decryption": "none",
 	}
@@ -3280,7 +3296,7 @@ func (s *InboundService) buildVmessWs(userId, port, index int) (*model.Inbound, 
 
 	settings := map[string]any{
 		"clients": []map[string]any{
-			{"id": clientID, "email": email},
+			{"id": clientID, "email": email, "enable": true},
 		},
 	}
 	settingsJSON, _ := json.MarshalIndent(settings, "", "  ")
@@ -3322,7 +3338,7 @@ func (s *InboundService) buildVlessGrpc(userId, port, index int) (*model.Inbound
 
 	settings := map[string]any{
 		"clients": []map[string]any{
-			{"id": clientID, "email": email},
+			{"id": clientID, "email": email, "enable": true},
 		},
 		"decryption": "none",
 	}
@@ -3369,6 +3385,7 @@ func (s *InboundService) buildTrojanWs(userId, port, index int) (*model.Inbound,
 				"password": password,
 				"email":    email,
 				"flow":     "",
+				"enable":   true,
 			},
 		},
 	}
@@ -3424,7 +3441,7 @@ func (s *InboundService) buildVlessTcpTls(userId, port, index int) (*model.Inbou
 
 	settings := map[string]any{
 		"clients": []map[string]any{
-			{"id": clientID, "email": email},
+			{"id": clientID, "email": email, "enable": true},
 		},
 		"decryption": "none",
 	}
