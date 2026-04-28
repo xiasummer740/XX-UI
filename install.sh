@@ -8,6 +8,18 @@ plain='\033[0m'
 
 cur_dir=$(pwd)
 
+# Curl wrapper with automatic IPv6 preference and IPv4 fallback
+_curl() {
+    # Try without address family flag first (supports both IPv4 and IPv6)
+    if command -v curl &>/dev/null; then
+        curl "$@" 2>/dev/null && return 0
+        # If failed, retry with IPv4-only
+        curl -4 "$@" 2>/dev/null && return 0
+        return 1
+    fi
+    return 1
+}
+
 xui_folder="${XUI_MAIN_FOLDER:=/usr/local/x-ui}"
 xui_service="${XUI_SERVICE:=/etc/systemd/system}"
 
@@ -113,7 +125,7 @@ gen_random_string() {
 install_acme() {
     echo -e "${green}正在安装 acme.sh SSL 证书管理工具...${plain}"
     cd ~ || return 1
-    curl -s https://get.acme.sh | sh >/dev/null 2>&1
+    _curl -s https://get.acme.sh | sh >/dev/null 2>&1
     if [ $? -ne 0 ]; then
         echo -e "${red}安装 acme.sh 失败${plain}"
         return 1
@@ -351,7 +363,7 @@ ssl_cert_issue() {
     if ! command -v ~/.acme.sh/acme.sh &>/dev/null; then
         echo "未找到 acme.sh，正在安装..."
         cd ~ || return 1
-        curl -s https://get.acme.sh | sh
+        _curl -s https://get.acme.sh | sh
         if [ $? -ne 0 ]; then
             echo -e "${red}安装 acme.sh 失败${plain}"
             return 1
@@ -650,7 +662,7 @@ config_after_install() {
     )
     local server_ip=""
     for ip_address in "${URL_lists[@]}"; do
-        local response=$(curl -s -w "\n%{http_code}" --max-time 3 "${ip_address}" 2>/dev/null)
+        local response=$(_curl -s -w "\n%{http_code}" --max-time 3 "${ip_address}" 2>/dev/null)
         local http_code=$(echo "$response" | tail -n1)
         local ip_result=$(echo "$response" | head -n-1 | tr -d '[:space:]')
         if [[ "${http_code}" == "200" && -n "${ip_result}" ]]; then
@@ -772,17 +784,13 @@ install_x-ui() {
     
     # Download resources
     if [ $# == 0 ]; then
-        tag_version=$(curl -Ls "https://api.github.com/repos/xiasummer740/XX-UI/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+        tag_version=$(_curl -Ls "https://api.github.com/repos/xiasummer740/XX-UI/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
         if [[ ! -n "$tag_version" ]]; then
-            echo -e "${yellow}Trying to fetch version with IPv4...${plain}"
-            tag_version=$(curl -4 -Ls "https://api.github.com/repos/xiasummer740/XX-UI/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-            if [[ ! -n "$tag_version" ]]; then
-                echo -e "${red}获取版本号失败，可能是 GitHub API 限制，请稍后重试${plain}"
-                exit 1
-            fi
+            echo -e "${red}获取版本号失败，可能是 GitHub API 限制，请稍后重试${plain}"
+            exit 1
         fi
         echo -e "获取到最新版本: ${tag_version}，开始安装..."
-        curl -4fLRo ${xui_folder}-linux-$(arch).tar.gz https://github.com/xiasummer740/XX-UI/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz
+        _curl -fLRo ${xui_folder}-linux-$(arch).tar.gz https://github.com/xiasummer740/XX-UI/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz
         if [[ $? -ne 0 ]]; then
             echo -e "${red}下载 x-ui 失败，请确保服务器可以访问 GitHub${plain}"
             exit 1
@@ -799,13 +807,13 @@ install_x-ui() {
         
         url="https://github.com/xiasummer740/XX-UI/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz"
         echo -e "开始安装 xx-ui $1"
-        curl -4fLRo ${xui_folder}-linux-$(arch).tar.gz ${url}
+        _curl -fLRo ${xui_folder}-linux-$(arch).tar.gz ${url}
         if [[ $? -ne 0 ]]; then
             echo -e "${red}下载 x-ui $1 失败，请检查版本是否存在${plain}"
             exit 1
         fi
     fi
-    curl -4fLRo /usr/bin/x-ui-temp https://raw.githubusercontent.com/xiasummer740/XX-UI/main/x-ui.sh
+    _curl -fLRo /usr/bin/x-ui-temp https://raw.githubusercontent.com/xiasummer740/XX-UI/main/x-ui.sh
     if [[ $? -ne 0 ]]; then
         echo -e "${red}下载 x-ui.sh 失败${plain}"
         exit 1
@@ -857,7 +865,7 @@ install_x-ui() {
     fi
     
     if [[ $release == "alpine" ]]; then
-        curl -4fLRo /etc/init.d/x-ui https://raw.githubusercontent.com/xiasummer740/XX-UI/main/x-ui.rc
+        _curl -fLRo /etc/init.d/x-ui https://raw.githubusercontent.com/xiasummer740/XX-UI/main/x-ui.rc
         if [[ $? -ne 0 ]]; then
             echo -e "${red}下载 x-ui.rc 失败${plain}"
             exit 1
@@ -914,13 +922,13 @@ install_x-ui() {
             echo -e "${yellow}在 tar.gz 中未找到服务文件，正在从 GitHub 下载...${plain}"
             case "${release}" in
                 ubuntu | debian | armbian)
-                    curl -4fLRo ${xui_service}/x-ui.service https://raw.githubusercontent.com/xiasummer740/XX-UI/main/x-ui.service.debian >/dev/null 2>&1
+                    _curl -fLRo ${xui_service}/x-ui.service https://raw.githubusercontent.com/xiasummer740/XX-UI/main/x-ui.service.debian >/dev/null 2>&1
                 ;;
                 arch | manjaro | parch)
-                    curl -4fLRo ${xui_service}/x-ui.service https://raw.githubusercontent.com/xiasummer740/XX-UI/main/x-ui.service.arch >/dev/null 2>&1
+                    _curl -fLRo ${xui_service}/x-ui.service https://raw.githubusercontent.com/xiasummer740/XX-UI/main/x-ui.service.arch >/dev/null 2>&1
                 ;;
                 *)
-                    curl -4fLRo ${xui_service}/x-ui.service https://raw.githubusercontent.com/xiasummer740/XX-UI/main/x-ui.service.rhel >/dev/null 2>&1
+                    _curl -fLRo ${xui_service}/x-ui.service https://raw.githubusercontent.com/xiasummer740/XX-UI/main/x-ui.service.rhel >/dev/null 2>&1
                 ;;
             esac
             

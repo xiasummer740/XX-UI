@@ -1,6 +1,6 @@
 module github.com/XiaSummer740/XX-UI
 
-go 1.26.2
+go 1.26
 
 require (
 	github.com/gin-contrib/gzip v1.2.6

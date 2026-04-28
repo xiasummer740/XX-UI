@@ -1177,17 +1177,14 @@ func (t *Tgbot) answerCallback(callbackQuery *telego.CallbackQuery, isAdmin bool
 				t.sendCallbackAnswerTgBot(callbackQuery.ID, t.I18nBot("tgbot.answers.errorOperation"))
 				t.searchClient(chatId, email, callbackQuery.Message.GetMessageID())
 			case "add_client_reset_exp_c":
-				client_ExpiryTime = 0
 				days, _ := strconv.ParseInt(dataArray[1], 10, 64)
+				// Use current time as base since this is for adding a new client
+				nowMs := time.Now().Unix() * 1000
 				var date int64
-				if client_ExpiryTime > 0 {
-					if client_ExpiryTime-time.Now().Unix()*1000 < 0 {
-						date = -int64(days * 24 * 60 * 60000)
-					} else {
-						date = client_ExpiryTime + int64(days*24*60*60000)
-					}
+				if days > 0 {
+					date = nowMs + int64(days*24*60*60000)
 				} else {
-					date = client_ExpiryTime - int64(days*24*60*60000)
+					date = nowMs
 				}
 				client_ExpiryTime = date
 
@@ -3818,5 +3815,5 @@ func (t *Tgbot) deleteMessageTgBot(chatId int64, messageID int) {
 func (t *Tgbot) isSingleWord(text string) bool {
 	text = strings.TrimSpace(text)
 	re := regexp.MustCompile(`\s+`)
-	return re.MatchString(text)
+	return !re.MatchString(text)
 }
