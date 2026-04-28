@@ -448,23 +448,23 @@ func (a *InboundController) batchGenerate(c *gin.Context) {
 func (a *InboundController) generateProtocol(c *gin.Context) {
 	user := session.GetLoginUser(c)
 
-	// Log raw request body BEFORE ShouldBindJSON consumes it
+	// Log raw request body BEFORE ShouldBind consumes it
 	bodyBytes, _ := io.ReadAll(c.Request.Body)
 	if len(bodyBytes) > 0 {
 		preview := string(bodyBytes)
 		if len(preview) > 500 {
 			preview = preview[:500]
 		}
-		logger.Debugf("[DIAG] generateProtocol raw body: %s", preview)
+		logger.Warningf("[DIAG] generateProtocol raw body: %s", preview)
 	}
 	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 	var req struct {
-		Protocols []string `json:"protocols"`
-		Count     int      `json:"count"`
+		Protocols []string `json:"protocols" form:"protocols"`
+		Count     int      `json:"count" form:"count"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		logger.Warningf("[DIAG] generateProtocol ShouldBindJSON failed: %v", err)
+	if err := c.ShouldBind(&req); err != nil {
+		logger.Warningf("[DIAG] generateProtocol ShouldBind failed: %v", err)
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
@@ -543,12 +543,12 @@ func (a *InboundController) updateClientTraffic(c *gin.Context) {
 
 	// Define the request structure for traffic update
 	type TrafficUpdateRequest struct {
-		Upload   int64 `json:"upload"`
-		Download int64 `json:"download"`
+		Upload   int64 `json:"upload" form:"upload"`
+		Download int64 `json:"download" form:"download"`
 	}
 
 	var request TrafficUpdateRequest
-	err := c.ShouldBindJSON(&request)
+	err := c.ShouldBind(&request)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.inboundUpdateSuccess"), err)
 		return
