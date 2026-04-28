@@ -1,8 +1,10 @@
 package controller
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strconv"
 	"time"
 
@@ -445,6 +447,17 @@ func (a *InboundController) batchGenerate(c *gin.Context) {
 // generateProtocol generates inbounds based on selected protocol types from the frontend.
 func (a *InboundController) generateProtocol(c *gin.Context) {
 	user := session.GetLoginUser(c)
+
+	// Log raw request body BEFORE ShouldBindJSON consumes it
+	bodyBytes, _ := io.ReadAll(c.Request.Body)
+	if len(bodyBytes) > 0 {
+		preview := string(bodyBytes)
+		if len(preview) > 500 {
+			preview = preview[:500]
+		}
+		logger.Debugf("[DIAG] generateProtocol raw body: %s", preview)
+	}
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 	var req struct {
 		Protocols []string `json:"protocols"`
