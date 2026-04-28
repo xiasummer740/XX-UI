@@ -9,15 +9,37 @@ plain='\033[0m'
 xui_folder="${XUI_MAIN_FOLDER:=/usr/local/x-ui}"
 xui_service="${XUI_SERVICE:=/etc/systemd/system}"
 
-# Curl wrapper with automatic IPv6 preference and IPv4 fallback
+# Download mirror support (set XUI_DOWNLOAD_BASE to use a mirror, e.g. https://ghproxy.net/https://github.com)
+DOWNLOAD_BASE="${XUI_DOWNLOAD_BASE:-https://github.com}"
+RAW_BASE="${XUI_RAW_BASE:-https://raw.githubusercontent.com}"
+
+# Curl wrapper with retry, timeout, and automatic IPv4 fallback
 _curl() {
-    # Try without address family flag first (supports both IPv4 and IPv6)
-    if command -v curl &>/dev/null; then
-        curl "$@" 2>/dev/null && return 0
-        # If failed, retry with IPv4-only
-        curl -4 "$@" 2>/dev/null && return 0
+    local max_retries=3
+    local retry_delay=2
+    local retry_count=0
+
+    if ! command -v curl &>/dev/null; then
+        echo "Error: curl not found" >&2
         return 1
     fi
+
+    while [ $retry_count -lt $max_retries ]; do
+        # Try without address family flag first (supports both IPv4 and IPv6)
+        if curl --connect-timeout 10 "$@" 2>/dev/null; then
+            return 0
+        fi
+        # If failed, retry with IPv4-only
+        if curl -4 --connect-timeout 10 "$@" 2>/dev/null; then
+            return 0
+        fi
+        retry_count=$((retry_count + 1))
+        if [ $retry_count -lt $max_retries ]; then
+            echo -e "${yellow}下载失败，${retry_delay}秒后重试 (${retry_count}/${max_retries})...${plain}" >&2
+            sleep $retry_delay
+            retry_delay=$((retry_delay * 2))
+        fi
+    done
     return 1
 }
 
@@ -795,9 +817,20 @@ update_x-ui() {
         _fail "ERROR: Failed to fetch x-ui version, it may be due to GitHub API restrictions, please try it later"
     fi
     echo -e "Got x-ui latest version: ${tag_version}, beginning the installation..."
-    _curl -fLRo ${xui_folder}-linux-$(arch).tar.gz https://github.com/xiasummer740/XX-UI/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz
+    
+    # Build download URL with mirror support
+    local download_url="${DOWNLOAD_BASE}/xiasummer740/XX-UI/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz"
+    echo -e "${green}下载地址: ${download_url}${plain}"
+    echo -e "${yellow}提示: 如果下载失败，可设置环境变量 XUI_DOWNLOAD_BASE 使用镜像${plain}"
+    echo -e "${yellow}示例: export XUI_DOWNLOAD_BASE=https://ghproxy.net/https://github.com${plain}"
+    
+    _curl -fLRo ${xui_folder}-linux-$(arch).tar.gz "${download_url}"
     if [[ $? -ne 0 ]]; then
-        _fail "ERROR: Failed to download x-ui, please be sure that your server can access GitHub"
+        echo -e "${red}下载 x-ui 失败，请确保服务器可以访问 GitHub${plain}"
+        echo -e "${yellow}您可以尝试设置镜像源后重试:${plain}"
+        echo -e "${yellow}  export XUI_DOWNLOAD_BASE=https://ghproxy.net/https://github.com${plain}"
+        echo -e "${yellow}  export XUI_RAW_BASE=https://ghproxy.net/https://raw.githubusercontent.com${plain}"
+        exit 1
     fi
     
     if [[ -e ${xui_folder}/ ]]; then
