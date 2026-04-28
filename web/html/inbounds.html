@@ -854,6 +854,20 @@
           <a-input v-model="protocolSelector.namePrefix" placeholder="默认: rn" :style="{ width: '200px' }" allow-clear />
           <span style="margin-left: 8px; color: #888;">节点将按 rn-01、rn-02 格式自动排序命名</span>
         </a-form-item>
+        <template v-if="hasTlsProtocolSelected()">
+          <a-divider style="margin: 12px 0; font-size: 13px; color: #333;">TLS 证书配置（仅 Trojan+TCP、Trojan+WS、VLESS+TCP+TLS 需要）</a-divider>
+          <a-form-item label="公钥文件路径（certFile）">
+            <a-input v-model="protocolSelector.certFile" placeholder="/root/cert/example.com/fullchain.pem" allow-clear />
+          </a-form-item>
+          <a-form-item label="私钥文件路径（keyFile）">
+            <a-input v-model="protocolSelector.keyFile" placeholder="/root/cert/example.com/privkey.pem" allow-clear />
+          </a-form-item>
+          <a-form-item label=" ">
+            <a-button type="primary" icon="import" @click="setProtocolCertData()">
+              从面板设置证书
+            </a-button>
+          </a-form-item>
+        </template>
         <div v-if="protocolSelector.selected.length > 0 && protocolSelector.count > 0" style="padding: 12px; background: #f6f8fa; border-radius: 4px; border: 1px solid #e8e8e8;">
           <div style="font-weight: bold; margin-bottom: 8px; color: #333;">&#x1F4E1; 端口范围预览：</div>
           <div v-for="p in getSelectedProtocols()" :key="p.key" style="margin-bottom: 6px; display: flex; align-items: center;">
@@ -1207,6 +1221,8 @@
         selected: [],
         subId: '',
         namePrefix: 'rn',
+        certFile: '',
+        keyFile: '',
         options: [
           { key: 'vless-reality', label: 'VLESS+Reality', basePort: 44301 },
           { key: 'vmess-tcp', label: 'VMess+TCP', basePort: 44302 },
@@ -1603,20 +1619,21 @@
           },
           isEdit: false,
           onShow: async function() {
-            // Auto-populate traffic reset from VPS purchase date
+            // Auto-populate traffic reset from VPS default settings
             try {
               const msg = await HttpUtil.post('/panel/setting/all');
-              if (msg.success && msg.obj && msg.obj.vpsPurchaseDate) {
-                const purchaseTs = Number(msg.obj.vpsPurchaseDate);
-                if (purchaseTs) {
-                  const d = new Date(purchaseTs * 1000);
-                  const day = d.getDate();
-                  if (day >= 1 && day <= 31) {
-                    self.$nextTick(() => {
-                      inModal.dbInbound.trafficReset = 'custom_date';
-                      inModal.dbInbound.resetDay = day;
-                    });
-                  }
+              if (msg.success && msg.obj) {
+                const resetMethod = msg.obj.defaultResetMethod || 'never';
+                const resetDay = msg.obj.defaultResetDay;
+                if (resetMethod === 'custom_date' && resetDay >= 1 && resetDay <= 31) {
+                  self.$nextTick(() => {
+                    inModal.dbInbound.trafficReset = 'custom_date';
+                    inModal.dbInbound.resetDay = resetDay;
+                  });
+                } else if (resetMethod !== 'never' && resetMethod !== '') {
+                  self.$nextTick(() => {
+                    inModal.dbInbound.trafficReset = resetMethod;
+                  });
                 }
               }
             } catch(e) {
@@ -2148,6 +2165,8 @@
             count: this.protocolSelector.count,
             subId: this.protocolSelector.subId,
             namePrefix: this.protocolSelector.namePrefix || 'rn',
+            certFile: this.protocolSelector.certFile,
+            keyFile: this.protocolSelector.keyFile,
           });
           if (msg.success) {
             const count = msg.obj && msg.obj.length > 0 ? msg.obj.length : 0;
@@ -2165,6 +2184,14 @@
       },
       getSelectedProtocols() {
         return this.protocolSelector.options.filter(p => this.protocolSelector.selected.includes(p.key));
+      },
+      hasTlsProtocolSelected() {
+        const tlsProtocols = ['trojan-tcp', 'trojan-ws', 'vless-tcp-tls'];
+        return this.protocolSelector.selected.some(key => tlsProtocols.includes(key));
+      },
+      setProtocolCertData() {
+        this.protocolSelector.certFile = this.defaultCert;
+        this.protocolSelector.keyFile = this.defaultKey;
       },
       importInbound() {
         promptModal.open({

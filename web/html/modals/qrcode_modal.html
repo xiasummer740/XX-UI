@@ -110,7 +110,7 @@
       this.dbInbound = dbInbound;
       this.inbound = dbInbound.toInbound();
       this.client = client;
-      this.subId = '';
+      this.subId = client?.subId || '';
       this.qrcodes = [];
       // Reset the status fetched flag when showing the modal
       if (qrModalApp) qrModalApp.statusFetched = false;

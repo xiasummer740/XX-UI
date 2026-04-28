@@ -2975,7 +2975,7 @@ func (s *InboundService) BatchGenerateInbounds(userId int) ([]*model.Inbound, er
 // Supported protocols: "vless-reality", "vmess-tcp", "shadowsocks", "trojan-tcp",
 // "vless-ws", "vmess-ws", "vless-grpc", "trojan-ws"
 // Each protocol gets inboundsCount inbounds on consecutive ports starting from basePort.
-func (s *InboundService) GenerateProtocolInbounds(userId int, protocols []string, inboundsCount int, subId string, namePrefix string) ([]*model.Inbound, error) {
+func (s *InboundService) GenerateProtocolInbounds(userId int, protocols []string, inboundsCount int, subId string, namePrefix string, certFile string, keyFile string) ([]*model.Inbound, error) {
 	var created []*model.Inbound
 	var firstErr error
 
@@ -2993,7 +2993,7 @@ func (s *InboundService) GenerateProtocolInbounds(userId int, protocols []string
 			resetDay = day
 		}
 	}
-	logger.Debugf("[DIAG] GenerateProtocolInbounds: subId=%s namePrefix=%s trafficReset=%s resetDay=%d", subId, namePrefix, trafficReset, resetDay)
+	logger.Debugf("[DIAG] GenerateProtocolInbounds: subId=%s namePrefix=%s trafficReset=%s resetDay=%d certFile=%s keyFile=%s", subId, namePrefix, trafficReset, resetDay, certFile, keyFile)
 
 	globalSeq := 0
 	for pi, protocol := range protocols {
@@ -3013,7 +3013,7 @@ func (s *InboundService) GenerateProtocolInbounds(userId int, protocols []string
 			case "shadowsocks":
 				inbound, err = s.buildShadowsocks(userId, port, i, subId, namePrefix, globalSeq, trafficReset, resetDay)
 			case "trojan-tcp":
-				inbound, err = s.buildTrojanTcp(userId, port, i, subId, namePrefix, globalSeq, trafficReset, resetDay)
+				inbound, err = s.buildTrojanTcp(userId, port, i, subId, namePrefix, globalSeq, trafficReset, resetDay, certFile, keyFile)
 			case "vless-ws":
 				inbound, err = s.buildVlessWs(userId, port, i, subId, namePrefix, globalSeq, trafficReset, resetDay)
 			case "vmess-ws":
@@ -3021,9 +3021,9 @@ func (s *InboundService) GenerateProtocolInbounds(userId int, protocols []string
 			case "vless-grpc":
 				inbound, err = s.buildVlessGrpc(userId, port, i, subId, namePrefix, globalSeq, trafficReset, resetDay)
 			case "trojan-ws":
-				inbound, err = s.buildTrojanWs(userId, port, i, subId, namePrefix, globalSeq, trafficReset, resetDay)
+				inbound, err = s.buildTrojanWs(userId, port, i, subId, namePrefix, globalSeq, trafficReset, resetDay, certFile, keyFile)
 			case "vless-tcp-tls":
-				inbound, err = s.buildVlessTcpTls(userId, port, i, subId, namePrefix, globalSeq, trafficReset, resetDay)
+				inbound, err = s.buildVlessTcpTls(userId, port, i, subId, namePrefix, globalSeq, trafficReset, resetDay, certFile, keyFile)
 			default:
 				continue
 			}
@@ -3220,7 +3220,7 @@ func (s *InboundService) buildShadowsocks(userId, port, index int, subId string,
 }
 
 // buildTrojanTcp builds a Trojan+TCP+TLS inbound
-func (s *InboundService) buildTrojanTcp(userId, port, index int, subId string, namePrefix string, globalSeq int, trafficReset string, resetDay int) (*model.Inbound, error) {
+func (s *InboundService) buildTrojanTcp(userId, port, index int, subId string, namePrefix string, globalSeq int, trafficReset string, resetDay int, certFile string, keyFile string) (*model.Inbound, error) {
 	password := uuid.New().String()[:24]
 	email := fmt.Sprintf("trojan_tcp_%d_%s", port, password[:8])
 
@@ -3238,11 +3238,26 @@ func (s *InboundService) buildTrojanTcp(userId, port, index int, subId string, n
 	settingsJSON, _ := json.MarshalIndent(settings, "", "  ")
 
 	streamSettings := map[string]any{
-		"network":  "tcp",
-		"security": "none",
+		"network": "tcp",
 		"tcpSettings": map[string]any{
 			"header": map[string]any{"type": "none"},
 		},
+	}
+	if certFile != "" && keyFile != "" {
+		streamSettings["security"] = "tls"
+		streamSettings["tlsSettings"] = map[string]any{
+			"serverName": "",
+			"minVersion": "1.2",
+			"alpn":       []string{"h2", "http/1.1"},
+			"certificates": []map[string]any{
+				{
+					"certificateFile": certFile,
+					"keyFile":         keyFile,
+				},
+			},
+		}
+	} else {
+		streamSettings["security"] = "none"
 	}
 	streamJSON, _ := json.MarshalIndent(streamSettings, "", "  ")
 
@@ -3395,7 +3410,7 @@ func (s *InboundService) buildVlessGrpc(userId, port, index int, subId string, n
 }
 
 // buildTrojanWs builds a Trojan+WS+TLS inbound
-func (s *InboundService) buildTrojanWs(userId, port, index int, subId string, namePrefix string, globalSeq int, trafficReset string, resetDay int) (*model.Inbound, error) {
+func (s *InboundService) buildTrojanWs(userId, port, index int, subId string, namePrefix string, globalSeq int, trafficReset string, resetDay int, certFile string, keyFile string) (*model.Inbound, error) {
 	password := uuid.New().String()[:24]
 	email := fmt.Sprintf("trojan_ws_%d_%s", port, password[:8])
 
@@ -3413,12 +3428,27 @@ func (s *InboundService) buildTrojanWs(userId, port, index int, subId string, na
 	settingsJSON, _ := json.MarshalIndent(settings, "", "  ")
 
 	streamSettings := map[string]any{
-		"network":  "ws",
-		"security": "none",
+		"network": "ws",
 		"wsSettings": map[string]any{
 			"path":    fmt.Sprintf("/trojan-ws-%d", port),
 			"headers": map[string]any{},
 		},
+	}
+	if certFile != "" && keyFile != "" {
+		streamSettings["security"] = "tls"
+		streamSettings["tlsSettings"] = map[string]any{
+			"serverName": "",
+			"minVersion": "1.2",
+			"alpn":       []string{"h2", "http/1.1"},
+			"certificates": []map[string]any{
+				{
+					"certificateFile": certFile,
+					"keyFile":         keyFile,
+				},
+			},
+		}
+	} else {
+		streamSettings["security"] = "none"
 	}
 	streamJSON, _ := json.MarshalIndent(streamSettings, "", "  ")
 
@@ -3443,7 +3473,7 @@ func (s *InboundService) buildTrojanWs(userId, port, index int, subId string, na
 }
 
 // buildVlessTcpTls builds a VLESS+TCP+TLS inbound with SNI auto-filled from panel domain
-func (s *InboundService) buildVlessTcpTls(userId, port, index int, subId string, namePrefix string, globalSeq int, trafficReset string, resetDay int) (*model.Inbound, error) {
+func (s *InboundService) buildVlessTcpTls(userId, port, index int, subId string, namePrefix string, globalSeq int, trafficReset string, resetDay int, certFile string, keyFile string) (*model.Inbound, error) {
 	clientID := uuid.New().String()
 	email := fmt.Sprintf("vless_tcp_tls_%d_%s", port, clientID[:8])
 
@@ -3479,6 +3509,15 @@ func (s *InboundService) buildVlessTcpTls(userId, port, index int, subId string,
 		"tcpSettings": map[string]any{
 			"header": map[string]any{"type": "none"},
 		},
+	}
+	if certFile != "" && keyFile != "" {
+		tlsSettings := streamSettings["tlsSettings"].(map[string]any)
+		tlsSettings["certificates"] = []map[string]any{
+			{
+				"certificateFile": certFile,
+				"keyFile":         keyFile,
+			},
+		}
 	}
 	streamJSON, _ := json.MarshalIndent(streamSettings, "", "  ")
 

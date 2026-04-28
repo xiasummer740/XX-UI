@@ -1,8 +1,8 @@
 {
-  "tag_name": "v2.12.5",
+  "tag_name": "v2.13.0",
   "target_commitish": "main",
-  "name": "XX-UI v2.12.5",
-  "body": "## XX-UI v2.12.5\n\n### v2.12.5 新功能\n\n1. **📋 一键配置节点继承 VPS 配置** - 生成节点现在会自动读取面板设置中的流量重置日和重置方式\n2. **✏️ 自定义节点名称前缀** - 弹窗新增 \"节点名称前缀\" 输入框，默认 `rn`，节点将按 `rn-01`、`rn-02` 格式自动排序命名（全局序号，跨协议）\n3. **🔗 订阅 ID 支持** - 弹窗新增 \"订阅 ID\" 输入框，生成的节点自动加入订阅（子 ID 匹配）\n\n### v2.12.4 修复\n\n4. **🐛 修复一键配置 \"invalid character 'p'\" 错误** - 将 `ShouldBindJSON` 改为 `ShouldBind` + `form` 标签，适配 axios 拦截器 URL-encoded 格式\n5. **🐛 修复 `updateClientTraffic` 同样问题** - 同一函数中的相同 Bug 一并修复\n6. **📝 日志优化** - 将 raw body 日志级别从 Debugf 改为 Warningf 以便在生产日志中可见\n\n### v2.12.1 修复\n\n7. **🐛 修复订阅 \"Error!\" 问题** - 所有 build 函数的 client 设置中添加 `\"enable\": true`，修复一键生成节点在订阅中不可用的问题\n\n### v2.12.0 变更\n\n8. **🔄 升级到 Go 1.24 + 依赖更新** - 修复编译兼容性\n\n### v2.11.1 修复\n\n9. **🐛 修复 v2.11.0 编译后无法启动** - 兼容性修复\n\n### 完整变更日志\n- 一键配置节点生成器：新增订阅 ID 输入、自定义名称前缀\n- 生成节点自动继承 VPS 配置的流量重置日和重置方式\n- 节点命名改为全局序号格式 `{prefix}-01`、`{prefix}-02`...\n- 修复 axios 拦截器导致的 ShouldBindJSON 解析失败\n- 所有一键生成 client 默认 enable: true\n- 修复订阅页面显示 Error! 的问题\n- 版本号从 v2.11.0 升级到 v2.12.5",
+  "name": "XX-UI v2.13.0",
+  "body": "## XX-UI v2.13.0\n\n### v2.13.0 修复\n\n1. **🔧 修复一键配置 TLS 协议节点不可用** - Trojan+TCP、Trojan+WS 和 VLESS+TCP+TLS 三种协议一键生成时不再缺少 TLS 证书配置。弹窗新增 \"TLS 证书配置\" 区域，用户可手动填写 certFile/keyFile 路径，或点击 \"从面板设置证书\" 按钮自动导入面板证书\n2. **🔗 修复二维码没有订阅链接** - 修复二维码弹窗 subId 始终为空的问题，现在正确读取节点配置的 subId 并显示订阅二维码\n3. **📅 修复添加入站流量重置日期字段** - 添加入站弹窗现在正确读取 VPS 配置中的 `defaultResetMethod` 和 `defaultResetDay`，而非从购买日期提取\n\n### 完整变更日志\n- 一键配置生成协议弹窗：新增 TLS 证书路径输入 + \"从面板设置证书\" 按钮\n- 新增 `hasTlsProtocolSelected()` 方法，仅在选择 Trojan+TCP/Trojan+WS/VLESS+TCP+TLS 时显示证书配置\n- Trojan+TCP 和 Trojan+WS build 函数：从 `security: \"none\"` 改为支持 TLS（用户提供证书时启用）\n- VLESS+TCP+TLS build 函数：在现有 `tlsSettings` 中增加 `certificates` 数组\n- QR 二维码弹窗：`show()` 函数中 `subId` 正确继承 client 的值\n- 添加入站：`onShow` 回调读取 `defaultResetMethod` 替代 `vpsPurchaseDate`",
   "draft": false,
   "prerelease": false
 }

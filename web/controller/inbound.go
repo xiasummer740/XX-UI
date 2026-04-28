@@ -464,6 +464,8 @@ func (a *InboundController) generateProtocol(c *gin.Context) {
 		Count      int      `json:"count" form:"count"`
 		SubId      string   `json:"subId" form:"subId"`
 		NamePrefix string   `json:"namePrefix" form:"namePrefix"`
+		CertFile   string   `json:"certFile" form:"certFile"`
+		KeyFile    string   `json:"keyFile" form:"keyFile"`
 	}
 	if err := c.ShouldBind(&req); err != nil {
 		logger.Warningf("[DIAG] generateProtocol ShouldBind failed: %v", err)
@@ -485,8 +487,8 @@ func (a *InboundController) generateProtocol(c *gin.Context) {
 		req.NamePrefix = "rn"
 	}
 
-	logger.Debugf("[DIAG] generateProtocol: protocols=%v count=%d subId=%s namePrefix=%s", req.Protocols, req.Count, req.SubId, req.NamePrefix)
-	result, err := a.inboundService.GenerateProtocolInbounds(user.Id, req.Protocols, req.Count, req.SubId, req.NamePrefix)
+	logger.Debugf("[DIAG] generateProtocol: protocols=%v count=%d subId=%s namePrefix=%s certFile=%s keyFile=%s", req.Protocols, req.Count, req.SubId, req.NamePrefix, req.CertFile, req.KeyFile)
+	result, err := a.inboundService.GenerateProtocolInbounds(user.Id, req.Protocols, req.Count, req.SubId, req.NamePrefix, req.CertFile, req.KeyFile)
 	if err != nil {
 		logger.Warning("[DIAG] generateProtocol GenerateProtocolInbounds error:", err)
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
