@@ -809,7 +809,12 @@
       <a-form-item label="代理协议" required>
         <a-select v-model="chainProxyModal.protocol" :dropdown-class-name="themeSwitcher.currentTheme">
           <a-select-option value="socks">SOCKS5</a-select-option>
-          <a-select-option value="http">HTTP</a-select-option>
+          <a-select-option value="http">HTTP(S)</a-select-option>
+          <a-select-option value="shadowsocks">Shadowsocks</a-select-option>
+          <a-select-option value="trojan">Trojan</a-select-option>
+          <a-select-option value="vless">VLESS</a-select-option>
+          <a-select-option value="vmess">VMess</a-select-option>
+          <a-select-option value="hysteria2">Hysteria2</a-select-option>
         </a-select>
       </a-form-item>
       <a-form-item label="代理地址" required>
@@ -823,6 +828,11 @@
       </a-form-item>
       <a-form-item label="代理密码（可选）">
         <a-input type="password" v-model="chainProxyModal.password" placeholder="无需认证则留空" />
+      </a-form-item>
+      <a-form-item label="快速粘贴识别（自动解析并填入）">
+        <a-input placeholder="粘贴 vmess/vless/trojan/ss/hysteria2 链接或 socks5://user:pass@host:port" v-model="chainProxyModal.pasteInput" @paste="onChainProxyPaste" @keyup.enter="parseChainProxyPaste" allow-clear>
+          <a-button slot="addonAfter" type="primary" icon="scan" size="small" @click="parseChainProxyPaste">解析</a-button>
+        </a-input>
       </a-form-item>
     </a-form>
   </a-modal>
@@ -1309,6 +1319,7 @@
         port: 1080,
         user: '',
         password: '',
+        pasteInput: '',
       },
       vpsModalVisible: false,
       vpsSaving: false,
@@ -2538,11 +2549,168 @@
           this.vpsSaving = false;
         }
       },
-      formatVpsDate(ts) {
-        if (!ts) return '';
-        const d = new Date(Number(ts) * 1000);
-        if (isNaN(d.getTime())) return ts;
-        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+      onChainProxyPaste(event) {
+        // Delay parsing to let the paste content be set on v-model
+        setTimeout(() => this.parseChainProxyPaste(), 50);
+      },
+      parseChainProxyPaste() {
+        const raw = (this.chainProxyModal.pasteInput || '').trim();
+        if (!raw) return;
+        // Try to detect the link type and parse
+        let parsed = false;
+        // 1) vmess://... base64 encoded JSON
+        if (raw.startsWith('vmess://')) {
+          const b64 = raw.slice(8).split('#')[0];
+          try {
+            const decoded = JSON.parse(atob(b64));
+            this.chainProxyModal.protocol = 'vmess';
+            this.chainProxyModal.address = decoded.add || '';
+            this.chainProxyModal.port = parseInt(decoded.port) || 0;
+            // vmess proxy uses UUID as user, password can be empty (alterId=0)
+            this.chainProxyModal.user = decoded.id || '';
+            this.chainProxyModal.password = '';
+            parsed = true;
+          } catch(e) { /* ignore */ }
+        }
+        // 2) vless://uuid@host:port?... or trojan://password@host:port?...
+        if (!parsed && (raw.startsWith('vless://') || raw.startsWith('trojan://'))) {
+          try {
+            const isVless = raw.startsWith('vless://');
+            const rest = raw.slice(isVless ? 8 : 9);
+            // Remove fragment (#...) and query (?...)
+            const atIdx = rest.indexOf('@');
+            if (atIdx > 0) {
+              const cred = rest.substring(0, atIdx);
+              const hostPortPart = rest.substring(atIdx + 1).split('?')[0].split('#')[0];
+              const colonIdx = hostPortPart.lastIndexOf(':');
+              if (colonIdx > 0) {
+                this.chainProxyModal.protocol = isVless ? 'vless' : 'trojan';
+                this.chainProxyModal.address = hostPortPart.substring(0, colonIdx);
+                this.chainProxyModal.port = parseInt(hostPortPart.substring(colonIdx + 1)) || 0;
+                this.chainProxyModal.user = '';
+                this.chainProxyModal.password = cred;
+                parsed = true;
+              }
+            }
+          } catch(e) { /* ignore */ }
+        }
+        // 3) ss://method:password@host:port
+        if (!parsed && raw.startsWith('ss://')) {
+          try {
+            const rest = raw.slice(5).split('#')[0];
+            // Could be base64 encoded: ss://base64(method:password)@host:port
+            if (rest.includes('@')) {
+              // Plain format: ss://method:password@host:port
+              const atIdx = rest.indexOf('@');
+              const methodPass = rest.substring(0, atIdx);
+              const hostPort = rest.substring(atIdx + 1);
+              const colonIdx = methodPass.indexOf(':');
+              const hpColon = hostPort.lastIndexOf(':');
+              if (colonIdx > 0 && hpColon > 0) {
+                this.chainProxyModal.protocol = 'shadowsocks';
+                this.chainProxyModal.address = hostPort.substring(0, hpColon);
+                this.chainProxyModal.port = parseInt(hostPort.substring(hpColon + 1)) || 0;
+                this.chainProxyModal.user = methodPass.substring(0, colonIdx);
+                this.chainProxyModal.password = methodPass.substring(colonIdx + 1);
+                parsed = true;
+              }
+            } else if (rest.includes(':')) {
+              // Encoded format: ss://base64(method:password)@host:port
+              try {
+                const decodedRest = atob(rest.split('@')[0]);
+                const atIdx2 = decodedRest.indexOf('@');
+                const methodPass2 = atIdx2 > 0 ? decodedRest.substring(0, atIdx2) : decodedRest;
+                const hostPort2 = atIdx2 > 0 ? decodedRest.substring(atIdx2 + 1) : '';
+                const colonIdx2 = methodPass2.indexOf(':');
+                const hpColon2 = hostPort2.lastIndexOf(':');
+                if (colonIdx2 > 0 && hpColon2 > 0) {
+                  this.chainProxyModal.protocol = 'shadowsocks';
+                  this.chainProxyModal.address = hostPort2.substring(0, hpColon2);
+                  this.chainProxyModal.port = parseInt(hostPort2.substring(hpColon2 + 1)) || 0;
+                  this.chainProxyModal.user = methodPass2.substring(0, colonIdx2);
+                  this.chainProxyModal.password = methodPass2.substring(colonIdx2 + 1);
+                  parsed = true;
+                }
+              } catch(e) { /* ignore */ }
+            }
+          } catch(e) { /* ignore */ }
+        }
+        // 4) hysteria2://auth@host:port?...
+        if (!parsed && raw.startsWith('hysteria2://')) {
+          try {
+            const rest = raw.slice(12).split('?')[0].split('#')[0];
+            const atIdx = rest.indexOf('@');
+            if (atIdx > 0) {
+              const auth = rest.substring(0, atIdx);
+              const hostPort = rest.substring(atIdx + 1);
+              const colonIdx = hostPort.lastIndexOf(':');
+              if (colonIdx > 0) {
+                this.chainProxyModal.protocol = 'hysteria2';
+                this.chainProxyModal.address = hostPort.substring(0, colonIdx);
+                this.chainProxyModal.port = parseInt(hostPort.substring(colonIdx + 1)) || 0;
+                this.chainProxyModal.user = '';
+                this.chainProxyModal.password = auth;
+                parsed = true;
+              }
+            }
+          } catch(e) { /* ignore */ }
+        }
+        // 5) socks5://user:pass@host:port or socks5://host:port
+        if (!parsed && (raw.startsWith('socks5://') || raw.startsWith('socks://'))) {
+          const prefix = raw.startsWith('socks5://') ? 9 : 8;
+          const rest = raw.slice(prefix).split('#')[0].split('/')[0];
+          this.chainProxyModal.protocol = 'socks';
+          const atIdx = rest.lastIndexOf('@');
+          if (atIdx > 0) {
+            const userPass = rest.substring(0, atIdx);
+            const hostPort = rest.substring(atIdx + 1);
+            const upColon = userPass.indexOf(':');
+            const hpColon = hostPort.lastIndexOf(':');
+            this.chainProxyModal.user = upColon > 0 ? userPass.substring(0, upColon) : userPass;
+            this.chainProxyModal.password = upColon > 0 ? userPass.substring(upColon + 1) : '';
+            this.chainProxyModal.address = hpColon > 0 ? hostPort.substring(0, hpColon) : hostPort;
+            this.chainProxyModal.port = hpColon > 0 ? parseInt(hostPort.substring(hpColon + 1)) : 0;
+          } else {
+            const hpColon = rest.lastIndexOf(':');
+            this.chainProxyModal.address = hpColon > 0 ? rest.substring(0, hpColon) : rest;
+            this.chainProxyModal.port = hpColon > 0 ? parseInt(rest.substring(hpColon + 1)) : 0;
+            this.chainProxyModal.user = '';
+            this.chainProxyModal.password = '';
+          }
+          parsed = true;
+        }
+        // 6) http://user:pass@host:port or https://user:pass@host:port
+        if (!parsed && (raw.startsWith('http://') || raw.startsWith('https://'))) {
+          const isHttps = raw.startsWith('https://');
+          const prefix = isHttps ? 8 : 7;
+          const rest = raw.slice(prefix).split('/')[0].split('#')[0];
+          this.chainProxyModal.protocol = 'http';
+          const atIdx = rest.lastIndexOf('@');
+          if (atIdx > 0) {
+            const userPass = rest.substring(0, atIdx);
+            const hostPort = rest.substring(atIdx + 1);
+            const upColon = userPass.indexOf(':');
+            const hpColon = hostPort.lastIndexOf(':');
+            this.chainProxyModal.user = upColon > 0 ? userPass.substring(0, upColon) : userPass;
+            this.chainProxyModal.password = upColon > 0 ? userPass.substring(upColon + 1) : '';
+            this.chainProxyModal.address = hpColon > 0 ? hostPort.substring(0, hpColon) : hostPort;
+            this.chainProxyModal.port = hpColon > 0 ? parseInt(hostPort.substring(hpColon + 1)) : (isHttps ? 443 : 80);
+          } else {
+            const hpColon = rest.lastIndexOf(':');
+            this.chainProxyModal.address = hpColon > 0 ? rest.substring(0, hpColon) : rest;
+            this.chainProxyModal.port = hpColon > 0 ? parseInt(rest.substring(hpColon + 1)) : (isHttps ? 443 : 80);
+            this.chainProxyModal.user = '';
+            this.chainProxyModal.password = '';
+          }
+          parsed = true;
+        }
+        if (parsed) {
+          this.$message.success('已自动解析代理链接并填入表单');
+          // Clear paste input after successful parse
+          this.chainProxyModal.pasteInput = '';
+        } else {
+          this.$message.warning('未能识别链接格式，请手动填写');
+        }
       },
     },
     watch: {

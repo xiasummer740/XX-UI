@@ -3248,6 +3248,14 @@ func (s *InboundService) buildTrojanTcp(userId, port, index int, subId string, n
 	}
 	settingsJSON, _ := json.MarshalIndent(settings, "", "  ")
 
+	// Trojan 协议强制要求 TLS — 自动从面板设置读取证书和域名
+	if certFile == "" || keyFile == "" {
+		certFile, keyFile = s.getDefaultCertPaths()
+	}
+
+	// 自动填充 SNI（从面板 webDomain）
+	sniDomain := s.getPanelDomain()
+
 	streamSettings := map[string]any{
 		"network": "tcp",
 		"tcpSettings": map[string]any{
@@ -3257,7 +3265,7 @@ func (s *InboundService) buildTrojanTcp(userId, port, index int, subId string, n
 	if certFile != "" && keyFile != "" {
 		streamSettings["security"] = "tls"
 		streamSettings["tlsSettings"] = map[string]any{
-			"serverName": "",
+			"serverName": sniDomain,
 			"minVersion": "1.2",
 			"alpn":       []string{"h2", "http/1.1"},
 			"certificates": []map[string]any{
@@ -3268,7 +3276,8 @@ func (s *InboundService) buildTrojanTcp(userId, port, index int, subId string, n
 			},
 		}
 	} else {
-		streamSettings["security"] = "none"
+		// 极不可能到达此处，保留"tls"而非"none"来明确表达 Trojan 的要求
+		streamSettings["security"] = "tls"
 	}
 	streamJSON, _ := json.MarshalIndent(streamSettings, "", "  ")
 
@@ -3438,6 +3447,12 @@ func (s *InboundService) buildTrojanWs(userId, port, index int, subId string, na
 	}
 	settingsJSON, _ := json.MarshalIndent(settings, "", "  ")
 
+	// Trojan 协议强制要求 TLS — 自动从面板设置读取证书和域名
+	if certFile == "" || keyFile == "" {
+		certFile, keyFile = s.getDefaultCertPaths()
+	}
+	sniDomain := s.getPanelDomain()
+
 	streamSettings := map[string]any{
 		"network": "ws",
 		"wsSettings": map[string]any{
@@ -3448,7 +3463,7 @@ func (s *InboundService) buildTrojanWs(userId, port, index int, subId string, na
 	if certFile != "" && keyFile != "" {
 		streamSettings["security"] = "tls"
 		streamSettings["tlsSettings"] = map[string]any{
-			"serverName": "",
+			"serverName": sniDomain,
 			"minVersion": "1.2",
 			"alpn":       []string{"h2", "http/1.1"},
 			"certificates": []map[string]any{
@@ -3459,7 +3474,7 @@ func (s *InboundService) buildTrojanWs(userId, port, index int, subId string, na
 			},
 		}
 	} else {
-		streamSettings["security"] = "none"
+		streamSettings["security"] = "tls"
 	}
 	streamJSON, _ := json.MarshalIndent(streamSettings, "", "  ")
 
@@ -3550,6 +3565,33 @@ func (s *InboundService) buildVlessTcpTls(userId, port, index int, subId string,
 		Tag:            fmt.Sprintf("inbound-%v", port),
 		Sniffing:       `{"enabled":true,"destOverride":["http","tls","quic"],"metadataOnly":false,"routeOnly":false}`,
 	}, nil
+}
+
+// getDefaultCertPaths reads the panel's configured certificate file paths from settings.
+// Returns (certFile, keyFile) — both will be empty if not configured.
+func (s *InboundService) getDefaultCertPaths() (string, string) {
+	db := database.GetDB()
+	var certSetting, keySetting model.Setting
+	certFile := ""
+	keyFile := ""
+	if err := db.Model(model.Setting{}).Where("`key` = ?", "certFile").First(&certSetting).Error; err == nil {
+		certFile = strings.TrimSpace(certSetting.Value)
+	}
+	if err := db.Model(model.Setting{}).Where("`key` = ?", "keyFile").First(&keySetting).Error; err == nil {
+		keyFile = strings.TrimSpace(keySetting.Value)
+	}
+	return certFile, keyFile
+}
+
+// getPanelDomain reads the panel's configured web domain for SNI auto-fill.
+// Returns empty string if not configured.
+func (s *InboundService) getPanelDomain() string {
+	db := database.GetDB()
+	var setting model.Setting
+	if err := db.Model(model.Setting{}).Where("`key` = ?", "webDomain").First(&setting).Error; err == nil {
+		return strings.TrimSpace(setting.Value)
+	}
+	return ""
 }
 
 // generateX25519Key runs the xray x25519 command and returns the key pair.

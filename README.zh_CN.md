@@ -30,7 +30,9 @@
 | 🎨 **全新 UI** | 浅蓝紫色流光渐变背景 + 毛玻璃半透明卡片，颜值在线 |
 | 📦 **协议齐全** | 支持 VLESS、VMess、Trojan、Shadowsocks、Hysteria2、WireGuard 等 |
 | 🌐 **多用户管理** | 支持多用户、多入站、流量统计、到期管理 |
-| 🔄 **一键更新** | 面板和内核均可在线更新 |
+| � **链式代理** | 支持 SOCKS5、HTTP(S)、Shadowsocks、Trojan、VLESS、VMess、Hysteria2 七种代理协议，支持粘贴识别自动解析配置 |
+| ⚡ **一键批量生成** | VLESS+Reality、VMess+TCP、Shadowsocks、Trojan+TCP/WS、VLESS+WS/gRPC/ TCP+TLS 共 9 种组合一键生成 |
+| �🔄 **一键更新** | 面板和内核均可在线更新 |
 | 📊 **实时监控** | CPU、内存、流量、在线连接数一目了然 |
 | 🌍 **多语言** | 支持中文、英文、波斯语、阿拉伯语等多国语言 |
 | 🔒 **安全加固** | 支持 TOTP 两步验证、SSL 证书 |

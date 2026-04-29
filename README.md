@@ -30,10 +30,12 @@
 | 🎨 **Beautiful UI** | Light blue-purple flowing gradient background + glassmorphism cards |
 | 📦 **Multiple Protocols** | VLESS, VMess, Trojan, Shadowsocks, Hysteria2, WireGuard and more |
 | 🌐 **Multi-User** | Supports multiple inbounds, clients, traffic stats, and expiration management |
+| 🔗 **Chain Proxy** | Supports SOCKS5, HTTP(S), Shadowsocks, Trojan, VLESS, VMess, Hysteria2 — 7 proxy protocols, auto-parses configs from paste |
+| ⚡ **Batch Generate** | VLESS+Reality, VMess+TCP, Shadowsocks, Trojan+TCP/WS, VLESS+WS/gRPC/TCP+TLS — 9 combos in one click |
 | 🔄 **One-Click Update** | Update panel and Xray-core online |
-| 📊 **Real-Time Monitor** | CPU, memory, traffic, online connections at a glance |
+| � **Real-Time Monitor** | CPU, memory, traffic, online connections at a glance |
 | 🌍 **Multi-Language** | English, Chinese, Persian, Arabic and more |
-| 🔒 **Security** | TOTP two-factor authentication, SSL certificate support |
+| �🔒 **Security** | TOTP two-factor authentication, SSL certificate support |
 | 💾 **Auto Backup** | Telegram backup, local backup support |
 | 📱 **Responsive** | Works perfectly on both desktop and mobile |
 

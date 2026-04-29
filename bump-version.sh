@@ -179,13 +179,13 @@ echo ""
 echo -n "$NEW_VERSION" > "$VERSION_FILE"
 echo -e "  ${GREEN}版本文件已更新: config/version -> $NEW_VERSION${NC}"
 
-# 更新 README 中的版本引用
-for readme in README.md README.zh_CN.md README.ar_EG.md README.es_ES.md README.fa_IR.md README.ru_RU.md; do
-    if [ -f "$readme" ]; then
-        sed -i "s/v$CURRENT_VERSION/v$NEW_VERSION/g" "$readme" 2>/dev/null || true
-    fi
-done
-echo -e "  ${GREEN}README 文件版本引用已更新${NC}"
+# 更新 README 中的版本引用（已跳过，避免编码问题）
+# for readme in README.md README.zh_CN.md README.ar_EG.md README.es_ES.md README.fa_IR.md README.ru_RU.md; do
+#     if [ -f "$readme" ]; then
+#         sed -i "s/v$CURRENT_VERSION/v$NEW_VERSION/g" "$readme" 2>/dev/null || true
+#     fi
+# done
+# echo -e "  ${GREEN}README 文件版本引用已更新${NC}"
 
 # 更新 install.sh
 if [ -f "install.sh" ]; then
