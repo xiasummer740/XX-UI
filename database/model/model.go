@@ -59,6 +59,10 @@ type Inbound struct {
 	ResetDay             int                  `json:"resetDay" form:"resetDay" gorm:"default:1"`                                                       // Custom reset day of month (1-31) for "custom_date" mode
 	ClientStats          []xray.ClientTraffic `gorm:"foreignKey:InboundId;references:Id" json:"clientStats" form:"clientStats"`                        // Client traffic statistics
 
+	// ChainProxy stores upstream proxy config for chain proxying via streamSettings.sockopt.dialerProxy
+	// Format: {"protocol":"socks","address":"127.0.0.1","port":1080,"user":"","password":""}
+	ChainProxy string `json:"chainProxy" form:"chainProxy" gorm:"default:''"`
+
 	// Xray configuration fields
 	Listen         string   `json:"listen" form:"listen"`
 	Port           int      `json:"port" form:"port"`

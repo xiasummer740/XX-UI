@@ -254,6 +254,15 @@
                     }
                 }
             },
+            fillSniFromDomain() {
+                // Auto-fill SNI from panel's webDomain setting
+                if (app.webDomain && app.webDomain.trim()) {
+                    inModal.inbound.stream.tls.sni = app.webDomain.trim();
+                } else {
+                    // Fallback: use current browser hostname
+                    inModal.inbound.stream.tls.sni = window.location.hostname;
+                }
+            },
             setDefaultCertData(index) {
                 inModal.inbound.stream.tls.certs[index].certFile = app.defaultCert;
                 inModal.inbound.stream.tls.certs[index].keyFile = app.defaultKey;

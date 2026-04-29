@@ -59,6 +59,8 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/updateClientTraffic/:email", a.updateClientTraffic)
 	g.POST("/:id/delClientByEmail/:email", a.delInboundClientByEmail)
 	g.POST("/checkPort", a.checkPort)
+	g.GET("/chainProxy/:id", a.getChainProxy)
+	g.POST("/chainProxy/:id", a.updateChainProxy)
 }
 
 type CopyInboundClientsRequest struct {
@@ -569,6 +571,69 @@ func (a *InboundController) updateClientTraffic(c *gin.Context) {
 	}
 
 	jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.inboundClientUpdateSuccess"), nil)
+}
+
+// ChainProxyConfig represents the chain proxy configuration stored in Inbound.ChainProxy
+type ChainProxyConfig struct {
+	Protocol string `json:"protocol"`
+	Address  string `json:"address"`
+	Port     int    `json:"port"`
+	User     string `json:"user,omitempty"`
+	Password string `json:"password,omitempty"`
+}
+
+// getChainProxy retrieves the chain proxy configuration for an inbound.
+func (a *InboundController) getChainProxy(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		jsonMsg(c, "Invalid inbound ID", err)
+		return
+	}
+	inbound, err := a.inboundService.GetInbound(id)
+	if err != nil {
+		jsonMsg(c, "Inbound not found", err)
+		return
+	}
+	cfg := &ChainProxyConfig{}
+	if inbound.ChainProxy != "" {
+		if err := json.Unmarshal([]byte(inbound.ChainProxy), cfg); err != nil {
+			// Not a valid JSON config — return empty
+			cfg = &ChainProxyConfig{}
+		}
+	}
+	jsonObj(c, cfg, nil)
+}
+
+// updateChainProxy updates the chain proxy configuration for an inbound.
+func (a *InboundController) updateChainProxy(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		jsonMsg(c, "Invalid inbound ID", err)
+		return
+	}
+	var cfg ChainProxyConfig
+	if err := c.ShouldBind(&cfg); err != nil {
+		jsonMsg(c, "Invalid request body", err)
+		return
+	}
+	// Validate: address and port required
+	if cfg.Address == "" || cfg.Port == 0 {
+		jsonMsg(c, "Address and port are required", nil)
+		return
+	}
+	if cfg.Protocol == "" {
+		cfg.Protocol = "socks" // default
+	}
+	raw, _ := json.Marshal(cfg)
+	needRestart, err := a.inboundService.UpdateInboundChainProxy(id, string(raw))
+	if err != nil {
+		jsonMsg(c, "Failed to update chain proxy", err)
+		return
+	}
+	jsonMsg(c, "Chain proxy updated", nil)
+	if needRestart {
+		a.xrayService.SetToNeedRestart()
+	}
 }
 
 // delInboundClientByEmail deletes a client from an inbound by email address.

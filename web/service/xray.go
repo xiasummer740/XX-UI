@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"runtime"
 	"sync"
 
@@ -208,6 +209,45 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 				return nil, err
 			}
 			inbound.StreamSettings = string(newStream)
+		}
+
+		// Inject chain proxy (dialerProxy) into streamSettings.sockopt if configured
+		if inbound.ChainProxy != "" {
+			// Re-parse the stream settings since we may have just modified them above
+			var stream map[string]any
+			if err := json.Unmarshal([]byte(inbound.StreamSettings), &stream); err == nil {
+				var cp struct {
+					Protocol string `json:"protocol"`
+					Address  string `json:"address"`
+					Port     int    `json:"port"`
+					User     string `json:"user,omitempty"`
+					Password string `json:"password,omitempty"`
+				}
+				if err := json.Unmarshal([]byte(inbound.ChainProxy), &cp); err == nil && cp.Address != "" && cp.Port > 0 {
+					// Build proxy URL: socks://user:pass@host:port
+					proxyURL := fmt.Sprintf("%s://", cp.Protocol)
+					if cp.User != "" {
+						proxyURL += cp.User
+						if cp.Password != "" {
+							proxyURL += ":" + cp.Password
+						}
+						proxyURL += "@"
+					}
+					proxyURL += fmt.Sprintf("%s:%d", cp.Address, cp.Port)
+
+					// Ensure sockopt exists
+					sockopt, ok := stream["sockopt"].(map[string]any)
+					if !ok {
+						sockopt = make(map[string]any)
+						stream["sockopt"] = sockopt
+					}
+					sockopt["dialerProxy"] = proxyURL
+
+					if newStream, err := json.MarshalIndent(stream, "", "  "); err == nil {
+						inbound.StreamSettings = string(newStream)
+					}
+				}
+			}
 		}
 
 		inboundConfig := inbound.GenXrayInboundConfig()

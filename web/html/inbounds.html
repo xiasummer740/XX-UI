@@ -317,6 +317,9 @@
                             <a-icon type="retweet"></a-icon> {{ i18n
                             "pages.inbounds.resetTraffic" }}
                           </a-menu-item>
+                          <a-menu-item key="chainProxy">
+                            <a-icon type="share-alt"></a-icon> 链式代理
+                          </a-menu-item>
                           <a-menu-item key="clone">
                             <a-icon type="block"></a-icon> {{ i18n
                             "pages.inbounds.clone"}}
@@ -800,6 +803,29 @@
       </a-spin>
     </a-layout-content>
   </a-layout>
+  <!-- 链式代理配置弹窗 -->
+  <a-modal :title="'链式代理 - ' + (chainProxyModal.inboundRemark || '')" :visible="chainProxyModal.visible" @ok="saveChainProxy" @cancel="chainProxyModal.visible = false" ok-text="保存" cancel-text="取消" :confirm-loading="chainProxyModal.saving" :class="themeSwitcher.currentTheme" width="550px" :destroy-on-close="true">
+    <a-form layout="vertical">
+      <a-form-item label="代理协议" required>
+        <a-select v-model="chainProxyModal.protocol" :dropdown-class-name="themeSwitcher.currentTheme">
+          <a-select-option value="socks">SOCKS5</a-select-option>
+          <a-select-option value="http">HTTP</a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item label="代理地址" required>
+        <a-input v-model="chainProxyModal.address" placeholder="例如：127.0.0.1 或 192.168.1.100" />
+      </a-form-item>
+      <a-form-item label="代理端口" required>
+        <a-input-number v-model="chainProxyModal.port" :min="1" :max="65535" :style="{ width: '150px' }" placeholder="1080" />
+      </a-form-item>
+      <a-form-item label="代理用户名（可选）">
+        <a-input v-model="chainProxyModal.user" placeholder="无需认证则留空" />
+      </a-form-item>
+      <a-form-item label="代理密码（可选）">
+        <a-input type="password" v-model="chainProxyModal.password" placeholder="无需认证则留空" />
+      </a-form-item>
+    </a-form>
+  </a-modal>
   <!-- VPS 配置弹窗 -->
   <a-modal :title="'VPS 配置'" :visible="vpsModalVisible" @ok="saveVpsConfig" @cancel="vpsModalVisible = false" ok-text="保存" cancel-text="取消" :confirm-loading="vpsSaving" :class="themeSwitcher.currentTheme" width="500px">
     <a-form layout="vertical">
@@ -1269,9 +1295,21 @@
       tgBotEnable: false,
       showAlert: false,
       ipLimitEnable: false,
+      webDomain: '',
       pageSize: 0,
       pingStatus: {},
       allSetting: {},
+      chainProxyModal: {
+        visible: false,
+        saving: false,
+        inboundId: 0,
+        inboundRemark: '',
+        protocol: 'socks',
+        address: '',
+        port: 1080,
+        user: '',
+        password: '',
+      },
       vpsModalVisible: false,
       vpsSaving: false,
       vpsForm: {
@@ -1371,6 +1409,7 @@
           this.remarkModel = remarkModel;
           this.datepicker = datepicker;
           this.ipLimitEnable = ipLimitEnable;
+          this.webDomain = webDomain;
         }
       },
       setInbounds(dbInbounds) {
@@ -1562,6 +1601,9 @@
           case "resetClients":
             this.resetAllClientTraffics(dbInbound.id);
             break;
+          case "chainProxy":
+            this.openChainProxyModal(dbInbound);
+            break;
           case "clone":
             this.openCloneInbound(dbInbound);
             break;
@@ -1571,6 +1613,77 @@
           case "delDepletedClients":
             this.delDepletedClients(dbInbound.id)
             break;
+        }
+      },
+      async openChainProxyModal(dbInbound) {
+        if (!this.chainProxyModal) {
+          this.chainProxyModal = {
+            visible: false,
+            saving: false,
+            inboundId: 0,
+            inboundRemark: '',
+            protocol: 'socks',
+            address: '',
+            port: 1080,
+            user: '',
+            password: '',
+          };
+        }
+        const modal = this.chainProxyModal;
+        modal.inboundId = dbInbound.id;
+        modal.inboundRemark = dbInbound.remark;
+        modal.saving = false;
+        // Fetch current chain proxy config
+        try {
+          const msg = await HttpUtil.get('/panel/api/inbounds/chainProxy/' + dbInbound.id);
+          if (msg.success && msg.obj) {
+            modal.protocol = msg.obj.protocol || 'socks';
+            modal.address = msg.obj.address || '';
+            modal.port = msg.obj.port || 0;
+            modal.user = msg.obj.user || '';
+            modal.password = msg.obj.password || '';
+          } else {
+            modal.protocol = 'socks';
+            modal.address = '';
+            modal.port = 0;
+            modal.user = '';
+            modal.password = '';
+          }
+        } catch(e) {
+          modal.protocol = 'socks';
+          modal.address = '';
+          modal.port = 0;
+          modal.user = '';
+          modal.password = '';
+        }
+        modal.visible = true;
+      },
+      async saveChainProxy() {
+        const modal = this.chainProxyModal;
+        if (!modal.address || !modal.port) {
+          this.$message.warning('代理地址和端口不能为空');
+          return;
+        }
+        modal.saving = true;
+        try {
+          const payload = {
+            protocol: modal.protocol,
+            address: modal.address,
+            port: modal.port,
+            user: modal.user,
+            password: modal.password,
+          };
+          const msg = await HttpUtil.post('/panel/api/inbounds/chainProxy/' + modal.inboundId, payload);
+          if (msg.success) {
+            this.$message.success('链式代理已保存，Xray 将在下次重启后生效');
+            modal.visible = false;
+          } else {
+            this.$message.error(msg.msg || '保存失败');
+          }
+        } catch(e) {
+          this.$message.error('保存失败: ' + (e.message || '网络错误'));
+        } finally {
+          modal.saving = false;
         }
       },
       openCloneInbound(dbInbound) {
@@ -1638,6 +1751,16 @@
               }
             } catch(e) {
               // silently fail
+            }
+            // Auto-fill TLS SNI from panel webDomain
+            if (self.webDomain) {
+              self.$nextTick(() => {
+                try {
+                  if (inModal.inbound && inModal.inbound.stream && inModal.inbound.stream.tls && !inModal.inbound.stream.tls.sni) {
+                    inModal.inbound.stream.tls.sni = self.webDomain;
+                  }
+                } catch(e) { /* silently fail */ }
+              });
             }
           }
         });

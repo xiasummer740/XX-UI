@@ -577,6 +577,17 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	return inbound, needRestart, tx.Save(oldInbound).Error
 }
 
+// UpdateInboundChainProxy updates the chain proxy configuration for an inbound.
+func (s *InboundService) UpdateInboundChainProxy(id int, chainProxy string) (bool, error) {
+	db := database.GetDB()
+	inbound, err := s.GetInbound(id)
+	if err != nil {
+		return false, err
+	}
+	inbound.ChainProxy = chainProxy
+	return false, db.Model(inbound).Update("chain_proxy", chainProxy).Error
+}
+
 func (s *InboundService) buildRuntimeInboundForAPI(tx *gorm.DB, inbound *model.Inbound) (*model.Inbound, error) {
 	if inbound == nil {
 		return nil, fmt.Errorf("inbound is nil")
