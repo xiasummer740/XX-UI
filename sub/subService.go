@@ -72,11 +72,13 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.C
 	for _, inbound := range inbounds {
 		clients, err := s.inboundService.GetClients(inbound)
 		if err != nil {
-			logger.Error("SubService - GetClients: Unable to get clients from inbound")
+			logger.Errorf("[DIAG] GetSubs: inbound=%d GetClients error: %v", inbound.Id, err)
 		}
 		if clients == nil {
+			logger.Warningf("[DIAG] GetSubs: inbound=%d clients is nil (no clients array in settings)", inbound.Id)
 			continue
 		}
+		logger.Infof("[DIAG] GetSubs: inbound=%d protocol=%s got %d clients from GetClients", inbound.Id, inbound.Protocol, len(clients))
 		if len(inbound.Listen) > 0 && inbound.Listen[0] == '@' {
 			listen, port, streamSettings, err := s.getFallbackMaster(inbound.Listen, inbound.StreamSettings)
 			if err == nil {
@@ -86,6 +88,7 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.C
 			}
 		}
 		for _, client := range clients {
+			logger.Infof("[DIAG] GetSubs: inbound=%d client email=%s Enable=%v SubID=%q (expected subId=%q match=%v)", inbound.Id, client.Email, client.Enable, client.SubID, subId, client.Enable && client.SubID == subId)
 			if client.Enable && client.SubID == subId {
 				matchedCount++
 				link := s.getLink(inbound, client.Email)
