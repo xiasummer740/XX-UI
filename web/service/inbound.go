@@ -546,6 +546,7 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 		}
 	}
 
+	logger.Debugf("[DEVICE_LIMIT_DEBUG] UpdateInbound BEFORE copy: inbound.DeviceLimit=%d, oldInbound.DeviceLimit=%d", inbound.DeviceLimit, oldInbound.DeviceLimit)
 	oldInbound.Up = inbound.Up
 	oldInbound.Down = inbound.Down
 	oldInbound.Total = inbound.Total
@@ -560,6 +561,7 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	oldInbound.StreamSettings = inbound.StreamSettings
 	oldInbound.Sniffing = inbound.Sniffing
 	oldInbound.DeviceLimit = inbound.DeviceLimit
+	logger.Debugf("[DEVICE_LIMIT_DEBUG] UpdateInbound AFTER copy: oldInbound.DeviceLimit=%d", oldInbound.DeviceLimit)
 	if inbound.Listen == "" || inbound.Listen == "0.0.0.0" || inbound.Listen == "::" || inbound.Listen == "::0" {
 		oldInbound.Tag = fmt.Sprintf("inbound-%v", inbound.Port)
 	} else {

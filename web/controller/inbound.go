@@ -185,6 +185,7 @@ func (a *InboundController) updateInbound(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.inboundUpdateSuccess"), err)
 		return
 	}
+	logger.Debugf("[DEVICE_LIMIT_DEBUG] updateInbound: id=%d, deviceLimit=%d, port=%d, protocol=%s", inbound.Id, inbound.DeviceLimit, inbound.Port, inbound.Protocol)
 	inbound, needRestart, err := a.inboundService.UpdateInbound(inbound)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
