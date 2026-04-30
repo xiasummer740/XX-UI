@@ -389,6 +389,13 @@ func (p *process) Start() (err error) {
 		configPath = p.configPath
 	}
 
+	// Ensure the bin directory exists before writing config.json.
+	// Without this, the write will fail with "no such file or directory"
+	// when the panel is run from a directory that doesn't have a bin/ folder.
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		return common.NewErrorf("Failed to create directory for config file: %v", err)
+	}
+
 	logger.Infof("Writing xray config to: %s", configPath)
 	err = os.WriteFile(configPath, data, fs.ModePerm)
 	if err != nil {
