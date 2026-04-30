@@ -134,6 +134,10 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.C
 				link := s.getLink(inbound, client.Email)
 				result = append(result, link)
 				ct := s.getClientTraffics(inbound.ClientStats, client.Email)
+				// If no traffic record exists (zero values), fall back to client config totalGB
+				if ct.Total == 0 && client.TotalGB > 0 {
+					ct.Total = client.TotalGB * 1024 * 1024 * 1024
+				}
 				clientTraffics = append(clientTraffics, ct)
 				if ct.LastOnline > lastOnline {
 					lastOnline = ct.LastOnline
@@ -171,15 +175,12 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.C
 func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) {
 	db := database.GetDB()
 	var inbounds []*model.Inbound
-	// allow "hysteria2" so imports stored with the literal v2 protocol
-	// string still surface here (#4081)
 	err := db.Model(model.Inbound{}).Preload("ClientStats").Where(`id in (
 		SELECT DISTINCT inbounds.id
 		FROM inbounds,
 			JSON_EACH(JSON_EXTRACT(inbounds.settings, '$.clients')) AS client
 		WHERE
-			protocol in ('vmess','vless','trojan','shadowsocks','hysteria','hysteria2')
-			AND JSON_EXTRACT(client.value, '$.subId') = ? AND enable = ?
+			JSON_EXTRACT(client.value, '$.subId') = ? AND enable = ?
 	)`, subId, true).Find(&inbounds).Error
 	if err != nil {
 		logger.Warningf("[DIAG] getInboundsBySubId: SQL error subId=%s err=%v", subId, err)

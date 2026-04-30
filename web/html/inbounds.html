@@ -458,6 +458,11 @@
                         </a-popover>
                       </template>
                     </template>
+                    <template slot="deviceLimit" slot-scope="text, dbInbound">
+                      <a-tag :style="{ margin: '0' }" color="blue">
+                        [[ clientCount[dbInbound.id] ? clientCount[dbInbound.id].clients : '-' ]]
+                      </a-tag>
+                    </template>
                     <template slot="traffic" slot-scope="text, dbInbound">
                       <a-popover
                         :overlay-class-name="themeSwitcher.currentTheme">
@@ -494,11 +499,6 @@
                           </template>
                         </a-tag>
                       </a-popover>
-                    </template>
-                    <template slot="allTimeInbound"
-                      slot-scope="text, dbInbound">
-                      <a-tag>[[ SizeFormatter.sizeFormat(dbInbound.allTime || 0)
-                        ]]</a-tag>
                     </template>
                     <template slot="enable" slot-scope="text, dbInbound">
                       <a-switch v-model="dbInbound.enable"
@@ -538,14 +538,14 @@
                         <a-icon v-else-if="pingStatus[dbInbound.id] && pingStatus[dbInbound.id].reachable"
                           type="check-circle" theme="filled"
                           :style="{ fontSize: '16px', color: '#52c41a' }"
-                          @click="checkPort(dbInbound.id, dbInbound.port)"></a-icon>
+                          @click="checkPort(dbInbound.id, dbInbound.port, dbInbound.listen)"></a-icon>
                         <a-icon v-else-if="pingStatus[dbInbound.id] && !pingStatus[dbInbound.id].reachable"
                           type="close-circle" theme="filled"
                           :style="{ fontSize: '16px', color: '#ff4d4f' }"
-                          @click="checkPort(dbInbound.id, dbInbound.port)"></a-icon>
+                          @click="checkPort(dbInbound.id, dbInbound.port, dbInbound.listen)"></a-icon>
                         <a-icon v-else
                           type="api" :style="{ fontSize: '16px', color: '#8c8c8c', cursor: 'pointer' }"
-                          @click="checkPort(dbInbound.id, dbInbound.port)"></a-icon>
+                          @click="checkPort(dbInbound.id, dbInbound.port, dbInbound.listen)"></a-icon>
                       </a-tooltip>
                     </template>
                     <template slot="info" slot-scope="text, dbInbound">
@@ -1185,15 +1185,15 @@
     width: 50,
     scopedSlots: { customRender: 'clients' },
   }, {
+    title: '{{ i18n "pages.inbounds.deviceLimit" }}',
+    align: 'center',
+    width: 40,
+    scopedSlots: { customRender: 'deviceLimit' },
+  }, {
     title: '{{ i18n "pages.inbounds.traffic" }}',
     align: 'center',
     width: 90,
     scopedSlots: { customRender: 'traffic' },
-  }, {
-    title: '{{ i18n "pages.inbounds.allTimeTraffic" }}',
-    align: 'center',
-    width: 60,
-    scopedSlots: { customRender: 'allTimeInbound' },
   }, {
     title: '{{ i18n "pages.inbounds.expireDate" }}',
     align: 'center',
@@ -1336,13 +1336,20 @@
       vpsPurchaseDateMoment: null,
     },
     methods: {
-      async checkPort(inboundId, port) {
+      async checkPort(inboundId, port, host) {
         if (!this.pingStatus[inboundId]) {
           this.$set(this.pingStatus, inboundId, {});
         }
         this.pingStatus[inboundId].testing = true;
         try {
-          const msg = await HttpUtil.post('/panel/api/inbounds/checkPort', { port });
+          let msg;
+          if (host) {
+            // Remote check: server connects to host:port
+            msg = await HttpUtil.post('/panel/api/inbounds/checkRemotePort', { host, port });
+          } else {
+            // Local check: check 127.0.0.1:port
+            msg = await HttpUtil.post('/panel/api/inbounds/checkPort', { port });
+          }
           if (msg.success && msg.obj) {
             this.$set(this.pingStatus, inboundId, {
               reachable: msg.obj.reachable,

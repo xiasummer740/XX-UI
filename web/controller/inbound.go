@@ -59,6 +59,7 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/updateClientTraffic/:email", a.updateClientTraffic)
 	g.POST("/:id/delClientByEmail/:email", a.delInboundClientByEmail)
 	g.POST("/checkPort", a.checkPort)
+	g.POST("/checkRemotePort", a.checkRemotePort)
 	g.GET("/chainProxy/:id", a.getChainProxy)
 	g.POST("/chainProxy/:id", a.updateChainProxy)
 }
@@ -538,6 +539,26 @@ func (a *InboundController) checkPort(c *gin.Context) {
 	}
 	result := a.inboundService.CheckPort(req.Port)
 	logger.Debugf("[DIAG] checkPort: port=%d reachable=%v latency=%v", req.Port, result["reachable"], result["latency"])
+	jsonObj(c, result, nil)
+}
+
+// checkRemotePort checks TCP connectivity to a remote host:port from the server side.
+// This is used for latency detection from the server to a remote node.
+func (a *InboundController) checkRemotePort(c *gin.Context) {
+	var req struct {
+		Host string `json:"host" form:"host"`
+		Port int    `json:"port" form:"port"`
+	}
+	if err := c.ShouldBind(&req); err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	if req.Host == "" {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), fmt.Errorf("host is required"))
+		return
+	}
+	result := a.inboundService.CheckRemotePort(req.Host, req.Port)
+	logger.Debugf("[DIAG] checkRemotePort: host=%s port=%d reachable=%v latency=%v", req.Host, req.Port, result["reachable"], result["latency"])
 	jsonObj(c, result, nil)
 }
 
