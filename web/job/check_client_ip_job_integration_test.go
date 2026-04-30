@@ -85,6 +85,30 @@ func seedInboundWithClient(t *testing.T, tag, email string, limitIp int) {
 	}
 }
 
+// seed an inbound whose settings json has multiple clients and an
+// inbound-level DeviceLimit.
+func seedInboundWithDeviceLimit(t *testing.T, tag string, deviceLimit int, clients []map[string]any) {
+	t.Helper()
+	settings := map[string]any{
+		"clients": clients,
+	}
+	settingsJSON, err := json.Marshal(settings)
+	if err != nil {
+		t.Fatalf("marshal settings: %v", err)
+	}
+	inbound := &model.Inbound{
+		Tag:         tag,
+		Enable:      true,
+		Protocol:    model.VLESS,
+		Port:        4321,
+		Settings:    string(settingsJSON),
+		DeviceLimit: deviceLimit,
+	}
+	if err := database.GetDB().Create(inbound).Error; err != nil {
+		t.Fatalf("seed inbound with deviceLimit: %v", err)
+	}
+}
+
 // seed an InboundClientIps row with the given blob.
 func seedClientIps(t *testing.T, email string, ips []IPWithTimestamp) *model.InboundClientIps {
 	t.Helper()
@@ -225,6 +249,148 @@ func TestUpdateInboundClientIps_ExcessLiveIpIsStillBanned(t *testing.T) {
 	wantSubstr := "[LIMIT_IP] Email = pr4091-abuse || Disconnecting OLD IP = 192.0.2.9"
 	if !contains(string(body), wantSubstr) {
 		t.Fatalf("3xipl.log missing expected ban line %q\nfull log:\n%s", wantSubstr, body)
+	}
+}
+
+// DeviceLimit=2, two clients each with 1 live IP => total 2, within limit.
+func TestUpdateInboundClientIps_DeviceLimit_UnderLimit(t *testing.T) {
+	setupIntegrationDB(t)
+
+	const email1 = "devlimit-under-a"
+	const email2 = "devlimit-under-b"
+	now := time.Now().Unix()
+
+	seedInboundWithDeviceLimit(t, "inbound-devlimit-under", 2, []map[string]any{
+		{"email": email1, "limitIp": 0, "enable": true},
+		{"email": email2, "limitIp": 0, "enable": true},
+	})
+
+	row1 := seedClientIps(t, email1, []IPWithTimestamp{
+		{IP: "10.0.0.1", Timestamp: now - 60},
+	})
+	row2 := seedClientIps(t, email2, []IPWithTimestamp{
+		{IP: "10.0.0.2", Timestamp: now - 30},
+	})
+
+	j := NewCheckClientIpJob()
+
+	// Client 1 has 1 live IP, client 2 has 1 live IP => total 2, within DeviceLimit=2
+	shouldCleanLog1 := j.updateInboundClientIps(row1, email1, []IPWithTimestamp{
+		{IP: "10.0.0.1", Timestamp: now},
+	})
+	if shouldCleanLog1 {
+		t.Fatalf("shouldCleanLog must be false: total live IPs (2) <= DeviceLimit (2)")
+	}
+	if len(j.disAllowedIps) != 0 {
+		t.Fatalf("disAllowedIps must be empty, got %v", j.disAllowedIps)
+	}
+
+	// Reset disAllowedIps for second call
+	j.disAllowedIps = []string{}
+
+	shouldCleanLog2 := j.updateInboundClientIps(row2, email2, []IPWithTimestamp{
+		{IP: "10.0.0.2", Timestamp: now},
+	})
+	if shouldCleanLog2 {
+		t.Fatalf("shouldCleanLog must be false: total live IPs (2) <= DeviceLimit (2)")
+	}
+	if len(j.disAllowedIps) != 0 {
+		t.Fatalf("disAllowedIps must be empty, got %v", j.disAllowedIps)
+	}
+}
+
+// DeviceLimit=1, two clients each with 1 live IP => total 2, exceeds limit.
+// The second client's IP should be banned.
+func TestUpdateInboundClientIps_DeviceLimit_ExceedsLimit(t *testing.T) {
+	setupIntegrationDB(t)
+
+	const email1 = "devlimit-exceed-a"
+	const email2 = "devlimit-exceed-b"
+	now := time.Now().Unix()
+
+	seedInboundWithDeviceLimit(t, "inbound-devlimit-exceed", 1, []map[string]any{
+		{"email": email1, "limitIp": 0, "enable": true},
+		{"email": email2, "limitIp": 0, "enable": true},
+	})
+
+	// Only client1 has an existing IP record; client2 has none yet.
+	row1 := seedClientIps(t, email1, []IPWithTimestamp{
+		{IP: "10.0.0.1", Timestamp: now - 120},
+	})
+
+	j := NewCheckClientIpJob()
+
+	// Client 1 connects first - should be allowed (total=1, limit=1)
+	shouldCleanLog1 := j.updateInboundClientIps(row1, email1, []IPWithTimestamp{
+		{IP: "10.0.0.1", Timestamp: now},
+	})
+	if shouldCleanLog1 {
+		t.Fatalf("shouldCleanLog must be false: total live IPs (1) <= DeviceLimit (1)")
+	}
+	if len(j.disAllowedIps) != 0 {
+		t.Fatalf("disAllowedIps must be empty, got %v", j.disAllowedIps)
+	}
+
+	// Now create client2's IP record (simulating client2 having connected earlier)
+	row2 := seedClientIps(t, email2, []IPWithTimestamp{
+		{IP: "10.0.0.2", Timestamp: now - 60},
+	})
+
+	// Reset disAllowedIps for second call
+	j.disAllowedIps = []string{}
+
+	// Client 2 connects - should be banned (total would be 2, limit=1)
+	shouldCleanLog2 := j.updateInboundClientIps(row2, email2, []IPWithTimestamp{
+		{IP: "10.0.0.2", Timestamp: now},
+	})
+	if !shouldCleanLog2 {
+		t.Fatalf("shouldCleanLog must be true: total live IPs (2) > DeviceLimit (1)")
+	}
+	if len(j.disAllowedIps) != 1 || j.disAllowedIps[0] != "10.0.0.2" {
+		t.Fatalf("expected 10.0.0.2 to be banned; disAllowedIps = %v", j.disAllowedIps)
+	}
+
+	// 3xipl.log must contain the DeviceLimit ban line.
+	body, err := os.ReadFile(readIpLimitLogPath())
+	if err != nil {
+		t.Fatalf("read 3xipl.log: %v", err)
+	}
+	wantSubstr := "[LIMIT_IP] Email = devlimit-exceed-b || Inbound DeviceLimit = 1"
+	if !contains(string(body), wantSubstr) {
+		t.Fatalf("3xipl.log missing expected DeviceLimit ban line %q\nfull log:\n%s", wantSubstr, body)
+	}
+}
+
+// DeviceLimit=0 (disabled), client-level limitIp=1 should still work.
+func TestUpdateInboundClientIps_DeviceLimitZero_FallsBackToClientLimit(t *testing.T) {
+	setupIntegrationDB(t)
+
+	const email = "devlimit-zero-fallback"
+	now := time.Now().Unix()
+
+	seedInboundWithDeviceLimit(t, "inbound-devlimit-zero", 0, []map[string]any{
+		{"email": email, "limitIp": 1, "enable": true},
+	})
+
+	row := seedClientIps(t, email, []IPWithTimestamp{
+		{IP: "10.0.0.1", Timestamp: now - 60},
+	})
+
+	j := NewCheckClientIpJob()
+
+	// 2 live IPs, client limitIp=1 => should ban the newcomer
+	live := []IPWithTimestamp{
+		{IP: "10.0.0.1", Timestamp: now - 5},
+		{IP: "192.0.2.9", Timestamp: now},
+	}
+
+	shouldCleanLog := j.updateInboundClientIps(row, email, live)
+
+	if !shouldCleanLog {
+		t.Fatalf("shouldCleanLog must be true: 2 live IPs > client limitIp=1")
+	}
+	if len(j.disAllowedIps) != 1 || j.disAllowedIps[0] != "192.0.2.9" {
+		t.Fatalf("expected 192.0.2.9 to be banned; disAllowedIps = %v", j.disAllowedIps)
 	}
 }
 
