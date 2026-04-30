@@ -21,6 +21,7 @@ class DBInbound {
         this.streamSettings = "";
         this.tag = "";
         this.sniffing = "";
+        this.deviceLimit = 0;
         this.clientStats = ""
         if (data == null) {
             return;

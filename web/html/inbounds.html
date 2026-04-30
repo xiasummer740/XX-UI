@@ -460,7 +460,7 @@
                     </template>
                     <template slot="deviceLimit" slot-scope="text, dbInbound">
                       <a-tag :style="{ margin: '0' }" color="blue">
-                        [[ clientCount[dbInbound.id] ? clientCount[dbInbound.id].clients : '-' ]]
+                        [[ dbInbound.deviceLimit > 0 ? dbInbound.deviceLimit : '-' ]]
                       </a-tag>
                     </template>
                     <template slot="traffic" slot-scope="text, dbInbound">
@@ -1809,6 +1809,7 @@
           trafficReset: dbInbound.trafficReset,
           lastTrafficResetTime: dbInbound.lastTrafficResetTime,
           resetDay: dbInbound.resetDay,
+          deviceLimit: dbInbound.deviceLimit,
 
           listen: inbound.listen,
           port: inbound.port,
@@ -1835,6 +1836,7 @@
           trafficReset: dbInbound.trafficReset,
           lastTrafficResetTime: dbInbound.lastTrafficResetTime,
           resetDay: dbInbound.resetDay,
+          deviceLimit: dbInbound.deviceLimit,
 
           listen: inbound.listen,
           port: inbound.port,

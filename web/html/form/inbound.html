@@ -49,6 +49,19 @@
         <template slot="label">
             <a-tooltip>
                 <template slot="title">
+                    0 <span>{{ i18n "pages.inbounds.meansNoLimit" }}</span>
+                </template>
+                {{ i18n "pages.inbounds.deviceLimit" }}
+                <a-icon type="question-circle"></a-icon>
+            </a-tooltip>
+        </template>
+        <a-input-number v-model.number="dbInbound.deviceLimit" :min="0"></a-input-number>
+    </a-form-item>
+
+    <a-form-item>
+        <template slot="label">
+            <a-tooltip>
+                <template slot="title">
                     <span>{{ i18n "pages.inbounds.periodicTrafficResetDesc"
                         }}</span>
                     <br v-if="dbInbound.lastTrafficResetTime && dbInbound.lastTrafficResetTime > 0">

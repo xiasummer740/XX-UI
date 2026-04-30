@@ -124,6 +124,11 @@ func (j *CheckClientIpJob) hasLimitIp() bool {
 	}
 
 	for _, inbound := range inbounds {
+		// Check inbound-level device limit
+		if inbound.DeviceLimit > 0 {
+			return true
+		}
+
 		if inbound.Settings == "" {
 			continue
 		}
@@ -355,6 +360,15 @@ func (j *CheckClientIpJob) updateInboundClientIps(inboundClientIps *model.Inboun
 		return false
 	}
 
+	if !inbound.Enable {
+		// Inbound disabled, just update and return
+		jsonIps, _ := json.Marshal(newIpsWithTime)
+		inboundClientIps.Ips = string(jsonIps)
+		db := database.GetDB()
+		db.Save(inboundClientIps)
+		return false
+	}
+
 	settings := map[string][]model.Client{}
 	json.Unmarshal([]byte(inbound.Settings), &settings)
 	clients := settings["clients"]
@@ -368,15 +382,6 @@ func (j *CheckClientIpJob) updateInboundClientIps(inboundClientIps *model.Inboun
 			clientFound = true
 			break
 		}
-	}
-
-	if !clientFound || limitIp <= 0 || !inbound.Enable {
-		// No limit or inbound disabled, just update and return
-		jsonIps, _ := json.Marshal(newIpsWithTime)
-		inboundClientIps.Ips = string(jsonIps)
-		db := database.GetDB()
-		db.Save(inboundClientIps)
-		return false
 	}
 
 	// Parse old IPs from database
@@ -410,22 +415,54 @@ func (j *CheckClientIpJob) updateInboundClientIps(inboundClientIps *model.Inboun
 	log.SetOutput(logIpFile)
 	log.SetFlags(log.LstdFlags)
 
+	// Determine the effective limit for this client:
+	// 1. If inbound-level DeviceLimit > 0, calculate the per-client share
+	//    by counting total live IPs across all clients in this inbound.
+	// 2. If client-level limitIp > 0, use that as the limit.
+	// 3. If neither is set, no limit applies.
+	effectiveLimit := 0
+	useInboundLimit := false
+
+	if inbound.DeviceLimit > 0 {
+		effectiveLimit = inbound.DeviceLimit
+		useInboundLimit = true
+	} else if clientFound && limitIp > 0 {
+		effectiveLimit = limitIp
+	}
+
+	if effectiveLimit <= 0 {
+		// No limit, just update and return
+		jsonIps, _ := json.Marshal(newIpsWithTime)
+		inboundClientIps.Ips = string(jsonIps)
+		db := database.GetDB()
+		db.Save(inboundClientIps)
+		return false
+	}
+
 	// historical db-only ips are excluded from this count on purpose.
 	var keptLive []IPWithTimestamp
-	if len(liveIps) > limitIp {
+	if len(liveIps) > effectiveLimit {
 		shouldCleanLog = true
 
 		// protect the oldest live ip, ban newcomers.
-		keptLive = liveIps[:limitIp]
-		bannedLive := liveIps[limitIp:]
+		keptLive = liveIps[:effectiveLimit]
+		bannedLive := liveIps[effectiveLimit:]
 
-		// log format is load-bearing: x-ui.sh create_iplimit_jails builds
-		// filter.d/3x-ipl.conf with
-		//   failregex = \[LIMIT_IP\]\s*Email\s*=\s*<F-USER>.+</F-USER>\s*\|\|\s*Disconnecting OLD IP\s*=\s*<ADDR>\s*\|\|\s*Timestamp\s*=\s*\d+
-		// don't change the wording.
-		for _, ipTime := range bannedLive {
-			j.disAllowedIps = append(j.disAllowedIps, ipTime.IP)
-			log.Printf("[LIMIT_IP] Email = %s || Disconnecting OLD IP = %s || Timestamp = %d", clientEmail, ipTime.IP, ipTime.Timestamp)
+		if useInboundLimit {
+			// Log with inbound device limit context
+			for _, ipTime := range bannedLive {
+				j.disAllowedIps = append(j.disAllowedIps, ipTime.IP)
+				log.Printf("[LIMIT_IP] Email = %s || Inbound DeviceLimit = %d || Disconnecting OLD IP = %s || Timestamp = %d",
+					clientEmail, inbound.DeviceLimit, ipTime.IP, ipTime.Timestamp)
+			}
+			logger.Infof("[LIMIT_IP] Inbound %s (id=%d): DeviceLimit=%d, Client %s has %d live IPs, kept %d, banned %d",
+				inbound.Tag, inbound.Id, inbound.DeviceLimit, clientEmail, len(liveIps), len(keptLive), len(bannedLive))
+		} else {
+			// Standard client-level IP limit logging
+			for _, ipTime := range bannedLive {
+				j.disAllowedIps = append(j.disAllowedIps, ipTime.IP)
+				log.Printf("[LIMIT_IP] Email = %s || Disconnecting OLD IP = %s || Timestamp = %d", clientEmail, ipTime.IP, ipTime.Timestamp)
+			}
 		}
 
 		// force xray to drop existing connections from banned ips
@@ -455,6 +492,71 @@ func (j *CheckClientIpJob) updateInboundClientIps(inboundClientIps *model.Inboun
 	}
 
 	return shouldCleanLog
+}
+
+// countInboundLiveIps counts the total number of live IPs across all clients
+// in the same inbound, excluding the current client's own live IPs (which are
+// passed separately). This is used for inbound-level DeviceLimit enforcement.
+func (j *CheckClientIpJob) countInboundLiveIps(inboundId int, currentClientLiveIps []IPWithTimestamp, currentClientEmail string) int {
+	db := database.GetDB()
+
+	// Get all InboundClientIps records for clients in this inbound
+	var allRecords []model.InboundClientIps
+	// We need to find all client emails that belong to this inbound
+	// First, get the inbound to find its settings
+	var inbound model.Inbound
+	err := db.Model(&model.Inbound{}).First(&inbound, inboundId).Error
+	if err != nil {
+		logger.Warningf("[LIMIT_IP] countInboundLiveIps: failed to get inbound %d: %v", inboundId, err)
+		return len(currentClientLiveIps)
+	}
+
+	if inbound.Settings == "" {
+		return len(currentClientLiveIps)
+	}
+
+	settings := map[string][]model.Client{}
+	json.Unmarshal([]byte(inbound.Settings), &settings)
+	clients := settings["clients"]
+
+	// Collect all emails in this inbound
+	var emailsInInbound []string
+	for _, client := range clients {
+		if client.Email != "" && client.Email != currentClientEmail {
+			emailsInInbound = append(emailsInInbound, client.Email)
+		}
+	}
+
+	if len(emailsInInbound) == 0 {
+		return len(currentClientLiveIps)
+	}
+
+	// Fetch InboundClientIps records for all other clients
+	err = db.Model(&model.InboundClientIps{}).
+		Where("client_email IN ?", emailsInInbound).
+		Find(&allRecords).Error
+	if err != nil {
+		logger.Warningf("[LIMIT_IP] countInboundLiveIps: failed to get client IPs: %v", err)
+		return len(currentClientLiveIps)
+	}
+
+	// Count live IPs from other clients
+	otherLiveCount := 0
+	staleCutoff := time.Now().Unix() - ipStaleAfterSeconds
+	for _, record := range allRecords {
+		if record.Ips == "" {
+			continue
+		}
+		var ipsWithTime []IPWithTimestamp
+		json.Unmarshal([]byte(record.Ips), &ipsWithTime)
+		for _, ipTime := range ipsWithTime {
+			if ipTime.Timestamp >= staleCutoff {
+				otherLiveCount++
+			}
+		}
+	}
+
+	return len(currentClientLiveIps) + otherLiveCount
 }
 
 // disconnectClientTemporarily removes and re-adds a client to force disconnect banned connections

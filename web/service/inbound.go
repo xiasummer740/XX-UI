@@ -2583,6 +2583,16 @@ func (s *InboundService) MigrationRequirements() {
 		}
 	}()
 
+	// Add device_limit column if not exists
+	if !tx.Migrator().HasColumn(&model.Inbound{}, "device_limit") {
+		err = tx.Migrator().AddColumn(&model.Inbound{}, "device_limit")
+		if err != nil {
+			logger.Warningf("Failed to add device_limit column: %v", err)
+			return
+		}
+		logger.Info("Added device_limit column to inbounds table")
+	}
+
 	// Calculate and backfill all_time from up+down for inbounds and clients
 	err = tx.Exec(`
 		UPDATE inbounds
