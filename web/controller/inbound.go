@@ -191,15 +191,11 @@ func (a *InboundController) updateInbound(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	// Reload the inbound from DB to ensure all fields (including ClientStats) are fully populated
-	// before serializing to JSON response. The inbound returned by UpdateInbound is the ShouldBind
-	// parameter which may have nil ClientStats, causing potential serialization issues.
-	if reloaded, reloadErr := a.inboundService.GetInbound(inbound.Id); reloadErr == nil {
-		inbound = reloaded
-	} else {
-		logger.Debugf("[updateInbound] failed to reload inbound %d: %v", inbound.Id, reloadErr)
-	}
-	jsonMsgObj(c, I18nWeb(c, "pages.inbounds.toasts.inboundUpdateSuccess"), inbound, nil)
+	// Use jsonMsg (without obj) instead of jsonMsgObj to avoid potential serialization
+	// issues with the Inbound struct (e.g., ClientStats nil slice, Protocol custom type).
+	// The inbound object returned by UpdateInbound is the ShouldBind parameter which may
+	// have incomplete fields. A simple success message is sufficient for the frontend.
+	jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.inboundUpdateSuccess"), nil)
 	if needRestart {
 		a.xrayService.SetToNeedRestart()
 	}
