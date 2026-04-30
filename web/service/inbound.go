@@ -177,12 +177,21 @@ func (s *InboundService) GetClients(inbound *model.Inbound) ([]model.Client, err
 		if !ok {
 			continue
 		}
+		// Fix: tgId can be an empty string "" in the database,
+		// but model.Client.TgID is int64, which causes json.Unmarshal to fail.
+		// Replace empty string tgId with 0 to allow successful parsing.
+		if tgIdVal, exists := clientMap["tgId"]; exists {
+			if strVal, ok := tgIdVal.(string); ok && strVal == "" {
+				clientMap["tgId"] = 0
+			}
+		}
 		bs, err := json.Marshal(clientMap)
 		if err != nil {
 			continue
 		}
 		var c model.Client
 		if err := json.Unmarshal(bs, &c); err != nil {
+			logger.Warningf("[DIAG] GetClients: inbound=%d unmarshal client error: %v, raw=%s", inbound.Id, err, string(bs))
 			continue
 		}
 		result = append(result, c)
