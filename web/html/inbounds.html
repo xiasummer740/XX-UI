@@ -771,6 +771,14 @@
                                   ]]</a-tag>
                               </td>
                             </tr>
+                            <tr>
+                              <td>{{ i18n "pages.inbounds.deviceLimit" }}</td>
+                              <td>
+                                <a-tag :style="{ margin: '0' }" color="blue">
+                                  [[ dbInbound.deviceLimit > 0 ? dbInbound.deviceLimit : '-' ]]
+                                </a-tag>
+                              </td>
+                            </tr>
                           </table>
                         </template>
                         <a-badge>
@@ -1729,6 +1737,7 @@
           expiryTime: dbInbound.expiryTime,
           trafficReset: dbInbound.trafficReset,
           lastTrafficResetTime: dbInbound.lastTrafficResetTime,
+          deviceLimit: dbInbound.deviceLimit,
 
           listen: '',
           port: RandomUtil.randomInteger(10000, 60000),

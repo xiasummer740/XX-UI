@@ -416,18 +416,70 @@ func (j *CheckClientIpJob) updateInboundClientIps(inboundClientIps *model.Inboun
 	log.SetFlags(log.LstdFlags)
 
 	// Determine the effective limit for this client:
-	// 1. If inbound-level DeviceLimit > 0, calculate the per-client share
-	//    by counting total live IPs across all clients in this inbound.
-	// 2. If client-level limitIp > 0, use that as the limit.
+	// 1. If inbound-level DeviceLimit > 0, the limit applies to ALL clients
+	//    combined across the entire inbound (shared device limit).
+	// 2. If client-level limitIp > 0, use that as the per-client limit.
 	// 3. If neither is set, no limit applies.
 	effectiveLimit := 0
-	useInboundLimit := false
+	var keptLive []IPWithTimestamp
 
 	if inbound.DeviceLimit > 0 {
+		// For inbound-level DeviceLimit, count live IPs across ALL clients
+		// in this inbound to enforce a shared device limit.
+		totalLiveIps := j.countInboundLiveIps(inbound.Id, liveIps, clientEmail)
 		effectiveLimit = inbound.DeviceLimit
-		useInboundLimit = true
+
+		if totalLiveIps > effectiveLimit {
+			shouldCleanLog = true
+
+			// Calculate how many of this client's IPs need to be banned
+			excessIps := totalLiveIps - effectiveLimit
+			if excessIps > len(liveIps) {
+				excessIps = len(liveIps)
+			}
+
+			// protect the oldest live ips, ban the newest excess
+			keptCount := len(liveIps) - excessIps
+			if keptCount < 0 {
+				keptCount = 0
+			}
+			keptLive = liveIps[:keptCount]
+			bannedLive := liveIps[keptCount:]
+
+			for _, ipTime := range bannedLive {
+				j.disAllowedIps = append(j.disAllowedIps, ipTime.IP)
+				log.Printf("[LIMIT_IP] Email = %s || Inbound DeviceLimit = %d || TotalLiveIps = %d || Disconnecting IP = %s || Timestamp = %d",
+					clientEmail, inbound.DeviceLimit, totalLiveIps, ipTime.IP, ipTime.Timestamp)
+			}
+			logger.Infof("[LIMIT_IP] Inbound %s (id=%d): DeviceLimit=%d, TotalLiveIps=%d, Client %s live=%d, kept=%d, banned=%d",
+				inbound.Tag, inbound.Id, inbound.DeviceLimit, totalLiveIps, clientEmail, len(liveIps), len(keptLive), len(bannedLive))
+
+			// force xray to drop existing connections from banned ips
+			j.disconnectClientTemporarily(inbound, clientEmail, clients)
+		} else {
+			keptLive = liveIps
+		}
 	} else if clientFound && limitIp > 0 {
 		effectiveLimit = limitIp
+
+		// historical db-only ips are excluded from this count on purpose.
+		if len(liveIps) > effectiveLimit {
+			shouldCleanLog = true
+
+			// protect the oldest live ip, ban newcomers.
+			keptLive = liveIps[:effectiveLimit]
+			bannedLive := liveIps[effectiveLimit:]
+
+			for _, ipTime := range bannedLive {
+				j.disAllowedIps = append(j.disAllowedIps, ipTime.IP)
+				log.Printf("[LIMIT_IP] Email = %s || Disconnecting OLD IP = %s || Timestamp = %d", clientEmail, ipTime.IP, ipTime.Timestamp)
+			}
+
+			// force xray to drop existing connections from banned ips
+			j.disconnectClientTemporarily(inbound, clientEmail, clients)
+		} else {
+			keptLive = liveIps
+		}
 	}
 
 	if effectiveLimit <= 0 {
@@ -437,38 +489,6 @@ func (j *CheckClientIpJob) updateInboundClientIps(inboundClientIps *model.Inboun
 		db := database.GetDB()
 		db.Save(inboundClientIps)
 		return false
-	}
-
-	// historical db-only ips are excluded from this count on purpose.
-	var keptLive []IPWithTimestamp
-	if len(liveIps) > effectiveLimit {
-		shouldCleanLog = true
-
-		// protect the oldest live ip, ban newcomers.
-		keptLive = liveIps[:effectiveLimit]
-		bannedLive := liveIps[effectiveLimit:]
-
-		if useInboundLimit {
-			// Log with inbound device limit context
-			for _, ipTime := range bannedLive {
-				j.disAllowedIps = append(j.disAllowedIps, ipTime.IP)
-				log.Printf("[LIMIT_IP] Email = %s || Inbound DeviceLimit = %d || Disconnecting OLD IP = %s || Timestamp = %d",
-					clientEmail, inbound.DeviceLimit, ipTime.IP, ipTime.Timestamp)
-			}
-			logger.Infof("[LIMIT_IP] Inbound %s (id=%d): DeviceLimit=%d, Client %s has %d live IPs, kept %d, banned %d",
-				inbound.Tag, inbound.Id, inbound.DeviceLimit, clientEmail, len(liveIps), len(keptLive), len(bannedLive))
-		} else {
-			// Standard client-level IP limit logging
-			for _, ipTime := range bannedLive {
-				j.disAllowedIps = append(j.disAllowedIps, ipTime.IP)
-				log.Printf("[LIMIT_IP] Email = %s || Disconnecting OLD IP = %s || Timestamp = %d", clientEmail, ipTime.IP, ipTime.Timestamp)
-			}
-		}
-
-		// force xray to drop existing connections from banned ips
-		j.disconnectClientTemporarily(inbound, clientEmail, clients)
-	} else {
-		keptLive = liveIps
 	}
 
 	// keep kept-live + historical in the blob so the panel keeps showing
