@@ -8,6 +8,7 @@ import (
 
 	"github.com/XiaSummer740/XX-UI/config"
 	"github.com/XiaSummer740/XX-UI/logger"
+	"github.com/XiaSummer740/XX-UI/web/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -55,8 +56,10 @@ func NewSUBController(
 	subAnnounce string,
 	subEnableRouting bool,
 	subRoutingRules string,
+	inboundService service.InboundService,
+	settingService service.SettingService,
 ) *SUBController {
-	sub := NewSubService(showInfo, rModel)
+	sub := NewSubService(showInfo, rModel, inboundService, settingService)
 	a := &SUBController{
 		subTitle:         subTitle,
 		subSupportUrl:    subSupportUrl,
@@ -73,8 +76,8 @@ func NewSUBController(
 		updateInterval:   update,
 
 		subService:      sub,
-		subJsonService:  NewSubJsonService(jsonFragment, jsonNoise, jsonMux, jsonRules, sub),
-		subClashService: NewSubClashService(sub),
+		subJsonService:  NewSubJsonService(jsonFragment, jsonNoise, jsonMux, jsonRules, sub, inboundService),
+		subClashService: NewSubClashService(sub, inboundService),
 	}
 	a.initRouter(g)
 	return a

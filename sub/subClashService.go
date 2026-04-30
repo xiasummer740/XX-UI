@@ -24,8 +24,8 @@ type ClashConfig struct {
 	Rules       []string         `yaml:"rules"`
 }
 
-func NewSubClashService(subService *SubService) *SubClashService {
-	return &SubClashService{SubService: subService}
+func NewSubClashService(subService *SubService, inboundService service.InboundService) *SubClashService {
+	return &SubClashService{SubService: subService, inboundService: inboundService}
 }
 
 func (s *SubClashService) GetClash(subId string, host string) (string, string, error) {

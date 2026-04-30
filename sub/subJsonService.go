@@ -30,7 +30,7 @@ type SubJsonService struct {
 }
 
 // NewSubJsonService creates a new JSON subscription service with the given configuration.
-func NewSubJsonService(fragment string, noises string, mux string, rules string, subService *SubService) *SubJsonService {
+func NewSubJsonService(fragment string, noises string, mux string, rules string, subService *SubService, inboundService service.InboundService) *SubJsonService {
 	var configJson map[string]any
 	var defaultOutbounds []json_util.RawMessage
 	json.Unmarshal([]byte(defaultJson), &configJson)
@@ -81,6 +81,7 @@ func NewSubJsonService(fragment string, noises string, mux string, rules string,
 		defaultOutbounds: defaultOutbounds,
 		fragmentOrNoises: fragmentOrNoises,
 		mux:              mux,
+		inboundService:   inboundService,
 		SubService:       subService,
 	}
 }

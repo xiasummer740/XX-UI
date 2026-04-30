@@ -263,10 +263,13 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 
 	g := engine.Group("/")
 
+	inboundService := service.InboundService{}
+
 	s.sub = NewSUBController(
 		g, LinksPath, JsonPath, ClashPath, subJsonEnable, subClashEnable, Encrypt, ShowInfo, RemarkModel, SubUpdates,
 		SubJsonFragment, SubJsonNoises, SubJsonMux, SubJsonRules, SubTitle, SubSupportUrl,
-		SubProfileUrl, SubAnnounce, SubEnableRouting, SubRoutingRules)
+		SubProfileUrl, SubAnnounce, SubEnableRouting, SubRoutingRules,
+		inboundService, s.settingService)
 
 	return engine, nil
 }
