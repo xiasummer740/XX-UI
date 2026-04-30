@@ -212,6 +212,7 @@
 "allTimeTraffic" = "累計總流量"
 "allTimeTrafficUsage" = "所有时间总使用量"
 "deviceLimit" = "設備限制"
+"deviceLimitDesc" = "限制此入站所有客戶端的總連接設備數，0 = 無限制"
 "title" = "入站列表"
 "totalDownUp" = "總上傳 / 下載"
 "totalUsage" = "總用量"

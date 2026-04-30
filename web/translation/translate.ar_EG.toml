@@ -212,6 +212,7 @@
 "allTimeTraffic" = "إجمالي حركة المرور"
 "allTimeTrafficUsage" = "إجمالي الاستخدام طوال الوقت"
 "deviceLimit" = "Device Limit"
+"deviceLimitDesc" = "الحد من إجمالي الأجهزة المتصلة عبر جميع العملاء في هذا الإدخال، 0 = غير محدود"
 "title" = "الإدخالات"
 "totalDownUp" = "إجمالي المرسل/المستقبل"
 "totalUsage" = "إجمالي الاستخدام"

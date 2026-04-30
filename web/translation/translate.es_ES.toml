@@ -212,6 +212,7 @@
 "allTimeTraffic" = "Tráfico Total"
 "allTimeTrafficUsage" = "Uso de datos histórico"
 "deviceLimit" = "Device Limit"
+"deviceLimitDesc" = "Limitar el total de dispositivos conectados en todos los clientes de este inbound, 0 = ilimitado"
 "title" = "Entradas"
 "totalDownUp" = "Subidas/Descargas Totales"
 "totalUsage" = "Uso Total"

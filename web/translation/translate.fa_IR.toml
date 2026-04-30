@@ -212,6 +212,7 @@
 "allTimeTraffic" = "کل ترافیک"
 "allTimeTrafficUsage" = "کل استفاده در تمام مدت"
 "deviceLimit" = "Device Limit"
+"deviceLimitDesc" = "محدود کردن تعداد کل دستگاه‌های متصل در تمام کلاینت‌های این inbound، 0 = بدون محدودیت"
 "title" = "کاربران"
 "totalDownUp" = "دریافت/ارسال کل"
 "totalUsage" = "‌‌‌مصرف کل"

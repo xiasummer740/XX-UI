@@ -212,6 +212,7 @@
 "allTimeTraffic" = "Загальний трафік"
 "allTimeTrafficUsage" = "Загальне використання за весь час"
 "deviceLimit" = "Device Limit"
+"deviceLimitDesc" = "Обмежити загальну кількість підключених пристроїв для всіх клієнтів у цьому inbound, 0 = без обмежень"
 "title" = "Вхідні"
 "totalDownUp" = "Всього надісланих/отриманих"
 "totalUsage" = "Всього використанно"

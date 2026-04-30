@@ -212,6 +212,7 @@
 "allTimeTraffic" = "Общий трафик"
 "allTimeTrafficUsage" = "Общее использование за все время"
 "deviceLimit" = "Device Limit"
+"deviceLimitDesc" = "Ограничить общее количество подключенных устройств для всех клиентов в этом inbound, 0 = без ограничений"
 "title" = "Подключения"
 "totalDownUp" = "Отправлено/получено"
 "totalUsage" = "Всего трафика"

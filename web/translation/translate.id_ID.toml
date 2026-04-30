@@ -212,6 +212,7 @@
 "allTimeTraffic" = "Total Lalu Lintas"
 "allTimeTrafficUsage" = "Total Penggunaan Sepanjang Waktu"
 "deviceLimit" = "Device Limit"
+"deviceLimitDesc" = "Batasi total perangkat yang terhubung di semua klien dalam inbound ini, 0 = tidak terbatas"
 "title" = "Masuk"
 "totalDownUp" = "Total Terkirim/Diterima"
 "totalUsage" = "Penggunaan Total"

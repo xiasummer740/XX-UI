@@ -212,6 +212,7 @@
 "allTimeTraffic" = "総トラフィック"
 "allTimeTrafficUsage" = "これまでの総使用量"
 "deviceLimit" = "デバイス制限"
+"deviceLimitDesc" = "このインバウンドの全クライアントの総接続デバイス数を制限します、0 = 無制限"
 "title" = "インバウンド一覧"
 "totalDownUp" = "総アップロード / ダウンロード"
 "totalUsage" = "総使用量"
