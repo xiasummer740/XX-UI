@@ -51,6 +51,10 @@ func runWebServer() {
 		log.Fatalf("Error initializing database: %v", err)
 	}
 
+	// Run database migrations (adds missing columns like device_limit)
+	inboundService := service.InboundService{}
+	inboundService.MigrateDB()
+
 	var server *web.Server
 	server = web.NewServer()
 	global.SetWebServer(server)
