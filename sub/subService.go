@@ -76,13 +76,53 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.C
 			settingsPreview = settingsPreview[:500]
 		}
 		logger.Warningf("[DIAG] GetSubs: inbound=%d Settings[:500]=%s", inbound.Id, settingsPreview)
+
+		// Manual parse clients from Settings to compare with GetClients
+		var manualSettings map[string]any
+		var manualClients []model.Client
+		if err := json.Unmarshal([]byte(inbound.Settings), &manualSettings); err != nil {
+			logger.Errorf("[DIAG] GetSubs: inbound=%d manual parse error: %v", inbound.Id, err)
+		} else {
+			var keys []string
+			for k := range manualSettings {
+				keys = append(keys, k)
+			}
+			logger.Warningf("[DIAG] GetSubs: inbound=%d manual parse keys=%v", inbound.Id, keys)
+			if raw, ok := manualSettings["clients"]; ok {
+				logger.Warningf("[DIAG] GetSubs: inbound=%d 'clients' key exists, type=%T value=%v", inbound.Id, raw, raw)
+				if arr, ok := raw.([]any); ok {
+					logger.Warningf("[DIAG] GetSubs: inbound=%d 'clients' is array with %d elements", inbound.Id, len(arr))
+					for i, item := range arr {
+						if m, ok := item.(map[string]any); ok {
+							bs, _ := json.Marshal(m)
+							var c model.Client
+							if err := json.Unmarshal(bs, &c); err == nil {
+								manualClients = append(manualClients, c)
+								logger.Warningf("[DIAG] GetSubs: inbound=%d manual client[%d] email=%s Enable=%v SubID=%s", inbound.Id, i, c.Email, c.Enable, c.SubID)
+							}
+						}
+					}
+				} else {
+					logger.Warningf("[DIAG] GetSubs: inbound=%d 'clients' is NOT an array, type=%T", inbound.Id, raw)
+				}
+			} else {
+				logger.Warningf("[DIAG] GetSubs: inbound=%d 'clients' key NOT FOUND in manual parse", inbound.Id)
+			}
+		}
+
 		clients, err := s.inboundService.GetClients(inbound)
 		if err != nil {
 			logger.Errorf("[DIAG] GetSubs: inbound=%d GetClients error: %v", inbound.Id, err)
 		}
 		if clients == nil {
 			logger.Warningf("[DIAG] GetSubs: inbound=%d clients is nil (no clients array in settings)", inbound.Id)
-			continue
+			// Use manual clients as fallback
+			clients = manualClients
+			if len(clients) > 0 {
+				logger.Warningf("[DIAG] GetSubs: inbound=%d using %d manual clients as fallback", inbound.Id, len(clients))
+			} else {
+				continue
+			}
 		}
 		logger.Infof("[DIAG] GetSubs: inbound=%d protocol=%s got %d clients from GetClients", inbound.Id, inbound.Protocol, len(clients))
 		if len(inbound.Listen) > 0 && inbound.Listen[0] == '@' {
