@@ -153,6 +153,16 @@ func (s *InboundService) GetClients(inbound *model.Inbound) ([]model.Client, err
 
 	rawClients, ok := settings["clients"]
 	if !ok || rawClients == nil {
+		// Debug: collect all top-level keys in settings
+		var keys []string
+		for k := range settings {
+			keys = append(keys, k)
+		}
+		settingsPreview := inbound.Settings
+		if len(settingsPreview) > 500 {
+			settingsPreview = settingsPreview[:500]
+		}
+		logger.Warningf("[DIAG] GetClients: inbound=%d no 'clients' key in settings, keys=%v, settings[:500]=%s", inbound.Id, keys, settingsPreview)
 		return nil, nil
 	}
 
