@@ -655,7 +655,8 @@ func (s *SettingService) SetExternalTrafficInformURI(InformURI string) error {
 func (s *SettingService) GetIpLimitEnable() (bool, error) {
 	accessLogPath, err := xray.GetAccessLogPath()
 	if err != nil {
-		return false, err
+		// config.json 不存在（xray 尚未启动），IP 限制默认禁用
+		return false, nil
 	}
 	return (accessLogPath != "none" && accessLogPath != ""), nil
 }
