@@ -407,7 +407,13 @@ func (p *process) Start() (err error) {
 
 	// Check if binary exists before attempting to start
 	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
-		return common.NewErrorf("Xray binary not found at: %s", binaryPath)
+		// Try to find xray binary from common alternative locations
+		// (e.g., previous installation at /usr/local/x-ui/bin/)
+		if found := tryFindXrayBinary(binaryPath); found {
+			logger.Infof("Found and copied xray binary to: %s", binaryPath)
+		} else {
+			return common.NewErrorf("Xray binary not found at: %s", binaryPath)
+		}
 	}
 
 	// Ensure geoip.dat and geosite.dat are present before starting xray.
@@ -496,4 +502,49 @@ func (p *process) Stop() error {
 func writeCrashReport(m []byte) error {
 	crashReportPath := config.GetBinFolderPath() + "/core_crash_" + time.Now().Format("20060102_150405") + ".log"
 	return os.WriteFile(crashReportPath, m, os.ModePerm)
+}
+
+// tryFindXrayBinary attempts to locate an xray binary from common alternative
+// installation paths (e.g., /usr/local/x-ui/bin/) and copies it to the expected
+// binary path. This ensures the panel works even when deployed to a different
+// directory than the original x-ui installation.
+func tryFindXrayBinary(destPath string) bool {
+	binaryName := GetBinaryName()
+
+	// Common alternative locations where xray might be installed
+	altPaths := []string{
+		"/usr/local/x-ui/bin/" + binaryName,
+		"/usr/local/x-ui/bin/xray",
+		"/etc/x-ui/bin/" + binaryName,
+		"/etc/x-ui/bin/xray",
+	}
+
+	for _, srcPath := range altPaths {
+		if _, err := os.Stat(srcPath); err == nil {
+			logger.Infof("Found xray binary at alternative location: %s, copying to: %s", srcPath, destPath)
+
+			// Ensure destination directory exists
+			if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
+				logger.Warningf("Failed to create destination directory: %v", err)
+				continue
+			}
+
+			// Read source binary
+			data, err := os.ReadFile(srcPath)
+			if err != nil {
+				logger.Warningf("Failed to read xray binary from %s: %v", srcPath, err)
+				continue
+			}
+
+			// Write to destination
+			if err := os.WriteFile(destPath, data, 0o755); err != nil {
+				logger.Warningf("Failed to write xray binary to %s: %v", destPath, err)
+				continue
+			}
+
+			return true
+		}
+	}
+
+	return false
 }
