@@ -70,6 +70,12 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.C
 	}
 	matchedCount := 0
 	for _, inbound := range inbounds {
+		// Debug: print inbound.Settings before calling GetClients
+		settingsPreview := inbound.Settings
+		if len(settingsPreview) > 500 {
+			settingsPreview = settingsPreview[:500]
+		}
+		logger.Warningf("[DIAG] GetSubs: inbound=%d Settings[:500]=%s", inbound.Id, settingsPreview)
 		clients, err := s.inboundService.GetClients(inbound)
 		if err != nil {
 			logger.Errorf("[DIAG] GetSubs: inbound=%d GetClients error: %v", inbound.Id, err)
