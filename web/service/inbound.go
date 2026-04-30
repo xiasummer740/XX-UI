@@ -569,32 +569,36 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	}
 
 	needRestart := false
-	s.xrayApi.Init(p.GetAPIPort())
-	if s.xrayApi.DelInbound(tag) == nil {
-		logger.Debug("Old inbound deleted by api:", tag)
-	}
-	if inbound.Enable {
-		runtimeInbound, err2 := s.buildRuntimeInboundForAPI(tx, oldInbound)
-		if err2 != nil {
-			logger.Debug("Unable to prepare runtime inbound config:", err2)
-			needRestart = true
-		} else {
-			inboundJson, err2 := json.MarshalIndent(runtimeInbound.GenXrayInboundConfig(), "", "  ")
+	if err := s.xrayApi.Init(p.GetAPIPort()); err != nil {
+		logger.Debugf("Unable to connect to Xray API (xray may not be running): %v", err)
+		needRestart = true
+	} else {
+		if s.xrayApi.DelInbound(tag) == nil {
+			logger.Debug("Old inbound deleted by api:", tag)
+		}
+		if inbound.Enable {
+			runtimeInbound, err2 := s.buildRuntimeInboundForAPI(tx, oldInbound)
 			if err2 != nil {
-				logger.Debug("Unable to marshal updated inbound config:", err2)
+				logger.Debug("Unable to prepare runtime inbound config:", err2)
 				needRestart = true
 			} else {
-				err2 = s.xrayApi.AddInbound(inboundJson)
-				if err2 == nil {
-					logger.Debug("Updated inbound added by api:", oldInbound.Tag)
-				} else {
-					logger.Debug("Unable to update inbound by api:", err2)
+				inboundJson, err2 := json.MarshalIndent(runtimeInbound.GenXrayInboundConfig(), "", "  ")
+				if err2 != nil {
+					logger.Debug("Unable to marshal updated inbound config:", err2)
 					needRestart = true
+				} else {
+					err2 = s.xrayApi.AddInbound(inboundJson)
+					if err2 == nil {
+						logger.Debug("Updated inbound added by api:", oldInbound.Tag)
+					} else {
+						logger.Debug("Unable to update inbound by api:", err2)
+						needRestart = true
+					}
 				}
 			}
 		}
+		s.xrayApi.Close()
 	}
-	s.xrayApi.Close()
 
 	return inbound, needRestart, tx.Save(oldInbound).Error
 }
