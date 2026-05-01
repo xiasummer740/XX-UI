@@ -785,10 +785,15 @@
                             <tr>
                               <td>链式代理</td>
                               <td>
-                                <a-tag v-if="dbInbound.chainProxy && dbInbound.chainProxy !== '{}' && dbInbound.chainProxy !== ''" :style="{ margin: '0' }" :color="dbInbound.enableChainProxy ? 'green' : 'orange'">
-                                  <a-icon type="share-alt"></a-icon>
-                                  [[ dbInbound.enableChainProxy ? '已启用' : '已禁用' ]]
-                                </a-tag>
+                                <template v-if="dbInbound.chainProxy && dbInbound.chainProxy !== '{}' && dbInbound.chainProxy !== ''">
+                                  <a-tag :style="{ margin: '0' }" :color="dbInbound.enableChainProxy ? 'green' : 'orange'">
+                                    <a-icon type="share-alt"></a-icon>
+                                    [[ dbInbound.enableChainProxy ? '已启用' : '已禁用' ]]
+                                  </a-tag>
+                                  <div style="font-size: 11px; color: #888; margin-top: 2px; word-break: break-all;">
+                                    [[ getChainProxySummary(dbInbound.chainProxy) ]]
+                                  </div>
+                                </template>
                                 <a-tag v-else :style="{ margin: '0' }" color="default">未配置</a-tag>
                               </td>
                             </tr>
@@ -837,12 +842,8 @@
         <a-select v-model="chainProxyModal.protocol" :dropdown-class-name="themeSwitcher.currentTheme">
           <a-select-option value="socks">SOCKS5</a-select-option>
           <a-select-option value="http">HTTP(S)</a-select-option>
-          <a-select-option value="shadowsocks">Shadowsocks</a-select-option>
-          <a-select-option value="trojan">Trojan</a-select-option>
-          <a-select-option value="vless">VLESS</a-select-option>
-          <a-select-option value="vmess">VMess</a-select-option>
-          <a-select-option value="hysteria2">Hysteria2</a-select-option>
         </a-select>
+        <span style="margin-left: 8px; color: #888; font-size: 12px;">仅支持 SOCKS5 和 HTTP(S) 协议</span>
       </a-form-item>
       <a-form-item label="代理地址" required>
         <a-input v-model="chainProxyModal.address" placeholder="例如：127.0.0.1 或 192.168.1.100" />
@@ -857,7 +858,7 @@
         <a-input type="password" v-model="chainProxyModal.password" placeholder="无需认证则留空" />
       </a-form-item>
       <a-form-item label="快速粘贴识别（自动解析并填入）">
-        <a-input placeholder="粘贴 vmess/vless/trojan/ss/hysteria2 链接或 socks5://user:pass@host:port" v-model="chainProxyModal.pasteInput" @paste="onChainProxyPaste" @keyup.enter="parseChainProxyPaste" allow-clear>
+        <a-input placeholder="粘贴 socks5://user:pass@host:port 或 http://user:pass@host:port" v-model="chainProxyModal.pasteInput" @paste="onChainProxyPaste" @keyup.enter="parseChainProxyPaste" allow-clear>
           <a-button slot="addonAfter" type="primary" icon="scan" size="small" @click="parseChainProxyPaste">解析</a-button>
         </a-input>
       </a-form-item>
@@ -1764,8 +1765,11 @@
           };
           const msg = await HttpUtil.post('/panel/api/inbounds/chainProxy/' + modal.inboundId, payload);
           if (msg.success) {
-            this.$message.success('链式代理已保存，Xray 正在重启以应用配置...');
-            modal.visible = false;
+            this.$message.success('链式代理已保存，正在测试连接...');
+            // Auto-test connection after save
+            setTimeout(() => {
+              this.testChainProxy();
+            }, 500);
             // Refresh the inbound list to show updated chain proxy status
             setTimeout(() => this.getDBInbounds(), 1000);
           } else {
@@ -1834,6 +1838,22 @@
             }
           },
         });
+      },
+      getChainProxySummary(chainProxyJson) {
+        if (!chainProxyJson || chainProxyJson === '{}' || chainProxyJson === '') return '';
+        try {
+          const cp = JSON.parse(chainProxyJson);
+          const protocol = cp.protocol || 'socks';
+          const address = cp.address || '';
+          const port = cp.port || '';
+          const protocolLabel = protocol === 'socks' ? 'SOCKS5' : protocol === 'http' ? 'HTTP' : protocol;
+          if (address && port) {
+            return protocolLabel + ' ' + address + ':' + port;
+          }
+          return protocolLabel;
+        } catch(e) {
+          return '';
+        }
       },
       openCloneInbound(dbInbound) {
         this.$confirm({

@@ -3,11 +3,11 @@ package service
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"runtime"
 	"sync"
 
 	"github.com/XiaSummer740/XX-UI/logger"
+	"github.com/XiaSummer740/XX-UI/util/json_util"
 	"github.com/XiaSummer740/XX-UI/xray"
 
 	"go.uber.org/atomic"
@@ -211,9 +211,9 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 			inbound.StreamSettings = string(newStream)
 		}
 
-		// Inject chain proxy (dialerProxy) into streamSettings.sockopt if configured and enabled
+		// Inject chain proxy into streamSettings.sockopt.dialerProxy
+		// by dynamically creating an outbound and referencing its tag.
 		if inbound.ChainProxy != "" && inbound.EnableChainProxy {
-			// Re-parse the stream settings since we may have just modified them above
 			var stream map[string]any
 			if err := json.Unmarshal([]byte(inbound.StreamSettings), &stream); err == nil {
 				var cp struct {
@@ -224,24 +224,26 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 					Password string `json:"password,omitempty"`
 				}
 				if err := json.Unmarshal([]byte(inbound.ChainProxy), &cp); err == nil && cp.Address != "" && cp.Port > 0 {
-					// Build proxy URL: socks://user:pass@host:port
-					proxyURL := fmt.Sprintf("%s://", cp.Protocol)
-					if cp.User != "" {
-						proxyURL += cp.User
-						if cp.Password != "" {
-							proxyURL += ":" + cp.Password
-						}
-						proxyURL += "@"
-					}
-					proxyURL += fmt.Sprintf("%s:%d", cp.Address, cp.Port)
+					// Build a dynamic outbound for the chain proxy
+					outboundTag := "chain_proxy_out"
+					outbound := buildChainProxyOutbound(cp, outboundTag)
 
-					// Ensure sockopt exists
+					// Append outbound to xrayConfig.OutboundConfigs
+					var outbounds []any
+					if err := json.Unmarshal([]byte(xrayConfig.OutboundConfigs), &outbounds); err == nil {
+						outbounds = append(outbounds, outbound)
+						if newOutbounds, err := json.Marshal(outbounds); err == nil {
+							xrayConfig.OutboundConfigs = json_util.RawMessage(string(newOutbounds))
+						}
+					}
+
+					// Ensure sockopt exists and set dialerProxy to the outbound tag
 					sockopt, ok := stream["sockopt"].(map[string]any)
 					if !ok {
 						sockopt = make(map[string]any)
 						stream["sockopt"] = sockopt
 					}
-					sockopt["dialerProxy"] = proxyURL
+					sockopt["dialerProxy"] = outboundTag
 
 					if newStream, err := json.MarshalIndent(stream, "", "  "); err == nil {
 						inbound.StreamSettings = string(newStream)
@@ -254,6 +256,82 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 		xrayConfig.InboundConfigs = append(xrayConfig.InboundConfigs, *inboundConfig)
 	}
 	return xrayConfig, nil
+}
+
+// buildChainProxyOutbound builds an outbound config map for the chain proxy.
+// Currently supports: socks, http.
+// The returned map can be serialized to JSON and appended to xrayConfig.OutboundConfigs.
+func buildChainProxyOutbound(cp struct {
+	Protocol string `json:"protocol"`
+	Address  string `json:"address"`
+	Port     int    `json:"port"`
+	User     string `json:"user,omitempty"`
+	Password string `json:"password,omitempty"`
+}, tag string) map[string]any {
+	outbound := map[string]any{
+		"tag":      tag,
+		"protocol": cp.Protocol,
+	}
+
+	switch cp.Protocol {
+	case "socks":
+		server := map[string]any{
+			"address": cp.Address,
+			"port":    cp.Port,
+		}
+		if cp.User != "" {
+			user := map[string]any{
+				"user": cp.User,
+			}
+			if cp.Password != "" {
+				user["pass"] = cp.Password
+			}
+			server["users"] = []any{user}
+		}
+		outbound["settings"] = map[string]any{
+			"servers": []any{server},
+		}
+	case "http":
+		server := map[string]any{
+			"address": cp.Address,
+			"port":    cp.Port,
+		}
+		if cp.User != "" {
+			user := map[string]any{
+				"user": cp.User,
+			}
+			if cp.Password != "" {
+				user["pass"] = cp.Password
+			}
+			server["users"] = []any{user}
+		}
+		outbound["settings"] = map[string]any{
+			"servers": []any{server},
+		}
+	default:
+		// For unsupported protocols, fall back to SOCKS5 settings
+		// to avoid generating invalid config that would crash Xray.
+		logger.Warningf("[ChainProxy] Unsupported protocol %q for dynamic outbound, falling back to socks", cp.Protocol)
+		outbound["protocol"] = "socks"
+		server := map[string]any{
+			"address": cp.Address,
+			"port":    cp.Port,
+		}
+		if cp.User != "" {
+			user := map[string]any{
+				"user": cp.User,
+			}
+			if cp.Password != "" {
+				user["pass"] = cp.Password
+			}
+			server["users"] = []any{user}
+		}
+		outbound["settings"] = map[string]any{
+			"servers": []any{server},
+		}
+	}
+
+	return outbound
 }
 
 // GetXrayTraffic fetches the current traffic statistics from the running Xray process.
