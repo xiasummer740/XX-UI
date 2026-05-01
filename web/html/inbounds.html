@@ -319,6 +319,9 @@
                           </a-menu-item>
                           <a-menu-item key="chainProxy">
                             <a-icon type="share-alt"></a-icon> 链式代理
+                            <a-tag v-if="dbInbound.chainProxy && dbInbound.chainProxy !== '{}' && dbInbound.chainProxy !== ''" :color="dbInbound.enableChainProxy ? 'green' : 'orange'" :style="{ marginLeft: '6px', fontSize: '10px', lineHeight: '14px', padding: '0 4px' }">
+                              [[ dbInbound.enableChainProxy ? 'ON' : 'OFF' ]]
+                            </a-tag>
                           </a-menu-item>
                           <a-menu-item key="clone">
                             <a-icon type="block"></a-icon> {{ i18n
@@ -779,6 +782,16 @@
                                 </a-tag>
                               </td>
                             </tr>
+                            <tr>
+                              <td>链式代理</td>
+                              <td>
+                                <a-tag v-if="dbInbound.chainProxy && dbInbound.chainProxy !== '{}' && dbInbound.chainProxy !== ''" :style="{ margin: '0' }" :color="dbInbound.enableChainProxy ? 'green' : 'orange'">
+                                  <a-icon type="share-alt"></a-icon>
+                                  [[ dbInbound.enableChainProxy ? '已启用' : '已禁用' ]]
+                                </a-tag>
+                                <a-tag v-else :style="{ margin: '0' }" color="default">未配置</a-tag>
+                              </td>
+                            </tr>
                           </table>
                         </template>
                         <a-badge>
@@ -812,8 +825,14 @@
     </a-layout-content>
   </a-layout>
   <!-- 链式代理配置弹窗 -->
-  <a-modal :title="'链式代理 - ' + (chainProxyModal.inboundRemark || '')" :visible="chainProxyModal.visible" @ok="saveChainProxy" @cancel="chainProxyModal.visible = false" ok-text="保存" cancel-text="取消" :confirm-loading="chainProxyModal.saving" :class="themeSwitcher.currentTheme" width="550px" :destroy-on-close="true">
+  <a-modal :title="'链式代理 - ' + (chainProxyModal.inboundRemark || '')" :visible="chainProxyModal.visible" @ok="saveChainProxy" @cancel="onChainProxyCancel" ok-text="保存" cancel-text="取消" :confirm-loading="chainProxyModal.saving" :class="themeSwitcher.currentTheme" width="550px" :destroy-on-close="true">
     <a-form layout="vertical">
+      <!-- 启用/禁用开关 -->
+      <a-form-item label="启用链式代理">
+        <a-switch v-model="chainProxyModal.enable" checked-children="已启用" un-checked-children="已禁用" />
+        <span style="margin-left: 8px; color: #888; font-size: 12px;">关闭后配置保留但不会生效</span>
+      </a-form-item>
+      <a-divider style="margin: 8px 0;" />
       <a-form-item label="代理协议" required>
         <a-select v-model="chainProxyModal.protocol" :dropdown-class-name="themeSwitcher.currentTheme">
           <a-select-option value="socks">SOCKS5</a-select-option>
@@ -841,6 +860,29 @@
         <a-input placeholder="粘贴 vmess/vless/trojan/ss/hysteria2 链接或 socks5://user:pass@host:port" v-model="chainProxyModal.pasteInput" @paste="onChainProxyPaste" @keyup.enter="parseChainProxyPaste" allow-clear>
           <a-button slot="addonAfter" type="primary" icon="scan" size="small" @click="parseChainProxyPaste">解析</a-button>
         </a-input>
+      </a-form-item>
+      <!-- 测试连接按钮和结果 -->
+      <a-form-item label="连接测试">
+        <a-space>
+          <a-button type="dashed" icon="api" :loading="chainProxyModal.testing" @click="testChainProxy" :disabled="!chainProxyModal.address || !chainProxyModal.port">
+            测试连接
+          </a-button>
+          <span v-if="chainProxyModal.testResult !== null" :style="{ color: chainProxyModal.testResult.reachable ? '#52c41a' : '#ff4d4f', fontSize: '13px' }">
+            <a-icon :type="chainProxyModal.testResult.reachable ? 'check-circle' : 'close-circle'" />
+            <template v-if="chainProxyModal.testResult.reachable">
+              连接成功 - 延迟: [[ chainProxyModal.testResult.latency ]]ms
+            </template>
+            <template v-else>
+              连接失败: [[ chainProxyModal.testResult.error || '超时或无响应' ]]
+            </template>
+          </span>
+        </a-space>
+      </a-form-item>
+      <!-- 清空配置按钮 -->
+      <a-form-item v-if="hasExistingChainProxy">
+        <a-button type="danger" icon="delete" @click="clearChainProxy" style="width: 100%;">
+          清空链式代理配置
+        </a-button>
       </a-form-item>
     </a-form>
   </a-modal>
@@ -1328,6 +1370,9 @@
         user: '',
         password: '',
         pasteInput: '',
+        enable: true,
+        testing: false,
+        testResult: null,
       },
       vpsModalVisible: false,
       vpsSaving: false,
@@ -1653,12 +1698,19 @@
             port: 1080,
             user: '',
             password: '',
+            pasteInput: '',
+            enable: true,
+            testing: false,
+            testResult: null,
           };
         }
         const modal = this.chainProxyModal;
         modal.inboundId = dbInbound.id;
         modal.inboundRemark = dbInbound.remark;
         modal.saving = false;
+        modal.testing = false;
+        modal.testResult = null;
+        modal.pasteInput = '';
         // Fetch current chain proxy config
         try {
           const msg = await HttpUtil.get('/panel/api/inbounds/chainProxy/' + dbInbound.id);
@@ -1668,12 +1720,15 @@
             modal.port = msg.obj.port || 0;
             modal.user = msg.obj.user || '';
             modal.password = msg.obj.password || '';
+            // Load enable state from inbound data or default to true if config exists
+            modal.enable = dbInbound.enableChainProxy !== undefined ? dbInbound.enableChainProxy : true;
           } else {
             modal.protocol = 'socks';
             modal.address = '';
             modal.port = 0;
             modal.user = '';
             modal.password = '';
+            modal.enable = true;
           }
         } catch(e) {
           modal.protocol = 'socks';
@@ -1681,6 +1736,7 @@
           modal.port = 0;
           modal.user = '';
           modal.password = '';
+          modal.enable = true;
         }
         modal.visible = true;
       },
@@ -1698,11 +1754,14 @@
             port: modal.port,
             user: modal.user,
             password: modal.password,
+            enableChainProxy: modal.enable,
           };
           const msg = await HttpUtil.post('/panel/api/inbounds/chainProxy/' + modal.inboundId, payload);
           if (msg.success) {
-            this.$message.success('链式代理已保存，Xray 将在下次重启后生效');
+            this.$message.success('链式代理已保存，Xray 正在重启以应用配置...');
             modal.visible = false;
+            // Refresh the inbound list to show updated chain proxy status
+            setTimeout(() => this.getDBInbounds(), 1000);
           } else {
             this.$message.error(msg.msg || '保存失败');
           }
@@ -1711,6 +1770,63 @@
         } finally {
           modal.saving = false;
         }
+      },
+      async testChainProxy() {
+        const modal = this.chainProxyModal;
+        if (!modal.address || !modal.port) {
+          this.$message.warning('请先填写代理地址和端口');
+          return;
+        }
+        modal.testing = true;
+        modal.testResult = null;
+        try {
+          const payload = {
+            address: modal.address,
+            port: modal.port,
+          };
+          const msg = await HttpUtil.post('/panel/api/inbounds/chainProxy/test', payload);
+          if (msg.success && msg.obj) {
+            modal.testResult = msg.obj;
+          } else {
+            modal.testResult = { reachable: false, error: msg.msg || '测试请求失败' };
+          }
+        } catch(e) {
+          modal.testResult = { reachable: false, error: e.message || '网络错误' };
+        } finally {
+          modal.testing = false;
+        }
+      },
+      onChainProxyCancel() {
+        const modal = this.chainProxyModal;
+        modal.visible = false;
+        modal.testResult = null;
+      },
+      clearChainProxy() {
+        const modal = this.chainProxyModal;
+        const self = this;
+        this.$confirm({
+          title: '确认清空',
+          content: '确定要清空链式代理配置吗？清空后 Xray 将重启。',
+          okText: '确认清空',
+          cancelText: '取消',
+          okType: 'danger',
+          class: themeSwitcher.currentTheme,
+          onOk: async () => {
+            try {
+              const resp = await axios.delete('/panel/api/inbounds/chainProxy/' + modal.inboundId);
+              const data = resp.data;
+              if (data && data.success) {
+                self.$message.success('链式代理已清空，Xray 正在重启...');
+                modal.visible = false;
+                setTimeout(() => self.getDBInbounds(), 1000);
+              } else {
+                self.$message.error((data && data.msg) || '清空失败');
+              }
+            } catch(e) {
+              self.$message.error('清空失败: ' + (e.message || '网络错误'));
+            }
+          },
+        });
       },
       openCloneInbound(dbInbound) {
         this.$confirm({
@@ -2885,7 +3001,11 @@
           depleted: depleted,
           expiring: expiring,
         };
-      }
+      },
+      hasExistingChainProxy() {
+        const modal = this.chainProxyModal;
+        return modal && (modal.address || modal.port);
+      },
     },
   });
 </script>

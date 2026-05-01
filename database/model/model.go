@@ -63,6 +63,10 @@ type Inbound struct {
 	// Format: {"protocol":"socks","address":"127.0.0.1","port":1080,"user":"","password":""}
 	ChainProxy string `json:"chainProxy" form:"chainProxy" gorm:"default:''"`
 
+	// EnableChainProxy controls whether the chain proxy is active.
+	// When false, the chain proxy config is preserved but not applied to xray config.
+	EnableChainProxy bool `json:"enableChainProxy" form:"enableChainProxy" gorm:"default:false"`
+
 	// DeviceLimit limits the number of unique client IPs that can connect to this inbound.
 	// 0 means no limit.
 	DeviceLimit int `json:"deviceLimit" form:"deviceLimit" gorm:"default:0;column:device_limit"`

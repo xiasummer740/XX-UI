@@ -62,6 +62,9 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/checkRemotePort", a.checkRemotePort)
 	g.GET("/chainProxy/:id", a.getChainProxy)
 	g.POST("/chainProxy/:id", a.updateChainProxy)
+	g.POST("/chainProxy/test", a.testChainProxy)
+	g.POST("/chainProxy/toggle/:id", a.toggleChainProxy)
+	g.DELETE("/chainProxy/:id", a.deleteChainProxy)
 }
 
 type CopyInboundClientsRequest struct {
@@ -637,7 +640,10 @@ func (a *InboundController) updateChainProxy(c *gin.Context) {
 		jsonMsg(c, "Invalid inbound ID", err)
 		return
 	}
-	var cfg ChainProxyConfig
+	var cfg struct {
+		ChainProxyConfig
+		EnableChainProxy bool `json:"enableChainProxy" form:"enableChainProxy"`
+	}
 	if err := c.ShouldBind(&cfg); err != nil {
 		jsonMsg(c, "Invalid request body", err)
 		return
@@ -650,13 +656,77 @@ func (a *InboundController) updateChainProxy(c *gin.Context) {
 	if cfg.Protocol == "" {
 		cfg.Protocol = "socks" // default
 	}
-	raw, _ := json.Marshal(cfg)
-	needRestart, err := a.inboundService.UpdateInboundChainProxy(id, string(raw))
+	raw, _ := json.Marshal(cfg.ChainProxyConfig)
+	needRestart, err := a.inboundService.UpdateInboundChainProxy(id, string(raw), cfg.EnableChainProxy)
 	if err != nil {
 		jsonMsg(c, "Failed to update chain proxy", err)
 		return
 	}
 	jsonMsg(c, "Chain proxy updated", nil)
+	if needRestart {
+		a.xrayService.SetToNeedRestart()
+	}
+}
+
+// testChainProxy tests TCP connectivity to a chain proxy server.
+func (a *InboundController) testChainProxy(c *gin.Context) {
+	var req struct {
+		Protocol string `json:"protocol" form:"protocol"`
+		Address  string `json:"address" form:"address"`
+		Port     int    `json:"port" form:"port"`
+		User     string `json:"user" form:"user"`
+		Password string `json:"password" form:"password"`
+	}
+	if err := c.ShouldBind(&req); err != nil {
+		jsonMsg(c, "Invalid request body", err)
+		return
+	}
+	if req.Address == "" || req.Port == 0 {
+		jsonMsg(c, "Address and port are required", nil)
+		return
+	}
+	result := a.inboundService.CheckRemotePort(req.Address, req.Port)
+	jsonObj(c, result, nil)
+}
+
+// toggleChainProxy enables or disables the chain proxy for an inbound.
+func (a *InboundController) toggleChainProxy(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		jsonMsg(c, "Invalid inbound ID", err)
+		return
+	}
+	var req struct {
+		Enable bool `json:"enable" form:"enable"`
+	}
+	if err := c.ShouldBind(&req); err != nil {
+		jsonMsg(c, "Invalid request body", err)
+		return
+	}
+	needRestart, err := a.inboundService.ToggleChainProxy(id, req.Enable)
+	if err != nil {
+		jsonMsg(c, "Failed to toggle chain proxy", err)
+		return
+	}
+	jsonMsg(c, "Chain proxy toggled", nil)
+	if needRestart {
+		a.xrayService.SetToNeedRestart()
+	}
+}
+
+// deleteChainProxy removes the chain proxy configuration for an inbound.
+func (a *InboundController) deleteChainProxy(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		jsonMsg(c, "Invalid inbound ID", err)
+		return
+	}
+	needRestart, err := a.inboundService.DeleteChainProxy(id)
+	if err != nil {
+		jsonMsg(c, "Failed to delete chain proxy", err)
+		return
+	}
+	jsonMsg(c, "Chain proxy deleted", nil)
 	if needRestart {
 		a.xrayService.SetToNeedRestart()
 	}

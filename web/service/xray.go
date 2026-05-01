@@ -211,8 +211,8 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 			inbound.StreamSettings = string(newStream)
 		}
 
-		// Inject chain proxy (dialerProxy) into streamSettings.sockopt if configured
-		if inbound.ChainProxy != "" {
+		// Inject chain proxy (dialerProxy) into streamSettings.sockopt if configured and enabled
+		if inbound.ChainProxy != "" && inbound.EnableChainProxy {
 			// Re-parse the stream settings since we may have just modified them above
 			var stream map[string]any
 			if err := json.Unmarshal([]byte(inbound.StreamSettings), &stream); err == nil {

@@ -604,14 +604,60 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 }
 
 // UpdateInboundChainProxy updates the chain proxy configuration for an inbound.
-func (s *InboundService) UpdateInboundChainProxy(id int, chainProxy string) (bool, error) {
+// The enable parameter controls whether the chain proxy is active.
+func (s *InboundService) UpdateInboundChainProxy(id int, chainProxy string, enable bool) (bool, error) {
 	db := database.GetDB()
 	inbound, err := s.GetInbound(id)
 	if err != nil {
 		return false, err
 	}
 	inbound.ChainProxy = chainProxy
-	return false, db.Model(inbound).Update("chain_proxy", chainProxy).Error
+	inbound.EnableChainProxy = enable
+	needRestart := chainProxy != ""
+	err = db.Model(inbound).Updates(map[string]any{
+		"chain_proxy":        chainProxy,
+		"enable_chain_proxy": enable,
+	}).Error
+	return needRestart, err
+}
+
+// ToggleChainProxy enables or disables the chain proxy for an inbound.
+// Returns needRestart=true when the toggle state changes.
+func (s *InboundService) ToggleChainProxy(id int, enable bool) (bool, error) {
+	db := database.GetDB()
+	inbound, err := s.GetInbound(id)
+	if err != nil {
+		return false, err
+	}
+	if inbound.ChainProxy == "" {
+		return false, fmt.Errorf("no chain proxy configured for inbound %d", id)
+	}
+	if inbound.EnableChainProxy == enable {
+		return false, nil // no change
+	}
+	inbound.EnableChainProxy = enable
+	err = db.Model(inbound).Update("enable_chain_proxy", enable).Error
+	return true, err // need restart when toggled
+}
+
+// DeleteChainProxy removes the chain proxy configuration for an inbound.
+// Returns needRestart=true when a config was actually removed.
+func (s *InboundService) DeleteChainProxy(id int) (bool, error) {
+	db := database.GetDB()
+	inbound, err := s.GetInbound(id)
+	if err != nil {
+		return false, err
+	}
+	if inbound.ChainProxy == "" && !inbound.EnableChainProxy {
+		return false, nil // nothing to delete
+	}
+	inbound.ChainProxy = ""
+	inbound.EnableChainProxy = false
+	err = db.Model(inbound).Updates(map[string]any{
+		"chain_proxy":        "",
+		"enable_chain_proxy": false,
+	}).Error
+	return true, err // need restart when deleted
 }
 
 func (s *InboundService) buildRuntimeInboundForAPI(tx *gorm.DB, inbound *model.Inbound) (*model.Inbound, error) {
