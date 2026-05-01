@@ -825,8 +825,10 @@
     </a-layout-content>
   </a-layout>
   <!-- 链式代理配置弹窗 -->
-  <a-modal :title="'链式代理 - ' + (chainProxyModal.inboundRemark || '')" :visible="chainProxyModal.visible" @ok="saveChainProxy" @cancel="onChainProxyCancel" ok-text="保存" cancel-text="取消" :confirm-loading="chainProxyModal.saving" :class="themeSwitcher.currentTheme" width="550px" :destroy-on-close="true">
+  <a-modal :title="chainProxyTitle" :visible="chainProxyModal.visible" @ok="saveChainProxy" @cancel="onChainProxyCancel" ok-text="保存" cancel-text="取消" :confirm-loading="chainProxyModal.saving" :class="themeSwitcher.currentTheme" width="550px" :destroy-on-close="true">
     <a-form layout="vertical">
+      <!-- 当前配置状态提示 -->
+      <a-alert v-if="hasExistingChainProxy" :type="chainProxyModal.enable ? 'success' : 'warning'" :message="chainProxyModal.enable ? '链式代理已启用' : '链式代理已禁用'" :description="chainProxyModal.enable ? '当前配置已生效，修改后会自动重启 Xray' : '配置已保留但未生效，开启后即可使用'" show-icon :style="{ marginBottom: '12px' }" />
       <!-- 启用/禁用开关 -->
       <a-form-item label="启用链式代理">
         <a-switch v-model="chainProxyModal.enable" checked-children="已启用" un-checked-children="已禁用" />
@@ -1740,6 +1742,11 @@
           modal.enable = true;
         }
         modal.visible = true;
+        // Auto-test connection if config exists
+        if (modal.address && modal.port) {
+          // Small delay to let modal render first
+          setTimeout(() => this.testChainProxy(), 300);
+        }
       },
       async saveChainProxy() {
         const modal = this.chainProxyModal;
@@ -3002,6 +3009,14 @@
           depleted: depleted,
           expiring: expiring,
         };
+      },
+      chainProxyTitle() {
+        const modal = this.chainProxyModal;
+        const base = '链式代理 - ' + (modal.inboundRemark || '');
+        if (modal && (modal.address || modal.port)) {
+          return base + ' (已配置)';
+        }
+        return base + ' (未配置)';
       },
       hasExistingChainProxy() {
         const modal = this.chainProxyModal;

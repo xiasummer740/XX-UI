@@ -23,6 +23,8 @@ class DBInbound {
         this.sniffing = "";
         this.deviceLimit = 0;
         this.clientStats = ""
+        this.chainProxy = "";
+        this.enableChainProxy = false;
         if (data == null) {
             return;
         }
