@@ -186,7 +186,7 @@ func (a *InboundController) updateInbound(c *gin.Context) {
 		return
 	}
 	logger.Infof("[DEVICE_LIMIT_DEBUG] updateInbound: id=%d, deviceLimit=%d, port=%d, protocol=%s", inbound.Id, inbound.DeviceLimit, inbound.Port, inbound.Protocol)
-	inbound, needRestart, err := a.inboundService.UpdateInbound(inbound)
+	_, needRestart, err := a.inboundService.UpdateInbound(inbound)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
