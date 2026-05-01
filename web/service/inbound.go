@@ -3695,7 +3695,7 @@ func (s *InboundService) CheckPort(port int) map[string]any {
 // This is used for latency detection from the server to a remote node.
 func (s *InboundService) CheckRemotePort(host string, port int) map[string]any {
 	start := time.Now()
-	addr := fmt.Sprintf("%s:%d", host, port)
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
 	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
 	latency := time.Since(start).Milliseconds()
 	if err != nil {
