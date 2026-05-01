@@ -827,8 +827,6 @@
   <!-- 链式代理配置弹窗 -->
   <a-modal :title="chainProxyTitle" :visible="chainProxyModal.visible" @ok="saveChainProxy" @cancel="onChainProxyCancel" ok-text="保存" cancel-text="取消" :confirm-loading="chainProxyModal.saving" :class="themeSwitcher.currentTheme" width="550px" :destroy-on-close="true">
     <a-form layout="vertical">
-      <!-- 当前配置状态提示 -->
-      <a-alert v-if="hasExistingChainProxy" :type="chainProxyModal.enable ? 'success' : 'warning'" :message="chainProxyModal.enable ? '链式代理已启用' : '链式代理已禁用'" :description="chainProxyModal.enable ? '当前配置已生效，修改后会自动重启 Xray' : '配置已保留但未生效，开启后即可使用'" show-icon :style="{ marginBottom: '12px' }" />
       <!-- 启用/禁用开关 -->
       <a-form-item label="启用链式代理">
         <a-switch v-model="chainProxyModal.enable" checked-children="已启用" un-checked-children="已禁用" />
