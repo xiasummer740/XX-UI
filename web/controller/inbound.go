@@ -604,11 +604,11 @@ func (a *InboundController) updateClientTraffic(c *gin.Context) {
 
 // ChainProxyConfig represents the chain proxy configuration stored in Inbound.ChainProxy
 type ChainProxyConfig struct {
-	Protocol string `json:"protocol"`
-	Address  string `json:"address"`
-	Port     int    `json:"port"`
-	User     string `json:"user,omitempty"`
-	Password string `json:"password,omitempty"`
+	Protocol string `json:"protocol" form:"protocol"`
+	Address  string `json:"address" form:"address"`
+	Port     int    `json:"port" form:"port"`
+	User     string `json:"user,omitempty" form:"user"`
+	Password string `json:"password,omitempty" form:"password"`
 }
 
 // getChainProxy retrieves the chain proxy configuration for an inbound.

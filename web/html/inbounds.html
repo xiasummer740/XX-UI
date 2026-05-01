@@ -1797,6 +1797,7 @@
             modal.testResult = { reachable: false, error: msg.msg || '测试请求失败' };
           }
         } catch(e) {
+          console.error('[ChainProxy] testConnection failed:', e);
           modal.testResult = { reachable: false, error: e.message || '网络错误' };
         } finally {
           modal.testing = false;
