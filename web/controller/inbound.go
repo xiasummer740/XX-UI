@@ -61,8 +61,8 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/checkPort", a.checkPort)
 	g.POST("/checkRemotePort", a.checkRemotePort)
 	g.GET("/chainProxy/:id", a.getChainProxy)
+	g.POST("/chainProxy/testConnection", a.testChainProxy)
 	g.POST("/chainProxy/:id", a.updateChainProxy)
-	g.POST("/chainProxy/test", a.testChainProxy)
 	g.POST("/chainProxy/toggle/:id", a.toggleChainProxy)
 	g.DELETE("/chainProxy/:id", a.deleteChainProxy)
 }

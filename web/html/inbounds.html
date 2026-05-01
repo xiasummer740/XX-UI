@@ -1287,6 +1287,7 @@
     { title: '{{ i18n "pages.inbounds.traffic" }}', width: 80, align: 'center', scopedSlots: { customRender: 'traffic' } },
     { title: '{{ i18n "pages.inbounds.allTimeTraffic" }}', width: 60, align: 'center', scopedSlots: { customRender: 'allTime' } },
     { title: '{{ i18n "pages.inbounds.expireDate" }}', width: 80, align: 'center', scopedSlots: { customRender: 'expiryTime' } },
+    { title: '链式代理', width: 50, align: 'center', scopedSlots: { customRender: 'chainProxyStatus' } },
   ];
 
   const innerMobileColumns = [
@@ -1784,7 +1785,7 @@
             address: modal.address,
             port: modal.port,
           };
-          const msg = await HttpUtil.post('/panel/api/inbounds/chainProxy/test', payload);
+          const msg = await HttpUtil.post('/panel/api/inbounds/chainProxy/testConnection', payload);
           if (msg.success && msg.obj) {
             modal.testResult = msg.obj;
           } else {
