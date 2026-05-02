@@ -1765,13 +1765,11 @@
           };
           const msg = await HttpUtil.post('/panel/api/inbounds/chainProxy/' + modal.inboundId, payload);
           if (msg.success) {
-            this.$message.success('链式代理已保存，正在测试连接...');
-            // Auto-test connection after save
-            setTimeout(() => {
-              this.testChainProxy();
-            }, 500);
-            // Refresh the inbound list to show updated chain proxy status
-            setTimeout(() => this.getDBInbounds(), 1000);
+            this.$message.success('链式代理已保存');
+            // Close modal and refresh the inbound list
+            modal.visible = false;
+            modal.testResult = null;
+            setTimeout(() => this.getDBInbounds(), 500);
           } else {
             this.$message.error(msg.msg || '保存失败');
           }
