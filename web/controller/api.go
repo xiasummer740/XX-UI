@@ -3,6 +3,7 @@ package controller
 import (
 	"net/http"
 
+	"github.com/XiaSummer740/XX-UI/logger"
 	"github.com/XiaSummer740/XX-UI/web/service"
 	"github.com/XiaSummer740/XX-UI/web/session"
 
@@ -28,9 +29,11 @@ func NewAPIController(g *gin.RouterGroup, customGeo *service.CustomGeoService) *
 // to hide the existence of API endpoints from unauthorized users
 func (a *APIController) checkAPIAuth(c *gin.Context) {
 	if !session.IsLogin(c) {
+		logger.Warning("[checkAPIAuth] Session not logged in, returning 404 for: " + c.Request.Method + " " + c.Request.RequestURI)
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
+	logger.Debug("[checkAPIAuth] Session valid for: " + c.Request.Method + " " + c.Request.RequestURI)
 	c.Next()
 }
 
