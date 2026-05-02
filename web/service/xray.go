@@ -211,42 +211,63 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 			inbound.StreamSettings = string(newStream)
 		}
 
-		// Inject chain proxy into streamSettings.sockopt.dialerProxy
-		// by dynamically creating an outbound and referencing its tag.
+		// Inject chain proxy by dynamically creating an outbound and
+		// adding a routing rule that sends this inbound's traffic through it.
+		// NOTE: We use a routing rule (inboundTag → outboundTag) instead of
+		// sockopt.dialerProxy because dialerProxy behaviour is unreliable
+		// across Xray versions, especially with VLESS/TLS inbounds.
 		if inbound.ChainProxy != "" && inbound.EnableChainProxy {
-			var stream map[string]any
-			if err := json.Unmarshal([]byte(inbound.StreamSettings), &stream); err == nil {
-				var cp struct {
-					Protocol string `json:"protocol"`
-					Address  string `json:"address"`
-					Port     int    `json:"port"`
-					User     string `json:"user,omitempty"`
-					Password string `json:"password,omitempty"`
-				}
-				if err := json.Unmarshal([]byte(inbound.ChainProxy), &cp); err == nil && cp.Address != "" && cp.Port > 0 {
-					// Build a dynamic outbound for the chain proxy
-					outboundTag := "chain_proxy_out"
-					outbound := buildChainProxyOutbound(cp, outboundTag)
+			var cp struct {
+				Protocol string `json:"protocol"`
+				Address  string `json:"address"`
+				Port     int    `json:"port"`
+				User     string `json:"user,omitempty"`
+				Password string `json:"password,omitempty"`
+			}
+			if err := json.Unmarshal([]byte(inbound.ChainProxy), &cp); err == nil && cp.Address != "" && cp.Port > 0 {
+				// Build a dynamic outbound for the chain proxy
+				outboundTag := "chain_proxy_out"
+				outbound := buildChainProxyOutbound(cp, outboundTag)
 
-					// Append outbound to xrayConfig.OutboundConfigs
-					var outbounds []any
-					if err := json.Unmarshal([]byte(xrayConfig.OutboundConfigs), &outbounds); err == nil {
+				// Append outbound to xrayConfig.OutboundConfigs
+				var outbounds []any
+				if err := json.Unmarshal([]byte(xrayConfig.OutboundConfigs), &outbounds); err == nil {
+					// Avoid duplicate chain_proxy_out entries when multiple inbounds share the proxy
+					hasChainOut := false
+					for _, ob := range outbounds {
+						if obMap, ok := ob.(map[string]any); ok {
+							if tag, _ := obMap["tag"].(string); tag == outboundTag {
+								hasChainOut = true
+								break
+							}
+						}
+					}
+					if !hasChainOut {
 						outbounds = append(outbounds, outbound)
 						if newOutbounds, err := json.Marshal(outbounds); err == nil {
 							xrayConfig.OutboundConfigs = json_util.RawMessage(string(newOutbounds))
 						}
 					}
+				}
 
-					// Ensure sockopt exists and set dialerProxy to the outbound tag
-					sockopt, ok := stream["sockopt"].(map[string]any)
-					if !ok {
-						sockopt = make(map[string]any)
-						stream["sockopt"] = sockopt
+				// Add a routing rule: traffic from this inbound → chain_proxy_out
+				var routing map[string]any
+				if err := json.Unmarshal([]byte(xrayConfig.RouterConfig), &routing); err == nil {
+					rules, _ := routing["rules"].([]any)
+					chainRule := map[string]any{
+						"type":        "field",
+						"inboundTag":  []string{inbound.Tag},
+						"outboundTag": outboundTag,
 					}
-					sockopt["dialerProxy"] = outboundTag
-
-					if newStream, err := json.MarshalIndent(stream, "", "  "); err == nil {
-						inbound.StreamSettings = string(newStream)
+					// Insert after the first rule (API rule) so API traffic is unaffected
+					if len(rules) > 1 {
+						rules = append(rules[:1], append([]any{chainRule}, rules[1:]...)...)
+					} else {
+						rules = append(rules, chainRule)
+					}
+					routing["rules"] = rules
+					if newRouting, err := json.Marshal(routing); err == nil {
+						xrayConfig.RouterConfig = json_util.RawMessage(string(newRouting))
 					}
 				}
 			}
