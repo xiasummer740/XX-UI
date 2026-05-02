@@ -202,8 +202,7 @@
 {{template "component/aSidebar" .}}
 {{template "component/aThemeSwitch" .}}
 <script>
-    const BASE_PATH = '{{ .base_path }}';
-    const API_BASE = BASE_PATH + 'panel/api/server';
+    const API_BASE = 'panel/api/server';
 
     new Vue({
         el: '#app',
