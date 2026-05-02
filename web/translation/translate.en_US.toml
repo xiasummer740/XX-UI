@@ -223,6 +223,14 @@
 "readDatabaseError" = "An error occurred while reading the database."
 "getDatabaseError" = "An error occurred while retrieving the database."
 "getConfigError" = "An error occurred while retrieving the config file."
+"updatePanel" = "Update Panel"
+"panelUpdateDesc" = "Update the panel to the latest version"
+"currentPanelVersion" = "Current Version"
+"latestPanelVersion" = "Latest Version"
+"panelUpToDate" = "Panel is up to date"
+"upToDate" = "Up to Date"
+"panelUpdateDialog" = "Update Panel"
+"panelUpdateDialogDesc" = "Are you sure you want to update the panel to #version#?"
 
 [pages.inbounds]
 "allTimeTraffic" = "All-time Traffic"

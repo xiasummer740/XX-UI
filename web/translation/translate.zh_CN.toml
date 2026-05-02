@@ -223,6 +223,14 @@
 "customGeoErrNotFound" = "未找到自定义 geo 源"
 "customGeoErrDownload" = "下载失败"
 "customGeoErrUpdateAllIncomplete" = "有一个或多个自定义 geo 源更新失败"
+"updatePanel" = "更新面板"
+"panelUpdateDesc" = "将面板更新到最新版本"
+"currentPanelVersion" = "当前版本"
+"latestPanelVersion" = "最新版本"
+"panelUpToDate" = "面板已是最新版本"
+"upToDate" = "已是最新"
+"panelUpdateDialog" = "更新面板"
+"panelUpdateDialogDesc" = "确定要将面板更新到 #version# 吗？"
 
 [pages.inbounds]
 "allTimeTraffic" = "累计总流量"
