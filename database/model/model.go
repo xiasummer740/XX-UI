@@ -144,9 +144,13 @@ type CustomGeoResource struct {
 
 // Client represents a client configuration for Xray inbounds with traffic limits and settings.
 type Client struct {
-	ID         string `json:"id,omitempty"`                 // Unique client identifier
-	Security   string `json:"security"`                     // Security method (e.g., "auto", "aes-128-gcm")
-	Password   string `json:"password,omitempty"`           // Client password
+	ID       string `json:"id,omitempty"`       // Unique client identifier
+	Security string `json:"security"`           // Security method (e.g., "auto", "aes-128-gcm")
+	Password string `json:"password,omitempty"` // Client password
+
+	// SpeedLimit 限制该用户的最大上传/下载速度，单位 KB/s，0 表示不限速
+	SpeedLimit int `json:"speedLimit" form:"speedLimit"`
+
 	Flow       string `json:"flow,omitempty"`               // Flow control (XTLS)
 	Auth       string `json:"auth,omitempty"`               // Auth password (Hysteria)
 	Email      string `json:"email"`                        // Client email identifier

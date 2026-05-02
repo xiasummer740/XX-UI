@@ -785,6 +785,12 @@ func (s *InboundService) AddInboundClient(data *model.Inbound) (bool, error) {
 				cm["created_at"] = nowTs
 			}
 			cm["updated_at"] = nowTs
+			// 持久化 speedLimit 字段
+			if clients[i].SpeedLimit > 0 {
+				cm["speedLimit"] = clients[i].SpeedLimit
+			} else {
+				delete(cm, "speedLimit")
+			}
 			interfaceClients[i] = cm
 		}
 	}
@@ -870,6 +876,7 @@ func (s *InboundService) AddInboundClient(data *model.Inbound) (bool, error) {
 					"flow":     client.Flow,
 					"password": client.Password,
 					"cipher":   cipher,
+					"level":    client.SpeedLimit,
 				})
 				if err1 == nil {
 					logger.Debug("Client added by api:", client.Email)
@@ -1261,6 +1268,12 @@ func (s *InboundService) UpdateInboundClient(data *model.Inbound, clientId strin
 			}
 			newMap["created_at"] = preservedCreated
 			newMap["updated_at"] = time.Now().Unix() * 1000
+			// 持久化 speedLimit 字段
+			if clients[0].SpeedLimit > 0 {
+				newMap["speedLimit"] = clients[0].SpeedLimit
+			} else {
+				delete(newMap, "speedLimit")
+			}
 			interfaceClients[0] = newMap
 		}
 	}
@@ -1336,6 +1349,7 @@ func (s *InboundService) UpdateInboundClient(data *model.Inbound, clientId strin
 				"auth":     clients[0].Auth,
 				"password": clients[0].Password,
 				"cipher":   cipher,
+				"level":    clients[0].SpeedLimit,
 			})
 			if err1 == nil {
 				logger.Debug("Client edited by api:", clients[0].Email)
@@ -2708,6 +2722,10 @@ func (s *InboundService) MigrationRequirements() {
 					c["created_at"] = time.Now().Unix() * 1000
 				}
 				c["updated_at"] = time.Now().Unix() * 1000
+				// Backfill speedLimit (default 0 = unlimited)
+				if _, ok := c["speedLimit"]; !ok {
+					c["speedLimit"] = 0
+				}
 				newClients = append(newClients, any(c))
 			}
 			settings["clients"] = newClients

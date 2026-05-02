@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"strconv"
 	"sync"
 
 	"github.com/XiaSummer740/XX-UI/logger"
@@ -113,6 +114,10 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 
 	s.inboundService.AddTraffic(nil, nil)
 
+	// =================================================================
+	// 动态限速核心逻辑 - 第一步: 收集所有非零限速值
+	// =================================================================
+	uniqueSpeeds := make(map[int]bool)
 	inbounds, err := s.inboundService.GetAllInbounds()
 	if err != nil {
 		return nil, err
@@ -139,6 +144,20 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 				enableMap[clientTraffic.Email] = clientTraffic.Enable
 			}
 
+			// =============================================================
+			// 动态限速核心逻辑 - 第二步: 从数据库读取 SpeedLimit，收集非零值
+			// =============================================================
+			speedByEmail := make(map[string]int)
+			dbClients, _ := s.inboundService.GetClients(inbound)
+			for _, dbClient := range dbClients {
+				if dbClient.SpeedLimit > 0 {
+					uniqueSpeeds[dbClient.SpeedLimit] = true
+					if dbClient.Email != "" {
+						speedByEmail[dbClient.Email] = dbClient.SpeedLimit
+					}
+				}
+			}
+
 			// filter and clean clients
 			var final_clients []any
 			for _, client := range clients {
@@ -160,9 +179,16 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 					continue
 				}
 
+				// 动态限速核心逻辑 - 第三步: 设置客户端 level（对应 policy 中的限速级别）
+				if speed, exists := speedByEmail[email]; exists && speed > 0 {
+					c["level"] = speed
+				} else {
+					c["level"] = 0
+				}
+
 				// clear client config for additional parameters
 				for key := range c {
-					if key != "email" && key != "id" && key != "password" && key != "flow" && key != "method" && key != "auth" {
+					if key != "email" && key != "id" && key != "password" && key != "flow" && key != "method" && key != "auth" && key != "level" {
 						delete(c, key)
 					}
 					if flow, ok := c["flow"].(string); ok && flow == "xtls-rprx-vision-udp443" {
@@ -266,6 +292,63 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 		inboundConfig := inbound.GenXrayInboundConfig()
 		xrayConfig.InboundConfigs = append(xrayConfig.InboundConfigs, *inboundConfig)
 	}
+
+	// =================================================================
+	// 动态限速核心逻辑 - 第四步: 根据收集到的限速值，动态生成 Policy Levels
+	// =================================================================
+	if len(uniqueSpeeds) > 0 {
+		var finalPolicy map[string]any
+		if xrayConfig.Policy != nil {
+			json.Unmarshal([]byte(xrayConfig.Policy), &finalPolicy)
+		}
+		if finalPolicy == nil {
+			finalPolicy = make(map[string]any)
+		}
+
+		var policyLevels map[string]any
+		if levels, ok := finalPolicy["levels"].(map[string]any); ok {
+			policyLevels = levels
+		} else {
+			policyLevels = make(map[string]any)
+		}
+
+		// 确保 level 0 策略完整（统计功能必需）
+		var level0 map[string]any
+		if l0, ok := policyLevels["0"].(map[string]any); ok {
+			level0 = l0
+		} else {
+			level0 = make(map[string]any)
+		}
+		level0["handshake"] = 4
+		level0["connIdle"] = 300
+		level0["uplinkOnly"] = 0
+		level0["downlinkOnly"] = 0
+		level0["statsUserUplink"] = true
+		level0["statsUserDownlink"] = true
+		level0["statsUserOnline"] = true
+		policyLevels["0"] = level0
+
+		// 为每个独立的限速值创建对应的 policy level
+		// level 的值 = speedLimit 的值（KB/s）
+		// uplinkOnly/downlinkOnly 的单位是 KB/s，与 speedLimit 一致
+		for speed := range uniqueSpeeds {
+			policyLevels[strconv.Itoa(speed)] = map[string]any{
+				"handshake":         4,
+				"connIdle":          300,
+				"uplinkOnly":        speed,
+				"downlinkOnly":      speed,
+				"statsUserUplink":   true,
+				"statsUserDownlink": true,
+				"statsUserOnline":   true,
+			}
+		}
+
+		finalPolicy["levels"] = policyLevels
+		if newPolicy, err := json.Marshal(finalPolicy); err == nil {
+			xrayConfig.Policy = json_util.RawMessage(string(newPolicy))
+		}
+	}
+
 	return xrayConfig, nil
 }
 

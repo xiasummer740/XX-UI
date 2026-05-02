@@ -100,6 +100,28 @@
             <a-input-number v-model.number="clientsBulkModal.limitIp"
                 min="0"></a-input-number>
         </a-form-item>
+        <!-- 独立限速设置 -->
+        <a-form-item>
+            <template slot="label">
+                <a-tooltip>
+                    <template slot="title">
+                        <span>设置该用户的最大〔上传/下载速度〕，单位 KB/s，0 表示不限速</span>
+                    </template>
+                    <span>
+                        独立限速
+                        <a-icon type="question-circle"></a-icon>
+                    </span>
+                </a-tooltip>
+            </template>
+            <a-input-number
+                v-model.number="clientsBulkModal.speedLimit"
+                :min="0"
+                style="width: 100%">
+                <template slot="addonAfter">
+                    KB/s
+                </template>
+            </a-input-number>
+        </a-form-item>
         <a-form-item>
             <template slot="label">
                 <a-tooltip>
@@ -182,6 +204,7 @@
         tgId: '',
         security: "auto",
         flow: "",
+        speedLimit: 0,
         delayedStart: false,
         reset: 0,
         ok() {
@@ -205,6 +228,7 @@
                 newClient.tgId = clientsBulkModal.tgId;
                 newClient.security = clientsBulkModal.security;
                 newClient.limitIp = clientsBulkModal.limitIp;
+                newClient.speedLimit = clientsBulkModal.speedLimit;
                 newClient._totalGB = clientsBulkModal.totalGB;
                 newClient._expiryTime = clientsBulkModal.expiryTime;
                 if (clientsBulkModal.inbound.canEnableTlsFlow()) {
@@ -230,6 +254,7 @@
             this.expiryTime = 0;
             this.emailMethod = 0;
             this.limitIp = 0;
+            this.speedLimit = 0;
             this.firstNum = 1;
             this.lastNum = 1;
             this.emailPrefix = "";
