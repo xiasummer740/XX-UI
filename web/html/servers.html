@@ -45,7 +45,9 @@
 </style>
 {{ template "page/head_end" .}}
 
+{{ template "page/body_start" .}}
 <a-layout id="app" v-cloak :class="themeSwitcher.currentTheme">
+    <a-sidebar></a-sidebar>
     <a-layout id="content-layout">
         <a-layout-content>
             <a-spin :spinning="loading" tip='{{ i18n "pages.servers.loading" }}'>
@@ -407,4 +409,4 @@
         }
     });
 </script>
-{{template "page/end" .}}
+{{ template "page/body_end" .}}
