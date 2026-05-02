@@ -1,0 +1,166 @@
+{{ template "page/head_start" .}}
+<style>
+    .navigation-page .tab-content-pane {
+        padding: 16px;
+    }
+    .navigation-page .tab-content-pane ol,
+    .navigation-page .tab-content-pane ul {
+        padding-left: 20px;
+    }
+    .navigation-page .tab-content-pane li {
+        margin-bottom: 8px;
+        line-height: 1.6;
+    }
+    .navigation-page .tab-content-pane a {
+        word-break: break-all;
+    }
+    .navigation-page .ant-tabs-tab {
+        font-size: 14px;
+    }
+    .navigation-page .ant-tabs-tab .anticon {
+        margin-right: 6px;
+    }
+</style>
+{{ template "page/head_end" .}}
+
+<a-layout id="app" v-cloak :class="themeSwitcher.currentTheme + ' navigation-page'">
+    <a-sidebar></a-sidebar>
+    <a-layout id="content-layout">
+        <a-layout-content>
+            <a-spin :spinning="false">
+                <a-tabs v-model="activeKey">
+                    <!-- Tab 1: 实用技巧 -->
+                    <a-tab-pane key="1">
+                        <template #tab>
+                            <a-icon type="bulb"></a-icon>
+                            <span>{{ i18n "pages.navigation.usefulTips" }}</span>
+                        </template>
+                        <div class="tab-content-pane">
+                            <a-card>
+                                <h2>一、XX-UI 面板相关</h2>
+                                <br>
+                                <ol>
+                                    <li><strong>XX-UI 项目地址：</strong> <a href="https://github.com/XiaSummer740/XX-UI" target="_blank">https://github.com/XiaSummer740/XX-UI</a></li>
+                                    <li><strong>XX-UI 交流群：</strong> <a href="https://t.me/XrayUI" target="_blank">https://t.me/XrayUI</a></li>
+                                    <li><strong>安装教程：</strong> 参考项目 README 文档</li>
+                                </ol>
+                                <br>
+
+                                <h2>二、实用技巧</h2>
+                                <br>
+                                <ol>
+                                    <li><strong>如何检查 IP 是否被墙：</strong> 使用 <a href="https://ping.pe/" target="_blank">ping.pe</a> 或 <a href="https://boce.com/" target="_blank">boce.com</a> 进行国内外多节点测试</li>
+                                    <li><strong>如何检查 IP 纯净度：</strong> 访问 <a href="https://scamalytics.com/" target="_blank">scamalytics.com</a> 查看风险评分</li>
+                                    <li><strong>如何查看端口连接数：</strong> <code>netstat -ntu | grep :节点端口 | grep ESTABLISHED | awk '{print $5}'</code></li>
+                                    <li><strong>推荐协议组合：</strong> VLESS + TCP + Reality + Vision，安全性高且抗检测</li>
+                                    <li><strong>端口选择建议：</strong> 建议使用高位端口（40000-65000），避免常见端口被扫描</li>
+                                </ol>
+                                <br>
+
+                                <h2>三、免责声明</h2>
+                                <br>
+                                <p>XX-UI 面板仅供学习和研究使用，请遵守当地法律法规，不得用于非法用途。</p>
+                            </a-card>
+                        </div>
+                    </a-tab-pane>
+
+                    <!-- Tab 2: 常用资源 -->
+                    <a-tab-pane key="2">
+                        <template #tab>
+                            <a-icon type="link"></a-icon>
+                            <span>{{ i18n "pages.navigation.resources" }}</span>
+                        </template>
+                        <div class="tab-content-pane">
+                            <a-card>
+                                <h2>一、常用代理软件</h2>
+                                <br>
+                                <ol>
+                                    <li><strong>Windows - v2rayN：</strong> <a href="https://github.com/2dust/v2rayN" target="_blank">https://github.com/2dust/v2rayN</a></li>
+                                    <li><strong>Android - v2rayNG：</strong> <a href="https://github.com/2dust/v2rayNG" target="_blank">https://github.com/2dust/v2rayNG</a></li>
+                                    <li><strong>iOS - Shadowrocket：</strong> App Store 搜索 Shadowrocket</li>
+                                    <li><strong>macOS - Clash Verge：</strong> <a href="https://github.com/clash-verge-rev/clash-verge-rev/releases" target="_blank">https://github.com/clash-verge-rev/clash-verge-rev/releases</a></li>
+                                    <li><strong>Linux - v2rayA：</strong> <a href="https://github.com/v2rayA/v2rayA" target="_blank">https://github.com/v2rayA/v2rayA</a></li>
+                                </ol>
+                                <br>
+
+                                <h2>二、常用网站</h2>
+                                <br>
+                                <ol>
+                                    <li><strong>NodeSeek 论坛：</strong> <a href="https://www.nodeseek.com/" target="_blank">https://www.nodeseek.com/</a></li>
+                                    <li><strong>V2EX：</strong> <a href="https://www.v2ex.com/" target="_blank">https://www.v2ex.com/</a></li>
+                                    <li><strong>IP 检测：</strong> <a href="https://whatismyipaddress.com/" target="_blank">https://whatismyipaddress.com/</a></li>
+                                    <li><strong>IP 纯净度检测：</strong> <a href="https://scamalytics.com/" target="_blank">https://scamalytics.com/</a></li>
+                                    <li><strong>Project X 文档：</strong> <a href="https://xtls.github.io/" target="_blank">https://xtls.github.io/</a></li>
+                                    <li><strong>Google 翻译：</strong> <a href="https://translate.google.com/" target="_blank">https://translate.google.com/</a></li>
+                                </ol>
+                                <br>
+
+                                <h2>三、接码平台</h2>
+                                <br>
+                                <p><a href="https://sms-activate.org/cn" target="_blank">https://sms-activate.org/cn</a> - 可用于注册各种在线服务</p>
+                            </a-card>
+                        </div>
+                    </a-tab-pane>
+
+                    <!-- Tab 3: 关于 XX-UI -->
+                    <a-tab-pane key="3">
+                        <template #tab>
+                            <a-icon type="info-circle"></a-icon>
+                            <span>{{ i18n "pages.navigation.about" }}</span>
+                        </template>
+                        <div class="tab-content-pane">
+                            <a-card>
+                                <h2>关于 XX-UI</h2>
+                                <br>
+                                <p>XX-UI 是一个基于 3x-ui 二次开发的 Web 面板，支持多协议、多用户、流量统计、订阅等功能。</p>
+                                <br>
+
+                                <h2>主要功能</h2>
+                                <br>
+                                <ul>
+                                    <li>支持 VMess、VLESS、Trojan、Shadowsocks、Hysteria 等协议</li>
+                                    <li>支持 Reality、TLS、WebSocket、gRPC、HTTPUpgrade 等传输方式</li>
+                                    <li>支持订阅功能（普通订阅、JSON 订阅、Clash 订阅）</li>
+                                    <li>支持流量统计与限制</li>
+                                    <li>支持多用户管理</li>
+                                    <li>支持 Telegram 机器人通知</li>
+                                    <li>支持面板更新通知</li>
+                                </ul>
+                                <br>
+
+                                <h2>相关链接</h2>
+                                <br>
+                                <p><a href="https://github.com/XiaSummer740/XX-UI" target="_blank">GitHub 项目地址</a></p>
+                                <p><a href="https://github.com/XiaSummer740/XX-UI/releases" target="_blank">版本发布页</a></p>
+                                <p><a href="https://t.me/XrayUI" target="_blank">Telegram 交流群</a></p>
+                            </a-card>
+                        </div>
+                    </a-tab-pane>
+                </a-tabs>
+            </a-spin>
+        </a-layout-content>
+    </a-layout>
+</a-layout>
+
+{{template "page/body_scripts" .}}
+{{template "component/aSidebar" .}}
+{{template "component/aThemeSwitch" .}}
+
+<script>
+    const app = new Vue({
+        delimiters: ['[[', ']]'],
+        el: '#app',
+        data: {
+            themeSwitcher,
+            activeKey: '1',
+        },
+        async mounted() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const tab = urlParams.get('tab');
+            if (tab) {
+                this.activeKey = tab;
+            }
+        },
+    });
+</script>
+{{ template "page/body_end" .}}

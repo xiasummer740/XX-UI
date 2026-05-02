@@ -22,6 +22,7 @@ import (
 
 	"github.com/XiaSummer740/XX-UI/config"
 	"github.com/XiaSummer740/XX-UI/database"
+	"github.com/XiaSummer740/XX-UI/database/model"
 	"github.com/XiaSummer740/XX-UI/logger"
 	"github.com/XiaSummer740/XX-UI/util/common"
 	"github.com/XiaSummer740/XX-UI/util/sys"
@@ -1335,4 +1336,127 @@ func (s *ServerService) GetNewmlkem768() (any, error) {
 	}
 
 	return keyPair, nil
+}
+
+// ==================== Remote Server Management ====================
+
+// GetRemoteServers returns all remote servers.
+func (s *ServerService) GetRemoteServers() ([]*model.RemoteServer, error) {
+	return database.GetRemoteServers()
+}
+
+// GetRemoteServerByID returns a single remote server by ID.
+func (s *ServerService) GetRemoteServerByID(id int) (*model.RemoteServer, error) {
+	return database.GetRemoteServerByID(id)
+}
+
+// CreateRemoteServer creates a new remote server.
+func (s *ServerService) CreateRemoteServer(server *model.RemoteServer) error {
+	return database.CreateRemoteServer(server)
+}
+
+// UpdateRemoteServer updates an existing remote server.
+func (s *ServerService) UpdateRemoteServer(server *model.RemoteServer) error {
+	return database.UpdateRemoteServer(server)
+}
+
+// DeleteRemoteServer deletes a remote server by ID.
+func (s *ServerService) DeleteRemoteServer(id int) error {
+	return database.DeleteRemoteServer(id)
+}
+
+// LoginToRemotePanel logs into a remote panel and returns the session cookie.
+func (s *ServerService) LoginToRemotePanel(server *model.RemoteServer) (string, error) {
+	loginURL := server.URL + "/login"
+	payload := map[string]string{
+		"username": server.Username,
+		"password": server.Password,
+	}
+	jsonPayload, _ := json.Marshal(payload)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Post(loginURL, "application/json", bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return "", fmt.Errorf("failed to connect to remote panel: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("remote panel login failed with status: %d", resp.StatusCode)
+	}
+
+	// Extract session cookie
+	for _, cookie := range resp.Cookies() {
+		if cookie.Name == "session" || strings.Contains(cookie.Name, "session") {
+			return cookie.Value, nil
+		}
+	}
+
+	return "", fmt.Errorf("no session cookie found in remote panel response")
+}
+
+// GetRemotePanelStatus fetches status from a remote panel.
+func (s *ServerService) GetRemotePanelStatus(server *model.RemoteServer) (map[string]any, error) {
+	sessionCookie, err := s.LoginToRemotePanel(server)
+	if err != nil {
+		return nil, err
+	}
+
+	statusURL := server.URL + "/panel/api/server/status"
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, _ := http.NewRequest("GET", statusURL, nil)
+	req.Header.Set("Cookie", "session="+sessionCookie)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get remote panel status: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var result map[string]any
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse remote panel status: %w", err)
+	}
+
+	return result, nil
+}
+
+// GetRemoteInbounds fetches inbounds from a remote panel.
+func (s *ServerService) GetRemoteInbounds(server *model.RemoteServer) ([]map[string]any, error) {
+	sessionCookie, err := s.LoginToRemotePanel(server)
+	if err != nil {
+		return nil, err
+	}
+
+	listURL := server.URL + "/panel/api/inbounds/list"
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, _ := http.NewRequest("GET", listURL, nil)
+	req.Header.Set("Cookie", "session="+sessionCookie)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get remote inbounds: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var result map[string]any
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse remote inbounds: %w", err)
+	}
+
+	// Extract the "obj" field which contains the inbounds array
+	obj, ok := result["obj"]
+	if !ok {
+		return nil, fmt.Errorf("unexpected response format from remote panel")
+	}
+
+	objJSON, _ := json.Marshal(obj)
+	var inbounds []map[string]any
+	if err := json.Unmarshal(objJSON, &inbounds); err != nil {
+		return nil, fmt.Errorf("failed to parse remote inbounds list: %w", err)
+	}
+
+	return inbounds, nil
 }

@@ -1,0 +1,410 @@
+{{ template "page/head_start" .}}
+<style>
+    .server-card .ant-card-head-title {
+        font-size: 16px;
+        font-weight: 600;
+    }
+    .server-card .ant-card-extra {
+        padding: 0;
+    }
+    .server-card .ant-statistic {
+        text-align: center;
+    }
+    .server-card .ant-statistic-title {
+        font-size: 13px;
+    }
+    .server-card .ant-statistic-content {
+        font-size: 20px;
+    }
+    .status-tag-online {
+        color: #52c41a !important;
+    }
+    .status-tag-offline {
+        color: #ff4d4f !important;
+    }
+    .deploy-hint {
+        margin-bottom: 15px;
+        color: #666;
+        font-style: italic;
+        font-size: 13px;
+        line-height: 1.6;
+    }
+    .dark .deploy-hint {
+        color: #999;
+    }
+    .qrcode-container {
+        text-align: center;
+        margin-bottom: 16px;
+    }
+    .qrcode-container canvas {
+        cursor: pointer;
+    }
+    .link-input {
+        cursor: pointer;
+    }
+</style>
+{{ template "page/head_end" .}}
+
+<a-layout id="app" v-cloak :class="themeSwitcher.currentTheme">
+    <a-layout id="content-layout">
+        <a-layout-content>
+            <a-spin :spinning="loading" tip='{{ i18n "pages.servers.loading" }}'>
+                <transition name="list" appear>
+                    <a-row :gutter="[isMobile ? 8 : 16, isMobile ? 0 : 12]">
+                        <!-- Controlled VPS (被控端) -->
+                        <a-col :span="24">
+                            <a-card class="server-card" hoverable
+                                :title='{{ i18n "pages.servers.controlledTitle" }}'>
+                                <template #extra>
+                                    <a-button type="primary" icon="plus" size="small"
+                                        @click="openAddModal(0)">
+                                        {{ i18n "pages.servers.addControlled" }}
+                                    </a-button>
+                                </template>
+                                <a-table :columns="normalColumns" :data-source="normalServers"
+                                    :row-key="record => record.id" :pagination="false"
+                                    :scroll="isMobile ? { x: 'max-content' } : {}"
+                                    :loading="loading">
+                                    <template slot="status" slot-scope="text, record">
+                                        <a-tag v-if="record.online" color="green">{{ i18n "pages.servers.online" }}</a-tag>
+                                        <a-tag v-else color="red">{{ i18n "pages.servers.offline" }}</a-tag>
+                                    </template>
+                                    <template slot="action" slot-scope="text, record">
+                                        <a-space>
+                                            <a-button type="primary" size="small" icon="search"
+                                                @click="checkServerStatus(record)">
+                                                {{ i18n "pages.servers.checkStatus" }}
+                                            </a-button>
+                                            <a-button type="danger" size="small" icon="delete"
+                                                @click="deleteServer(record)">
+                                                {{ i18n "pages.servers.delete" }}
+                                            </a-button>
+                                        </a-space>
+                                    </template>
+                                </a-table>
+                            </a-card>
+                        </a-col>
+
+                        <!-- Transit VPS (中转机) -->
+                        <a-col :span="24" style="margin-top: 16px;">
+                            <a-card class="server-card" hoverable
+                                :title='{{ i18n "pages.servers.transitTitle" }}'>
+                                <template #extra>
+                                    <a-button type="primary" icon="plus" size="small"
+                                        @click="openAddModal(1)">
+                                        {{ i18n "pages.servers.addTransit" }}
+                                    </a-button>
+                                </template>
+                                <div class="deploy-hint">
+                                    {{ i18n "pages.servers.transitHint" }}
+                                </div>
+                                <a-table :columns="transitColumns" :data-source="transitServers"
+                                    :row-key="record => record.id" :pagination="false"
+                                    :scroll="isMobile ? { x: 'max-content' } : {}"
+                                    :loading="loading">
+                                    <template slot="status" slot-scope="text, record">
+                                        <a-tag v-if="record.online" color="green">{{ i18n "pages.servers.online" }}</a-tag>
+                                        <a-tag v-else color="red">{{ i18n "pages.servers.offline" }}</a-tag>
+                                    </template>
+                                    <template slot="action" slot-scope="text, record">
+                                        <a-space>
+                                            <a-button size="small" icon="link"
+                                                @click="getLastLink(record)">
+                                                {{ i18n "pages.servers.lastLink" }}
+                                            </a-button>
+                                            <a-button type="primary" size="small" icon="cloud-upload"
+                                                @click="setupRelay(record)">
+                                                {{ i18n "pages.servers.deploy" }}
+                                            </a-button>
+                                            <a-button type="danger" size="small" icon="delete"
+                                                @click="deleteServer(record)">
+                                                {{ i18n "pages.servers.delete" }}
+                                            </a-button>
+                                        </a-space>
+                                    </template>
+                                </a-table>
+                            </a-card>
+                        </a-col>
+                    </a-row>
+                </transition>
+            </a-spin>
+        </a-layout-content>
+    </a-layout>
+
+    <!-- Add/Edit Server Modal -->
+    <a-modal v-model="addModal.visible"
+        :title="addModal.formType === 1 ? '{{ i18n "pages.servers.addTransit" }}' : '{{ i18n "pages.servers.addControlled" }}'"
+        @ok="submitServer" :confirm-loading="addModal.loading"
+        :ok-text='{{ i18n "pages.servers.confirm" }}'
+        :cancel-text='{{ i18n "pages.servers.cancel" }}'>
+        <a-form :model="addModal.form" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
+            <a-form-item :label='{{ i18n "pages.servers.nameLabel" }}'>
+                <a-input v-model="addModal.form.name" :placeholder='{{ i18n "pages.servers.namePlaceholder" }}' />
+            </a-form-item>
+            <a-form-item :label='{{ i18n "pages.servers.urlLabel" }}'>
+                <a-input v-model="addModal.form.url" :placeholder='{{ i18n "pages.servers.urlPlaceholder" }}' />
+            </a-form-item>
+            <a-form-item :label='{{ i18n "pages.servers.usernameLabel" }}'>
+                <a-input v-model="addModal.form.username" :placeholder='{{ i18n "pages.servers.usernamePlaceholder" }}' />
+            </a-form-item>
+            <a-form-item :label='{{ i18n "pages.servers.passwordLabel" }}'>
+                <a-input-password v-model="addModal.form.password" :placeholder='{{ i18n "pages.servers.passwordPlaceholder" }}' />
+            </a-form-item>
+        </a-form>
+        <div v-if="addModal.formType === 0" style="margin-top: 20px; color: red; font-style: italic; text-align: center; line-height: 1.6;">
+            {{ i18n "pages.servers.controlledWarning" }}
+        </div>
+        <div v-else style="margin-top: 20px; color: #1890ff; font-style: italic; text-align: center; line-height: 1.6;">
+            {{ i18n "pages.servers.transitInfo" }}
+        </div>
+    </a-modal>
+
+    <!-- Deployment Result Modal -->
+    <a-modal v-model="resultModal.visible" :title="resultModal.title" :footer="null" :width="450">
+        <div class="qrcode-container">
+            <div :id="'qrcode-canvas-' + resultModal.id" @click="copyLink(resultModal.link)"></div>
+        </div>
+        <a-input class="link-input" v-model="resultModal.link" read-only @click="copyLink(resultModal.link)">
+            <a-icon slot="addonAfter" type="copy" @click="copyLink(resultModal.link)" />
+        </a-input>
+    </a-modal>
+
+    <!-- Status Check Modal -->
+    <a-modal v-model="statusModal.visible" :title='{{ i18n "pages.servers.statusTitle" }}' :footer="null" :width="500">
+        <a-spin :spinning="statusModal.loading">
+            <a-descriptions :column="1" bordered size="small">
+                <a-descriptions-item :label='{{ i18n "pages.servers.statusName" }}'>
+                    [[ statusModal.data.name ]]
+                </a-descriptions-item>
+                <a-descriptions-item :label='{{ i18n "pages.servers.statusUrl" }}'>
+                    [[ statusModal.data.url ]]
+                </a-descriptions-item>
+                <a-descriptions-item :label='{{ i18n "pages.servers.statusCpu" }}'>
+                    [[ statusModal.data.cpu ]]
+                </a-descriptions-item>
+                <a-descriptions-item :label='{{ i18n "pages.servers.statusMem" }}'>
+                    [[ statusModal.data.mem ]]
+                </a-descriptions-item>
+                <a-descriptions-item :label='{{ i18n "pages.servers.statusUptime" }}'>
+                    [[ statusModal.data.uptime ]]
+                </a-descriptions-item>
+                <a-descriptions-item :label='{{ i18n "pages.servers.statusXray" }}'>
+                    [[ statusModal.data.xray ]]
+                </a-descriptions-item>
+            </a-descriptions>
+        </a-spin>
+    </a-modal>
+</a-layout>
+
+{{template "page/body_scripts" .}}
+<script>
+    const BASE_PATH = '{{ .base_path }}';
+    const API_BASE = BASE_PATH + 'panel/api/server';
+
+    new Vue({
+        el: '#app',
+        mixins: [themeSwitcher, i18nMixin],
+        data() {
+            return {
+                loading: false,
+                normalServers: [],
+                transitServers: [],
+                normalColumns: [
+                    { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
+                    { title: '{{ i18n "pages.servers.colName" }}', dataIndex: 'name', key: 'name' },
+                    { title: '{{ i18n "pages.servers.colUrl" }}', dataIndex: 'url', key: 'url' },
+                    { title: '{{ i18n "pages.servers.colStatus" }}', key: 'status', scopedSlots: { customRender: 'status' }, width: 100 },
+                    { title: '{{ i18n "pages.servers.colAction" }}', key: 'action', scopedSlots: { customRender: 'action' }, width: 200 },
+                ],
+                transitColumns: [
+                    { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
+                    { title: '{{ i18n "pages.servers.colName" }}', dataIndex: 'name', key: 'name' },
+                    { title: '{{ i18n "pages.servers.colUrl" }}', dataIndex: 'url', key: 'url' },
+                    { title: '{{ i18n "pages.servers.colStatus" }}', key: 'status', scopedSlots: { customRender: 'status' }, width: 100 },
+                    { title: '{{ i18n "pages.servers.colAction" }}', key: 'action', scopedSlots: { customRender: 'action' }, width: 280 },
+                ],
+                addModal: {
+                    visible: false,
+                    loading: false,
+                    formType: 0,
+                    form: {
+                        name: '',
+                        url: '',
+                        username: '',
+                        password: '',
+                    }
+                },
+                resultModal: {
+                    visible: false,
+                    title: '',
+                    link: '',
+                    id: 0,
+                },
+                statusModal: {
+                    visible: false,
+                    loading: false,
+                    data: {
+                        name: '',
+                        url: '',
+                        cpu: '',
+                        mem: '',
+                        uptime: '',
+                        xray: '',
+                    }
+                },
+            }
+        },
+        created() {
+            this.loadServers();
+        },
+        methods: {
+            loadServers() {
+                this.loading = true;
+                axios.get(API_BASE + '/remoteServers').then(res => {
+                    if (res.data.success) {
+                        const servers = res.data.obj || [];
+                        this.normalServers = servers.filter(s => s.type === 0);
+                        this.transitServers = servers.filter(s => s.type === 1);
+                    } else {
+                        this.$message.error(res.data.msg || '{{ i18n "pages.servers.loadFailed" }}');
+                    }
+                }).catch(err => {
+                    this.$message.error('{{ i18n "pages.servers.loadFailed" }}: ' + (err.message || ''));
+                }).finally(() => {
+                    this.loading = false;
+                });
+            },
+            openAddModal(type) {
+                this.addModal.formType = type;
+                this.addModal.form = { name: '', url: '', username: '', password: '' };
+                this.addModal.visible = true;
+            },
+            submitServer() {
+                const form = this.addModal.form;
+                if (!form.name || !form.url || !form.username || !form.password) {
+                    this.$message.warning('{{ i18n "pages.servers.fillRequired" }}');
+                    return;
+                }
+                this.addModal.loading = true;
+                const payload = {
+                    name: form.name,
+                    url: form.url,
+                    username: form.username,
+                    password: form.password,
+                    type: this.addModal.formType,
+                };
+                axios.post(API_BASE + '/remoteServer/add', payload).then(res => {
+                    if (res.data.success) {
+                        this.$message.success('{{ i18n "pages.servers.addSuccess" }}');
+                        this.addModal.visible = false;
+                        this.loadServers();
+                    } else {
+                        this.$message.error(res.data.msg || '{{ i18n "pages.servers.addFailed" }}');
+                    }
+                }).catch(err => {
+                    this.$message.error('{{ i18n "pages.servers.addFailed" }}: ' + (err.message || ''));
+                }).finally(() => {
+                    this.addModal.loading = false;
+                });
+            },
+            deleteServer(record) {
+                const self = this;
+                this.$confirm({
+                    title: '{{ i18n "pages.servers.deleteConfirm" }}',
+                    content: `{{ i18n "pages.servers.deleteContent" }}: ${record.name}?`,
+                    okText: '{{ i18n "pages.servers.confirm" }}',
+                    cancelText: '{{ i18n "pages.servers.cancel" }}',
+                    okType: 'danger',
+                    onOk() {
+                        return axios.post(API_BASE + '/remoteServer/delete/' + record.id).then(res => {
+                            if (res.data.success) {
+                                self.$message.success('{{ i18n "pages.servers.deleteSuccess" }}');
+                                self.loadServers();
+                            } else {
+                                self.$message.error(res.data.msg || '{{ i18n "pages.servers.deleteFailed" }}');
+                            }
+                        }).catch(err => {
+                            self.$message.error('{{ i18n "pages.servers.deleteFailed" }}: ' + (err.message || ''));
+                        });
+                    }
+                });
+            },
+            checkServerStatus(record) {
+                this.statusModal.visible = true;
+                this.statusModal.loading = true;
+                this.statusModal.data = {
+                    name: record.name,
+                    url: record.url,
+                    cpu: '...',
+                    mem: '...',
+                    uptime: '...',
+                    xray: '...',
+                };
+                axios.get(API_BASE + '/remoteServer/status/' + record.id).then(res => {
+                    if (res.data.success) {
+                        const obj = res.data.obj || {};
+                        this.statusModal.data.cpu = obj.cpu != null ? obj.cpu + '%' : 'N/A';
+                        this.statusModal.data.mem = obj.mem != null ? obj.mem + '%' : 'N/A';
+                        this.statusModal.data.uptime = obj.uptime || 'N/A';
+                        this.statusModal.data.xray = obj.xray || 'N/A';
+                    } else {
+                        this.statusModal.data.cpu = 'Error';
+                        this.statusModal.data.mem = 'Error';
+                        this.statusModal.data.uptime = 'Error';
+                        this.statusModal.data.xray = 'Error';
+                        this.$message.error(res.data.msg || '{{ i18n "pages.servers.statusFailed" }}');
+                    }
+                }).catch(err => {
+                    this.statusModal.data.cpu = 'Error';
+                    this.statusModal.data.mem = 'Error';
+                    this.statusModal.data.uptime = 'Error';
+                    this.statusModal.data.xray = 'Error';
+                    this.$message.error('{{ i18n "pages.servers.statusFailed" }}: ' + (err.message || ''));
+                }).finally(() => {
+                    this.statusModal.loading = false;
+                });
+            },
+            getLastLink(record) {
+                if (record.lastLink) {
+                    this.resultModal.title = '{{ i18n "pages.servers.lastLinkTitle" }}';
+                    this.resultModal.link = record.lastLink;
+                    this.resultModal.id = record.id;
+                    this.resultModal.visible = true;
+                    this.$nextTick(() => {
+                        this.generateQRCode(record.id, record.lastLink);
+                    });
+                } else {
+                    this.$message.info('{{ i18n "pages.servers.noLastLink" }}');
+                }
+            },
+            setupRelay(record) {
+                this.$message.info('{{ i18n "pages.servers.deployComing" }}');
+            },
+            generateQRCode(id, text) {
+                const containerId = 'qrcode-canvas-' + id;
+                const container = document.getElementById(containerId);
+                if (!container) return;
+                container.innerHTML = '';
+                // Use QRCode if available
+                if (typeof QRCode !== 'undefined') {
+                    new QRCode(container, {
+                        text: text,
+                        width: 200,
+                        height: 200,
+                    });
+                }
+            },
+            copyLink(link) {
+                if (!link) return;
+                const textarea = document.createElement('textarea');
+                textarea.value = link;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                this.$message.success('{{ i18n "pages.servers.copied" }}');
+            },
+        }
+    });
+</script>
+{{template "page/end" .}}

@@ -3,6 +3,7 @@ package model
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/XiaSummer740/XX-UI/util/json_util"
 	"github.com/XiaSummer740/XX-UI/xray"
@@ -164,4 +165,18 @@ type Client struct {
 	Reset      int    `json:"reset" form:"reset"`           // Reset period in days
 	CreatedAt  int64  `json:"created_at,omitempty"`         // Creation timestamp
 	UpdatedAt  int64  `json:"updated_at,omitempty"`         // Last update timestamp
+}
+
+// RemoteServer represents a remote panel server for multi-server management.
+// Type 0 = 被控端 VPS (remote panel), Type 1 = 中转机 VPS (relay/transit node).
+type RemoteServer struct {
+	Id        int       `json:"id" gorm:"primaryKey;autoIncrement"`
+	Name      string    `json:"name"`     // Display name / remark
+	URL       string    `json:"url"`      // Panel URL (e.g., http://ip:port)
+	Username  string    `json:"username"` // Login username
+	Password  string    `json:"password"` // Login password
+	Type      int       `json:"type"`     // 0 = controlled VPS, 1 = transit VPS
+	LastLink  string    `json:"lastLink"` // Last deployment link for transit VPS
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }

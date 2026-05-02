@@ -197,6 +197,33 @@
                 </a-card>
               </a-col>
               <a-col :sm="24" :lg="12">
+                <a-card title='XX-UI' hoverable>
+                  <template v-if="panelUpdateModal.info.updateAvailable" #extra>
+                    <a-tooltip :overlay-class-name="themeSwitcher.currentTheme" :title='`{{ i18n "pages.index.updatePanel" }}: ${panelUpdateModal.info.latestVersion}`'>
+                      <a-tag color="orange" style="cursor:pointer;margin:0" @click="openPanelUpdate">
+                        <a-icon type="cloud-download"></a-icon>[[ panelUpdateModal.info.latestVersion ]]
+                      <span v-if="!isMobile">{{ i18n "pages.index.updatePanel" }}</span>
+                      </a-tag>
+                    </a-tooltip>
+                  </template>
+                  <a rel="noopener" href="https://github.com/MHSanaei/3x-ui/releases" target="_blank">
+                    <a-tag color="green">
+                      <span>v{{ .cur_ver }}</span>
+                    </a-tag>
+                  </a>
+                  <a rel="noopener" href="https://t.me/XrayUI" target="_blank">
+                    <a-tag color="green">
+                      <span>@XrayUI</span>
+                    </a-tag>
+                  </a>
+                  <a rel="noopener" href="https://github.com/MHSanaei/3x-ui/wiki" target="_blank">
+                    <a-tag color="purple">
+                      <span>{{ i18n "pages.index.documentation" }}</span>
+                    </a-tag>
+                  </a>
+                </a-card>
+              </a-col>
+              <a-col :sm="24" :lg="12">
                 <a-card title='{{ i18n "pages.index.systemLoad" }}' hoverable>
                   <a-space direction="vertical" style="width:100%">
                     <a-space>
@@ -427,6 +454,33 @@
         </div>
       </a-collapse-panel>
     </a-collapse>
+  </a-modal>
+  <a-modal id="panel-update-modal" v-model="panelUpdateModal.visible" title='{{ i18n "pages.index.updatePanel" }}'
+    :closable="true" @ok="() => panelUpdateModal.visible = false" :class="themeSwitcher.currentTheme" footer="">
+    <a-alert type="warning" class="mb-12 w-100" message='{{ i18n "pages.index.panelUpdateDesc" }}'
+      show-icon></a-alert>
+    <a-list class="ant-version-list w-100" bordered>
+      <a-list-item class="ant-version-list-item">
+        <span>{{ i18n "pages.index.currentPanelVersion" }}</span>
+        <a-tag color="green">v[[ panelUpdateModal.info.currentVersion || '{{ .cur_ver }}' ]]</a-tag>
+      </a-list-item>
+      <a-list-item class="ant-version-list-item" v-if="panelUpdateModal.info.updateAvailable">
+        <span>{{ i18n "pages.index.latestPanelVersion" }}</span>
+        <a-tag color="purple">
+          [[ panelUpdateModal.info.latestVersion || '-' ]]
+        </a-tag>
+      </a-list-item>
+      <a-list-item class="ant-version-list-item" v-else>
+        <span>{{ i18n "pages.index.panelUpToDate" }}</span>
+        <a-tag color="green">{{ i18n "pages.index.upToDate" }}</a-tag>
+      </a-list-item>
+    </a-list>
+    <div class="mt-5 d-flex justify-end">
+      <a-button type="primary" icon="cloud-download" :disabled="!panelUpdateModal.info.updateAvailable"
+        @click="updatePanel">
+        {{ i18n "pages.index.updatePanel" }}
+      </a-button>
+    </div>
   </a-modal>
   <a-modal v-model="customGeoModal.visible" :title="customGeoModal.editId ? '{{ i18n "pages.index.customGeoModalEdit" }}' : '{{ i18n "pages.index.customGeoModalAdd" }}'"
     :confirm-loading="customGeoModal.saving" @ok="submitCustomGeo" :ok-text="'{{ i18n "pages.index.customGeoModalSave" }}'" :cancel-text="'{{ i18n "close" }}'"
@@ -842,6 +896,24 @@
     }
   }
 
+  const panelUpdateModal = {
+    visible: false,
+    info: {
+      currentVersion: '{{ .cur_ver }}',
+      latestVersion: '',
+      updateAvailable: false,
+    },
+    show(info) {
+      this.visible = true;
+      if (info) {
+        this.info = info;
+      }
+    },
+    hide() {
+      this.visible = false;
+    },
+  };
+
   const versionModal = {
     visible: false,
     versions: [],
@@ -1007,6 +1079,7 @@
   cpuHistoryLong: [], // aggregated points from backend
   cpuHistoryLabels: [],
   cpuHistoryModal: { visible: false, bucket: 2 },
+      panelUpdateModal,
       versionModal,
       logModal,
       xraylogModal,
@@ -1037,6 +1110,36 @@
       },
     },
     methods: {
+      async openPanelUpdate() {
+        this.loading(true);
+        const msg = await HttpUtil.get('/panel/api/server/getPanelUpdateInfo');
+        this.loading(false);
+        if (!msg.success) {
+          return;
+        }
+        panelUpdateModal.show(msg.obj);
+      },
+      updatePanel() {
+        this.$confirm({
+          title: '{{ i18n "pages.index.panelUpdateDialog" }}',
+          content: '{{ i18n "pages.index.panelUpdateDialogDesc" }}'
+            .replace('#version#', panelUpdateModal.info.latestVersion || ''),
+          okText: '{{ i18n "confirm"}}',
+          class: themeSwitcher.currentTheme,
+          cancelText: '{{ i18n "cancel"}}',
+          onOk: async () => {
+            panelUpdateModal.hide();
+            this.loading(true, '{{ i18n "pages.index.dontRefresh"}}');
+            const msg = await HttpUtil.post('/panel/api/server/updatePanel');
+            if (!msg.success) {
+              this.loading(false);
+              return;
+            }
+            await PromiseUtil.sleep(15000);
+            window.location.reload();
+          },
+        });
+      },
       loading(spinning, tip = '{{ i18n "loading"}}') {
         this.loadingStates.spinning = spinning;
         this.loadingTip = tip;
@@ -1432,6 +1535,13 @@
 
       // Initial status fetch
       await this.getStatus();
+
+      // Silently check for panel updates so the indicator shows on load
+      HttpUtil.get('/panel/api/server/getPanelUpdateInfo').then(msg => {
+        if (msg && msg.success && msg.obj) {
+          panelUpdateModal.info = msg.obj;
+        }
+      });
 
       // Setup WebSocket for real-time updates
       if (window.wsClient) {

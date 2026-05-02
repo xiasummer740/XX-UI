@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/XiaSummer740/XX-UI/database/model"
 	"github.com/XiaSummer740/XX-UI/web/global"
 	"github.com/XiaSummer740/XX-UI/web/service"
 	"github.com/XiaSummer740/XX-UI/web/websocket"
@@ -64,6 +65,14 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.POST("/xraylogs/:count", a.getXrayLogs)
 	g.POST("/importDB", a.importDB)
 	g.POST("/getNewEchCert", a.getNewEchCert)
+
+	// Remote server management routes
+	g.GET("/remoteServers", a.getRemoteServers)
+	g.POST("/remoteServer/add", a.addRemoteServer)
+	g.POST("/remoteServer/update", a.updateRemoteServer)
+	g.POST("/remoteServer/delete/:id", a.deleteRemoteServer)
+	g.GET("/remoteServer/status/:id", a.getRemoteServerStatus)
+	g.GET("/remoteServer/inbounds/:id", a.getRemoteServerInbounds)
 }
 
 // refreshStatus updates the cached server status and collects CPU history.
@@ -391,4 +400,104 @@ func (a *ServerController) getNewmlkem768(c *gin.Context) {
 		return
 	}
 	jsonObj(c, out, nil)
+}
+
+// ==================== Remote Server Management Handlers ====================
+
+// getRemoteServers returns all remote servers.
+func (a *ServerController) getRemoteServers(c *gin.Context) {
+	servers, err := a.serverService.GetRemoteServers()
+	if err != nil {
+		jsonMsg(c, "Failed to get remote servers", err)
+		return
+	}
+	if servers == nil {
+		servers = []*model.RemoteServer{}
+	}
+	jsonObj(c, servers, nil)
+}
+
+// addRemoteServer creates a new remote server.
+func (a *ServerController) addRemoteServer(c *gin.Context) {
+	var server model.RemoteServer
+	if err := c.ShouldBindJSON(&server); err != nil {
+		jsonMsg(c, "Invalid request body", err)
+		return
+	}
+	if err := a.serverService.CreateRemoteServer(&server); err != nil {
+		jsonMsg(c, "Failed to add remote server", err)
+		return
+	}
+	jsonObj(c, server, nil)
+}
+
+// updateRemoteServer updates an existing remote server.
+func (a *ServerController) updateRemoteServer(c *gin.Context) {
+	var server model.RemoteServer
+	if err := c.ShouldBindJSON(&server); err != nil {
+		jsonMsg(c, "Invalid request body", err)
+		return
+	}
+	if err := a.serverService.UpdateRemoteServer(&server); err != nil {
+		jsonMsg(c, "Failed to update remote server", err)
+		return
+	}
+	jsonObj(c, server, nil)
+}
+
+// deleteRemoteServer deletes a remote server by ID.
+func (a *ServerController) deleteRemoteServer(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		jsonMsg(c, "Invalid server ID", err)
+		return
+	}
+	if err := a.serverService.DeleteRemoteServer(id); err != nil {
+		jsonMsg(c, "Failed to delete remote server", err)
+		return
+	}
+	jsonMsg(c, "Remote server deleted", nil)
+}
+
+// getRemoteServerStatus fetches status from a remote panel.
+func (a *ServerController) getRemoteServerStatus(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		jsonMsg(c, "Invalid server ID", err)
+		return
+	}
+	server, err := a.serverService.GetRemoteServerByID(id)
+	if err != nil {
+		jsonMsg(c, "Remote server not found", err)
+		return
+	}
+	status, err := a.serverService.GetRemotePanelStatus(server)
+	if err != nil {
+		jsonMsg(c, "Failed to get remote server status", err)
+		return
+	}
+	jsonObj(c, status, nil)
+}
+
+// getRemoteServerInbounds fetches inbounds from a remote panel.
+func (a *ServerController) getRemoteServerInbounds(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		jsonMsg(c, "Invalid server ID", err)
+		return
+	}
+	server, err := a.serverService.GetRemoteServerByID(id)
+	if err != nil {
+		jsonMsg(c, "Remote server not found", err)
+		return
+	}
+	inbounds, err := a.serverService.GetRemoteInbounds(server)
+	if err != nil {
+		jsonMsg(c, "Failed to get remote inbounds", err)
+		return
+	}
+	jsonObj(c, inbounds, nil)
 }
