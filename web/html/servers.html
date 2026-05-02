@@ -199,6 +199,8 @@
 </a-layout>
 
 {{template "page/body_scripts" .}}
+{{template "component/aSidebar" .}}
+{{template "component/aThemeSwitch" .}}
 <script>
     const BASE_PATH = '{{ .base_path }}';
     const API_BASE = BASE_PATH + 'panel/api/server';
