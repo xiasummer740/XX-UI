@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"runtime"
 	"sync"
 
@@ -225,32 +226,21 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 				Password string `json:"password,omitempty"`
 			}
 			if err := json.Unmarshal([]byte(inbound.ChainProxy), &cp); err == nil && cp.Address != "" && cp.Port > 0 {
-				// Build a dynamic outbound for the chain proxy
-				outboundTag := "chain_proxy_out"
+				// Build a dynamic outbound for the chain proxy with a unique tag per inbound.
+				// Each inbound gets its own outbound so different inbounds can use different destinations.
+				outboundTag := fmt.Sprintf("chain_proxy_out_%d", inbound.Id)
 				outbound := buildChainProxyOutbound(cp, outboundTag)
 
 				// Append outbound to xrayConfig.OutboundConfigs
 				var outbounds []any
 				if err := json.Unmarshal([]byte(xrayConfig.OutboundConfigs), &outbounds); err == nil {
-					// Avoid duplicate chain_proxy_out entries when multiple inbounds share the proxy
-					hasChainOut := false
-					for _, ob := range outbounds {
-						if obMap, ok := ob.(map[string]any); ok {
-							if tag, _ := obMap["tag"].(string); tag == outboundTag {
-								hasChainOut = true
-								break
-							}
-						}
-					}
-					if !hasChainOut {
-						outbounds = append(outbounds, outbound)
-						if newOutbounds, err := json.Marshal(outbounds); err == nil {
-							xrayConfig.OutboundConfigs = json_util.RawMessage(string(newOutbounds))
-						}
+					outbounds = append(outbounds, outbound)
+					if newOutbounds, err := json.Marshal(outbounds); err == nil {
+						xrayConfig.OutboundConfigs = json_util.RawMessage(string(newOutbounds))
 					}
 				}
 
-				// Add a routing rule: traffic from this inbound → chain_proxy_out
+				// Add a routing rule: traffic from this inbound → chain_proxy_out_{id}
 				var routing map[string]any
 				if err := json.Unmarshal([]byte(xrayConfig.RouterConfig), &routing); err == nil {
 					rules, _ := routing["rules"].([]any)
