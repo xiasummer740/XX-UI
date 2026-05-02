@@ -206,9 +206,10 @@
 
     new Vue({
         el: '#app',
-        mixins: [themeSwitcher, MediaQueryMixin],
+        mixins: [MediaQueryMixin],
         data() {
             return {
+                themeSwitcher,
                 loading: false,
                 normalServers: [],
                 transitServers: [],
