@@ -456,12 +456,35 @@ func (s *Server) Start() (err error) {
 	if err != nil {
 		return err
 	}
+	// Security: If no certificate is configured, force listen address to localhost
+	// to prevent the panel from being exposed on the public network without encryption.
+	if certFile == "" || keyFile == "" {
+		logger.Info("No certificate configured. Forcing listen address to localhost for security.")
+		logger.Info("Access is only possible via SSH tunnel (e.g., http://127.0.0.1).")
+		listen = fallbackToLocalhost(listen)
+	}
 	listenAddr := net.JoinHostPort(listen, strconv.Itoa(port))
-	listener, err := net.Listen("tcp", listenAddr)
+
+	baseListener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		return err
 	}
-	if certFile != "" || keyFile != "" {
+
+	// Wrap listener with TCP Keep-Alive support (5 second period)
+	tcpListener, ok := baseListener.(*net.TCPListener)
+	var listener net.Listener
+	if !ok {
+		logger.Warning("Listener is not a TCPListener, cannot set Keep-Alive.")
+		listener = baseListener
+	} else {
+		kaListener := &keepAliveListener{
+			TCPListener:     tcpListener,
+			KeepAlivePeriod: 5 * time.Second,
+		}
+		listener = net.Listener(kaListener)
+	}
+
+	if certFile != "" && keyFile != "" {
 		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 		if err == nil {
 			c := &tls.Config{
@@ -480,7 +503,9 @@ func (s *Server) Start() (err error) {
 	s.listener = listener
 
 	s.httpServer = &http.Server{
-		Handler: engine,
+		Handler:      engine,
+		ReadTimeout:  120 * time.Second,
+		WriteTimeout: 120 * time.Second,
 	}
 
 	go func() {
@@ -540,4 +565,33 @@ func (s *Server) GetWSHub() any {
 
 func (s *Server) RestartXray() error {
 	return s.xrayService.RestartXray(true)
+}
+
+// keepAliveListener wraps a TCPListener to set TCP Keep-Alive on accepted connections.
+type keepAliveListener struct {
+	*net.TCPListener
+	KeepAlivePeriod time.Duration
+}
+
+func (l *keepAliveListener) Accept() (net.Conn, error) {
+	tc, err := l.TCPListener.AcceptTCP()
+	if err != nil {
+		return nil, err
+	}
+	tc.SetKeepAlive(true)
+	tc.SetKeepAlivePeriod(l.KeepAlivePeriod)
+	return tc, nil
+}
+
+// fallbackToLocalhost forces the listen address to localhost when no certificate is configured.
+// This prevents the panel from being exposed on the public network without encryption.
+func fallbackToLocalhost(listen string) string {
+	if listen == "0.0.0.0" || listen == "" || strings.HasPrefix(listen, "0.0.0.0:") {
+		return "127.0.0.1"
+	}
+	// If it's an IPv6 all-interfaces address
+	if listen == "::" || listen == "[::]" {
+		return "127.0.0.1"
+	}
+	return listen
 }
