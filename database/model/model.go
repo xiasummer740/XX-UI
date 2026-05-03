@@ -170,13 +170,13 @@ type Client struct {
 // RemoteServer represents a remote panel server for multi-server management.
 // Type 0 = 被控端 VPS (remote panel), Type 1 = 中转机 VPS (relay/transit node).
 type RemoteServer struct {
-	Id        int       `json:"id" gorm:"primaryKey;autoIncrement"`
-	Name      string    `json:"name"`     // Display name / remark
-	URL       string    `json:"url"`      // Panel URL (e.g., http://ip:port)
-	Username  string    `json:"username"` // Login username
-	Password  string    `json:"password"` // Login password
-	Type      int       `json:"type"`     // 0 = controlled VPS, 1 = transit VPS
-	LastLink  string    `json:"lastLink"` // Last deployment link for transit VPS
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	Id        int       `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
+	Name      string    `json:"name" form:"name"`         // Display name / remark
+	URL       string    `json:"url" form:"url"`           // Panel URL (e.g., http://ip:port)
+	Username  string    `json:"username" form:"username"` // Login username
+	Password  string    `json:"password" form:"password"` // Login password
+	Type      int       `json:"type" form:"type"`         // 0 = controlled VPS, 1 = transit VPS
+	LastLink  string    `json:"lastLink" form:"lastLink"` // Last deployment link for transit VPS
+	CreatedAt time.Time `json:"createdAt" form:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt" form:"updatedAt"`
 }
