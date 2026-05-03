@@ -530,6 +530,17 @@
                         </svg>
                       </a-tag>
                     </template>
+                    <template slot="chainProxyStatus" slot-scope="text, dbInbound">
+                      <template v-if="dbInbound.chainProxy && dbInbound.chainProxy !== '{}' && dbInbound.chainProxy !== ''">
+                        <a-tag :color="dbInbound.enableChainProxy ? 'green' : 'orange'" :style="{ margin: '0', fontSize: '10px', lineHeight: '14px', padding: '0 4px' }">
+                          <a-icon type="share-alt"></a-icon>
+                          [[ dbInbound.enableChainProxy ? '已启用' : '已禁用' ]]
+                        </a-tag>
+                      </template>
+                      <template v-else>
+                        <a-tag :style="{ margin: '0', fontSize: '10px', lineHeight: '14px', padding: '0 4px', color: '#999' }">未配置</a-tag>
+                      </template>
+                    </template>
                     <template slot="ping" slot-scope="text, dbInbound">
                       <a-tooltip>
                         <template slot="title">
@@ -1241,6 +1252,11 @@
     width: 40,
     scopedSlots: { customRender: 'expiryTime' },
   }, {
+    title: '链式代理',
+    align: 'center',
+    width: 40,
+    scopedSlots: { customRender: 'chainProxyStatus' },
+  }, {
     title: '{{ i18n "pages.inbounds.ping" }}',
     align: 'center',
     width: 35,
@@ -1285,7 +1301,6 @@
         customRender: (text) => (text > 0 ? `${text} KB/s` : '不限速'),
     },
     { title: '{{ i18n "pages.inbounds.expireDate" }}', width: 80, align: 'center', scopedSlots: { customRender: 'expiryTime' } },
-    { title: '链式代理', width: 50, align: 'center', scopedSlots: { customRender: 'chainProxyStatus' } },
   ];
 
   const innerMobileColumns = [
@@ -1336,6 +1351,7 @@
       webDomain: '',
       pageSize: 0,
       pingStatus: {},
+      pingTimer: null,
       allSetting: {},
       chainProxyModal: {
         visible: false,
@@ -1404,6 +1420,16 @@
             error: err.message || 'Request failed',
           });
         }
+      },
+      autoCheckAllPorts() {
+        if (!this.dbInbounds || this.dbInbounds.length === 0) return;
+        const inbounds = this.dbInbounds;
+        // Check all inbounds concurrently
+        inbounds.forEach(dbInbound => {
+          if (dbInbound && dbInbound.id && dbInbound.port) {
+            this.checkPort(dbInbound.id, dbInbound.port, dbInbound.listen);
+          }
+        });
       },
       loading(spinning = true) {
         this.loadingStates.spinning = spinning;
@@ -2892,7 +2918,18 @@
       // Initial data fetch
       this.getDBInbounds().then(() => {
         this.loading(false);
+        // Auto-check port connectivity for all inbounds after data is loaded
+        this.$nextTick(() => {
+          this.autoCheckAllPorts();
+        });
       });
+
+      // Auto-refresh ping status every 60 seconds
+      this.pingTimer = setInterval(() => {
+        if (this.dbInbounds && this.dbInbounds.length > 0) {
+          this.autoCheckAllPorts();
+        }
+      }, 60000);
 
       // Setup WebSocket for real-time updates
       if (window.wsClient) {
@@ -2987,6 +3024,12 @@
         if (this.isRefreshEnabled) {
           this.startDataRefreshLoop();
         }
+      }
+    },
+    beforeDestroy() {
+      if (this.pingTimer) {
+        clearInterval(this.pingTimer);
+        this.pingTimer = null;
       }
     },
     computed: {

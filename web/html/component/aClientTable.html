@@ -271,15 +271,4 @@
     -
   </template>
 </template>
-<template slot="chainProxyStatus" slot-scope="text, client, index">
-  <template v-if="record.chainProxy && record.chainProxy !== '{}' && record.chainProxy !== ''">
-    <a-tag :color="record.enableChainProxy ? 'green' : 'orange'" :style="{ margin: '0', fontSize: '10px', lineHeight: '14px', padding: '0 4px' }">
-      <a-icon type="share-alt"></a-icon>
-      [[ record.enableChainProxy ? '已启用' : '已禁用' ]]
-    </a-tag>
-  </template>
-  <template v-else>
-    <a-tag :style="{ margin: '0', fontSize: '10px', lineHeight: '14px', padding: '0 4px', color: '#999' }">未配置</a-tag>
-  </template>
-</template>
 {{end}}
