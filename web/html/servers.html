@@ -71,6 +71,7 @@
     <template slot="action" slot-scope="text, record">
         <a-space>
             <a-button type="primary" size="small" icon="search" @click="checkServerStatus(record)">查看状态</a-button>
+            <a-button type="default" size="small" icon="link" @click="openRemotePanel(record)">打开面板</a-button>
             <a-button type="danger" size="small" icon="delete" @click="deleteServer(record)">删除</a-button>
         </a-space>
     </template>
@@ -115,6 +116,8 @@
                 <a-button type="primary" size="small" icon="cloud-upload" @click="setupRelay(record)" :loading="record.setupLoading">
                     一键部署中转
                 </a-button>
+                
+                <a-button type="default" size="small" icon="link" @click="openRemotePanel(record)">打开面板</a-button>
                 
                 <a-button type="danger" size="small" icon="delete" @click="deleteServer(record)">删除</a-button>
             </a-space>
@@ -584,6 +587,14 @@
                 document.execCommand('Copy');
                 document.body.removeChild(input);
                 this.$message.success('复制成功');
+            },
+
+            openRemotePanel(record) {
+                if (!record.url) {
+                    this.$message.warning('面板地址为空');
+                    return;
+                }
+                window.open(record.url, '_blank');
             },
         },
         mounted() {
