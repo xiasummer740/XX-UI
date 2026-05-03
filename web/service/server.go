@@ -1371,9 +1371,7 @@ func (s *ServerService) LoginToRemotePanel(server *model.RemoteServer) (string, 
 	// Users may enter the panel page URL (e.g., https://host:port/basepath/panel/)
 	// but the login API is at basepath/login (not basepath/panel/login).
 	baseURL := strings.TrimRight(server.URL, "/")
-	if strings.HasSuffix(baseURL, "/panel") {
-		baseURL = strings.TrimSuffix(baseURL, "/panel")
-	}
+	baseURL = strings.TrimSuffix(baseURL, "/panel")
 	loginURL := baseURL + "/login"
 
 	payload := map[string]string{
@@ -1412,9 +1410,7 @@ func (s *ServerService) GetRemotePanelStatus(server *model.RemoteServer) (map[st
 
 	// Normalize the URL the same way as LoginToRemotePanel
 	baseURL := strings.TrimRight(server.URL, "/")
-	if strings.HasSuffix(baseURL, "/panel") {
-		baseURL = strings.TrimSuffix(baseURL, "/panel")
-	}
+	baseURL = strings.TrimSuffix(baseURL, "/panel")
 	statusURL := baseURL + "/panel/api/server/status"
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -1445,9 +1441,7 @@ func (s *ServerService) GetRemoteInbounds(server *model.RemoteServer) ([]map[str
 
 	// Normalize the URL the same way as LoginToRemotePanel
 	baseURL := strings.TrimRight(server.URL, "/")
-	if strings.HasSuffix(baseURL, "/panel") {
-		baseURL = strings.TrimSuffix(baseURL, "/panel")
-	}
+	baseURL = strings.TrimSuffix(baseURL, "/panel")
 	listURL := baseURL + "/panel/api/inbounds/list"
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, _ := http.NewRequest("GET", listURL, nil)
