@@ -420,7 +420,10 @@ func (a *ServerController) getRemoteServers(c *gin.Context) {
 // addRemoteServer creates a new remote server.
 func (a *ServerController) addRemoteServer(c *gin.Context) {
 	var server model.RemoteServer
-	if err := c.ShouldBindJSON(&server); err != nil {
+	// Use ShouldBind instead of ShouldBindJSON to support both JSON and form-encoded data.
+	// The global axios config (axios-init.js) sets Content-Type to application/x-www-form-urlencoded
+	// and serializes all POST data with Qs.stringify, so the request body is form-encoded.
+	if err := c.ShouldBind(&server); err != nil {
 		jsonMsg(c, "Invalid request body", err)
 		return
 	}
@@ -434,7 +437,8 @@ func (a *ServerController) addRemoteServer(c *gin.Context) {
 // updateRemoteServer updates an existing remote server.
 func (a *ServerController) updateRemoteServer(c *gin.Context) {
 	var server model.RemoteServer
-	if err := c.ShouldBindJSON(&server); err != nil {
+	// Use ShouldBind instead of ShouldBindJSON to support both JSON and form-encoded data.
+	if err := c.ShouldBind(&server); err != nil {
 		jsonMsg(c, "Invalid request body", err)
 		return
 	}
