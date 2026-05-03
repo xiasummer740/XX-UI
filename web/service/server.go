@@ -1367,7 +1367,15 @@ func (s *ServerService) DeleteRemoteServer(id int) error {
 
 // LoginToRemotePanel logs into a remote panel and returns the session cookie.
 func (s *ServerService) LoginToRemotePanel(server *model.RemoteServer) (string, error) {
-	loginURL := server.URL + "/login"
+	// Normalize the URL: remove trailing slash and /panel suffix if present.
+	// Users may enter the panel page URL (e.g., https://host:port/basepath/panel/)
+	// but the login API is at basepath/login (not basepath/panel/login).
+	baseURL := strings.TrimRight(server.URL, "/")
+	if strings.HasSuffix(baseURL, "/panel") {
+		baseURL = strings.TrimSuffix(baseURL, "/panel")
+	}
+	loginURL := baseURL + "/login"
+
 	payload := map[string]string{
 		"username": server.Username,
 		"password": server.Password,
@@ -1402,7 +1410,13 @@ func (s *ServerService) GetRemotePanelStatus(server *model.RemoteServer) (map[st
 		return nil, err
 	}
 
-	statusURL := server.URL + "/panel/api/server/status"
+	// Normalize the URL the same way as LoginToRemotePanel
+	baseURL := strings.TrimRight(server.URL, "/")
+	if strings.HasSuffix(baseURL, "/panel") {
+		baseURL = strings.TrimSuffix(baseURL, "/panel")
+	}
+	statusURL := baseURL + "/panel/api/server/status"
+
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, _ := http.NewRequest("GET", statusURL, nil)
 	req.Header.Set("Cookie", "session="+sessionCookie)
@@ -1429,7 +1443,12 @@ func (s *ServerService) GetRemoteInbounds(server *model.RemoteServer) ([]map[str
 		return nil, err
 	}
 
-	listURL := server.URL + "/panel/api/inbounds/list"
+	// Normalize the URL the same way as LoginToRemotePanel
+	baseURL := strings.TrimRight(server.URL, "/")
+	if strings.HasSuffix(baseURL, "/panel") {
+		baseURL = strings.TrimSuffix(baseURL, "/panel")
+	}
+	listURL := baseURL + "/panel/api/inbounds/list"
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, _ := http.NewRequest("GET", listURL, nil)
 	req.Header.Set("Cookie", "session="+sessionCookie)
