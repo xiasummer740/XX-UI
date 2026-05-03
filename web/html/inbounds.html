@@ -799,42 +799,44 @@
                                 <a-tag v-else :style="{ margin: '0' }" color="default">未配置</a-tag>
                               </td>
                             </tr>
-                          </table>
-                          <!-- SOCKS 协议详细信息 -->
-                          <table v-if="dbInbound.isSocks" class="tr-info-table" style="margin-top: 10px; width: 100%;">
-                            <tr>
-                              <th style="padding: 2px 8px; text-align: left; background: #f5f5f5;">Auth</th>
-                              <th style="padding: 2px 8px; text-align: left; background: #f5f5f5;">启用 UDP</th>
-                              <th style="padding: 2px 8px; text-align: left; background: #f5f5f5;">IP</th>
-                            </tr>
-                            <tr>
-                              <td style="padding: 2px 8px;">
-                                <a-tag color="green">[[ dbInbound.toInbound().settings.auth ]]</a-tag>
-                              </td>
-                              <td style="padding: 2px 8px;">
-                                <a-tag color="green">[[ dbInbound.toInbound().settings.udp ]]</a-tag>
-                              </td>
-                              <td style="padding: 2px 8px;">
-                                <a-tag color="green">[[ dbInbound.toInbound().settings.ip ]]</a-tag>
-                              </td>
-                            </tr>
-                            <template v-if="dbInbound.toInbound().settings.auth == 'password'">
+                            <!-- SOCKS 协议详细信息 -->
+                            <template v-if="dbInbound.isSocks">
                               <tr>
-                                <td style="padding: 2px 8px;"></td>
-                                <td style="padding: 2px 8px;">用户名</td>
-                                <td style="padding: 2px 8px;">密码</td>
+                                <td colspan="2" style="padding: 8px 8px 2px 8px; font-weight: bold; border-bottom: 1px solid #e8e8e8;">SOCKS 详细信息</td>
                               </tr>
-                              <tr v-for="(account, index) in dbInbound.toInbound().settings.accounts">
-                                <td style="padding: 2px 8px;">[[ index ]]</td>
+                              <tr>
+                                <td style="padding: 2px 8px;">Auth</td>
                                 <td style="padding: 2px 8px;">
-                                  <a-tag color="green">[[ account.user ]]</a-tag>
-                                </td>
-                                <td style="padding: 2px 8px;">
-                                  <a-tag color="green">[[ account.pass ]]</a-tag>
+                                  <a-tag color="green">[[ dbInbound.toInbound().settings.auth ]]</a-tag>
                                 </td>
                               </tr>
+                              <tr>
+                                <td style="padding: 2px 8px;">启用 UDP</td>
+                                <td style="padding: 2px 8px;">
+                                  <a-tag color="green">[[ dbInbound.toInbound().settings.udp ]]</a-tag>
+                                </td>
+                              </tr>
+                              <tr>
+                                <td style="padding: 2px 8px;">IP</td>
+                                <td style="padding: 2px 8px;">
+                                  <a-tag color="green">[[ dbInbound.toInbound().settings.ip ]]</a-tag>
+                                </td>
+                              </tr>
+                              <template v-if="dbInbound.toInbound().settings.auth == 'password'">
+                                <tr>
+                                  <td style="padding: 2px 8px;">用户名</td>
+                                  <td style="padding: 2px 8px;">密码</td>
+                                </tr>
+                                <tr v-for="(account, index) in dbInbound.toInbound().settings.accounts">
+                                  <td style="padding: 2px 8px;">
+                                    <a-tag color="green">[[ account.user ]]</a-tag>
+                                  </td>
+                                  <td style="padding: 2px 8px;">
+                                    <a-tag color="green">[[ account.pass ]]</a-tag>
+                                  </td>
+                                </tr>
+                              </template>
                             </template>
-                          </table>
                         </template>
                         <a-badge>
                           <a-icon v-if="!dbInbound.enable" slot="count"
