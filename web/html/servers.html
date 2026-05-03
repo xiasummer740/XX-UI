@@ -366,22 +366,23 @@
                 this.transitCurrentPage = pagination.current;
             },
 
-            getServers() {
+            async getServers() {
                 this.loading = true;
-                axios.get(API_BASE + '/remoteServers').then(res => {
-                    if (res.data.success) {
-                        const servers = res.data.obj || [];
+                try {
+                    const msg = await HttpUtil.get(API_BASE + '/remoteServers');
+                    if (msg.success) {
+                        const servers = msg.obj || [];
                         this.servers = servers;
                         this.normalCount = this.normalServers.length;
                         this.transitCount = this.transitServers.length;
                     } else {
-                        this.$message.error(res.data.msg || '加载服务器列表失败');
+                        this.$message.error(msg.msg || '加载服务器列表失败');
                     }
-                }).catch(err => {
+                } catch (err) {
                     this.$message.error('加载服务器列表失败: ' + (err.message || ''));
-                }).finally(() => {
+                } finally {
                     this.loading = false;
-                });
+                }
             },
 
             openAddModal(type = 0) {
@@ -396,7 +397,7 @@
                 this.visible = true;
             },
 
-            submitServer() {
+            async submitServer() {
                 const form = this.form;
                 if (!form.name || !form.url || !form.username || !form.password) {
                     this.$message.warning('请填写所有必填字段');
@@ -410,19 +411,20 @@
                     password: form.password,
                     type: this.formType,
                 };
-                axios.post(API_BASE + '/remoteServer/add', payload).then(res => {
-                    if (res.data.success) {
+                try {
+                    const msg = await HttpUtil.post(API_BASE + '/remoteServer/add', payload);
+                    if (msg.success) {
                         this.$message.success('服务器添加成功');
                         this.visible = false;
                         this.getServers();
                     } else {
-                        this.$message.error(res.data.msg || '添加服务器失败');
+                        this.$message.error(msg.msg || '添加服务器失败');
                     }
-                }).catch(err => {
+                } catch (err) {
                     this.$message.error('添加服务器失败: ' + (err.message || ''));
-                }).finally(() => {
+                } finally {
                     this.modalLoading = false;
-                });
+                }
             },
 
             deleteServer(record) {
@@ -433,23 +435,24 @@
                     okText: '确定',
                     cancelText: '取消',
                     okType: 'danger',
-                    onOk() {
+                    onOk: async () => {
                         const id = record.ID || record.id;
-                        return axios.post(API_BASE + '/remoteServer/delete/' + id).then(res => {
-                            if (res.data.success) {
+                        try {
+                            const msg = await HttpUtil.post(API_BASE + '/remoteServer/delete/' + id);
+                            if (msg.success) {
                                 self.$message.success('服务器删除成功');
                                 self.getServers();
                             } else {
-                                self.$message.error(res.data.msg || '删除服务器失败');
+                                self.$message.error(msg.msg || '删除服务器失败');
                             }
-                        }).catch(err => {
+                        } catch (err) {
                             self.$message.error('删除服务器失败: ' + (err.message || ''));
-                        });
+                        }
                     }
                 });
             },
 
-            checkServerStatus(record) {
+            async checkServerStatus(record) {
                 this.statusModal.visible = true;
                 this.statusModal.loading = true;
                 this.statusModal.data = {
@@ -461,9 +464,10 @@
                     xray: '...',
                 };
                 const id = record.ID || record.id;
-                axios.get(API_BASE + '/remoteServer/status/' + id).then(res => {
-                    if (res.data.success) {
-                        const obj = res.data.obj || {};
+                try {
+                    const msg = await HttpUtil.get(API_BASE + '/remoteServer/status/' + id);
+                    if (msg.success) {
+                        const obj = msg.obj || {};
                         this.statusModal.data.cpu = obj.cpu != null ? obj.cpu + '%' : 'N/A';
                         this.statusModal.data.mem = obj.mem != null ? obj.mem + '%' : 'N/A';
                         this.statusModal.data.uptime = obj.uptime || 'N/A';
@@ -473,17 +477,17 @@
                         this.statusModal.data.mem = 'Error';
                         this.statusModal.data.uptime = 'Error';
                         this.statusModal.data.xray = 'Error';
-                        this.$message.error(res.data.msg || '获取服务器状态失败');
+                        this.$message.error(msg.msg || '获取服务器状态失败');
                     }
-                }).catch(err => {
+                } catch (err) {
                     this.statusModal.data.cpu = 'Error';
                     this.statusModal.data.mem = 'Error';
                     this.statusModal.data.uptime = 'Error';
                     this.statusModal.data.xray = 'Error';
                     this.$message.error('获取服务器状态失败: ' + (err.message || ''));
-                }).finally(() => {
+                } finally {
                     this.statusModal.loading = false;
-                });
+                }
             },
 
             getLastLink(record) {
@@ -519,20 +523,21 @@
                 this.checkModalVisible = true;
             },
 
-            performPing(record) {
+            async performPing(record) {
                 record.pingLoading = true;
                 const id = record.ID || record.id;
-                axios.get(API_BASE + '/remoteServer/ping/' + id).then(res => {
-                    if (res.data.success) {
-                        record.pingResult = res.data.obj && res.data.obj.latency ? res.data.obj.latency : -1;
+                try {
+                    const msg = await HttpUtil.get(API_BASE + '/remoteServer/ping/' + id);
+                    if (msg.success) {
+                        record.pingResult = msg.obj && msg.obj.latency ? msg.obj.latency : -1;
                     } else {
                         record.pingResult = -1;
                     }
-                }).catch(() => {
+                } catch (err) {
                     record.pingResult = -1;
-                }).finally(() => {
+                } finally {
                     record.pingLoading = false;
-                });
+                }
             },
 
             generateQRCode(text) {
