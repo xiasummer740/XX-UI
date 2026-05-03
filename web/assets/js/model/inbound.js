@@ -2045,7 +2045,7 @@ Inbound.Settings = class extends XrayCommonClass {
             case Protocols.SHADOWSOCKS: return new Inbound.ShadowsocksSettings(protocol);
             case Protocols.TUNNEL: return new Inbound.TunnelSettings(protocol);
             case Protocols.MIXED: return new Inbound.MixedSettings(protocol);
-            case Protocols.SOCKS: return new Inbound.SocksSettings();
+            case Protocols.SOCKS: return new Inbound.SocksSettings(protocol);
             case Protocols.HTTP: return new Inbound.HttpSettings(protocol);
             case Protocols.WIREGUARD: return new Inbound.WireguardSettings(protocol);
             case Protocols.TUN: return new Inbound.TunSettings(protocol);
@@ -2724,11 +2724,12 @@ Inbound.HttpSettings.HttpAccount = class extends XrayCommonClass {
 };
 
 Inbound.SocksSettings = class extends Inbound.Settings {
-    constructor(udp = false, auth = 'noauth', accounts = []) {
-        super();
-        this.udp = udp;
+    constructor(protocol, auth = 'password', accounts = [new Inbound.SocksSettings.SocksAccount()], udp = false, ip = '127.0.0.1') {
+        super(protocol);
         this.auth = auth;
         this.accounts = accounts;
+        this.udp = udp;
+        this.ip = ip;
     }
 
     addAccount(account) {
@@ -2740,26 +2741,47 @@ Inbound.SocksSettings = class extends Inbound.Settings {
     }
 
     static fromJson(json = {}) {
+        let accounts;
+        if (json.auth === 'password') {
+            accounts = json.accounts.map(
+                account => Inbound.SocksSettings.SocksAccount.fromJson(account)
+            )
+        }
         return new Inbound.SocksSettings(
-            json.udp || false,
-            json.auth || 'noauth',
-            (json.accounts || []).map(a => new Inbound.SocksSettings.SocksAccount(a.user, a.pass)),
+            Protocols.SOCKS,
+            json.auth,
+            accounts,
+            json.udp,
+            json.ip,
         );
     }
 
     toJson() {
         return {
-            udp: this.udp,
             auth: this.auth,
-            accounts: this.auth === 'password' ? this.accounts.map(a => ({ user: a.user, pass: a.pass })) : undefined,
+            accounts: this.auth === 'password' ? this.accounts.map(account => account.toJson()) : undefined,
+            udp: this.udp,
+            ip: this.ip,
         };
     }
 };
 
-Inbound.SocksSettings.SocksAccount = class {
-    constructor(user = '', pass = '') {
+Inbound.SocksSettings.SocksAccount = class extends XrayCommonClass {
+    constructor(user = RandomUtil.randomSeq(10), pass = RandomUtil.randomSeq(10)) {
+        super();
         this.user = user;
         this.pass = pass;
+    }
+
+    static fromJson(json = {}) {
+        return new Inbound.SocksSettings.SocksAccount(json.user, json.pass);
+    }
+
+    toJson() {
+        return {
+            user: this.user,
+            pass: this.pass,
+        };
     }
 };
 
