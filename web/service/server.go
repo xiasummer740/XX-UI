@@ -1391,9 +1391,11 @@ func (s *ServerService) LoginToRemotePanel(server *model.RemoteServer) (string, 
 		return "", fmt.Errorf("remote panel login failed with status: %d", resp.StatusCode)
 	}
 
-	// Extract session cookie
+	// Extract session cookie.
+	// The remote panel (XX-UI / 3x-ui) uses sessions.Sessions("3x-ui", store) which
+	// sets the cookie name to "3x-ui". Also check for common cookie names.
 	for _, cookie := range resp.Cookies() {
-		if cookie.Name == "session" || strings.Contains(cookie.Name, "session") {
+		if cookie.Name == "session" || cookie.Name == "3x-ui" || strings.Contains(cookie.Name, "session") {
 			return cookie.Value, nil
 		}
 	}
@@ -1415,7 +1417,8 @@ func (s *ServerService) GetRemotePanelStatus(server *model.RemoteServer) (map[st
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, _ := http.NewRequest("GET", statusURL, nil)
-	req.Header.Set("Cookie", "session="+sessionCookie)
+	// The remote panel uses "3x-ui" as the session cookie name (set by sessions.Sessions("3x-ui", store))
+	req.Header.Set("Cookie", "3x-ui="+sessionCookie)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -1445,7 +1448,8 @@ func (s *ServerService) GetRemoteInbounds(server *model.RemoteServer) ([]map[str
 	listURL := baseURL + "/panel/api/inbounds/list"
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, _ := http.NewRequest("GET", listURL, nil)
-	req.Header.Set("Cookie", "session="+sessionCookie)
+	// The remote panel uses "3x-ui" as the session cookie name (set by sessions.Sessions("3x-ui", store))
+	req.Header.Set("Cookie", "3x-ui="+sessionCookie)
 
 	resp, err := client.Do(req)
 	if err != nil {
