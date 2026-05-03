@@ -437,6 +437,40 @@
           </tr>
         </template>
       </table>
+      <table v-if="dbInbound.isSocks" class="tr-info-table">
+        <tr>
+          <th>{{ i18n "password" }} Auth</th>
+          <th>{{ i18n "pages.inbounds.enable" }} udp</th>
+          <th>IP</th>
+        </tr>
+        <tr>
+          <td>
+            <a-tag color="green">[[ inbound.settings.auth ]]</a-tag>
+          </td>
+          <td>
+            <a-tag color="green">[[ inbound.settings.udp]]</a-tag>
+          </td>
+          <td>
+            <a-tag color="green">[[ inbound.settings.ip ]]</a-tag>
+          </td>
+        </tr>
+        <template v-if="inbound.settings.auth == 'password'">
+          <tr>
+            <td></td>
+            <td>{{ i18n "username" }}</td>
+            <td>{{ i18n "password" }}</td>
+          </tr>
+          <tr v-for="account,index in inbound.settings.accounts">
+            <td>[[ index ]]</td>
+            <td>
+              <a-tag color="green">[[ account.user ]]</a-tag>
+            </td>
+            <td>
+              <a-tag color="green">[[ account.pass ]]</a-tag>
+            </td>
+          </tr>
+        </template>
+      </table>
       <table v-if="dbInbound.isHTTP" class="tr-info-table">
         <tr>
           <th></th>
