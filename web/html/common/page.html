@@ -9,6 +9,46 @@
   <link rel="stylesheet" href="{{ .base_path }}assets/ant-design-vue/antd.min.css">
   <link rel="stylesheet" href="{{ .base_path }}assets/css/custom.min.css?{{ .cur_ver }}">
   <style>
+    /* ===== CSS CUSTOM PROPERTIES (Gradient Presets) ===== */
+    :root {
+      --xx-grad-colors: #ff6b9d, #a855f7, #3b82f6, #14b8a6, #f97316, #ec4899, #8b5cf6;
+      --xx-grad-angle: 135deg;
+      --xx-grad-size: 800%;
+      --xx-grad-duration: 10s;
+      --xx-glow-color: rgba(168, 85, 247, 0.15);
+      --xx-glow-border: rgba(168, 85, 247, 0.25);
+    }
+    /* Preset: Aurora (极光) — default */
+    html[data-grad="aurora"] {
+      --xx-grad-colors: #ff6b9d, #a855f7, #3b82f6, #14b8a6, #f97316, #ec4899, #8b5cf6;
+      --xx-glow-color: rgba(168, 85, 247, 0.15);
+      --xx-glow-border: rgba(168, 85, 247, 0.25);
+    }
+    /* Preset: Cyber (赛博) */
+    html[data-grad="cyber"] {
+      --xx-grad-colors: #0f0c29, #302b63, #24243e, #4a00e0, #8e2de2, #e94057, #f27121;
+      --xx-glow-color: rgba(142, 45, 226, 0.15);
+      --xx-glow-border: rgba(142, 45, 226, 0.25);
+    }
+    /* Preset: Neon (霓虹) */
+    html[data-grad="neon"] {
+      --xx-grad-colors: #00f260, #0575e6, #7f00ff, #e100ff, #00f260, #0575e6, #7f00ff;
+      --xx-glow-color: rgba(0, 242, 96, 0.12);
+      --xx-glow-border: rgba(0, 242, 96, 0.22);
+    }
+    /* Preset: Sunset (日落) */
+    html[data-grad="sunset"] {
+      --xx-grad-colors: #ff512f, #dd2476, #ff6b6b, #f093fb, #f5576c, #ff512f, #dd2476;
+      --xx-glow-color: rgba(221, 36, 118, 0.15);
+      --xx-glow-border: rgba(221, 36, 118, 0.25);
+    }
+    /* Preset: Ocean (海洋) */
+    html[data-grad="ocean"] {
+      --xx-grad-colors: #2193b0, #6dd5ed, #00b4db, #0083b0, #2193b0, #6dd5ed, #00b4db;
+      --xx-glow-color: rgba(0, 180, 219, 0.12);
+      --xx-glow-border: rgba(0, 180, 219, 0.22);
+    }
+
     /* ===== VIBRANT FLOWING GRADIENT ===== */
     @keyframes flowGradient {
       0% { background-position: 0% 50%; }
@@ -39,10 +79,10 @@
     }
     /* ===== SITE-WIDE VIBRANT FLOWING GRADIENT ===== */
     html {
-      background: linear-gradient(135deg, #ff6b9d, #a855f7, #3b82f6, #14b8a6, #f97316, #ec4899, #8b5cf6) !important;
-      background-size: 800% 800% !important;
+      background: linear-gradient(var(--xx-grad-angle), var(--xx-grad-colors)) !important;
+      background-size: var(--xx-grad-size) var(--xx-grad-size) !important;
       background-attachment: fixed !important;
-      animation: pageFlowGradient 10s ease infinite !important;
+      animation: pageFlowGradient var(--xx-grad-duration) ease infinite !important;
       min-height: 100%;
     }
     body {
@@ -76,6 +116,32 @@
     @keyframes pulseGlow {
       0%   { opacity: 0.4; transform: scale(1); }
       100% { opacity: 0.8; transform: scale(1.1); }
+    }
+
+    /* ===== XX-UI CUSTOM LOADING SPINNER ===== */
+    @keyframes xxSpin {
+      0%   { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    @keyframes xxSpinDash {
+      0%   { stroke-dashoffset: 126; }
+      50%  { stroke-dashoffset: 40; }
+      100% { stroke-dashoffset: 126; }
+    }
+    .xx-ui-spinner {
+      display: inline-block;
+      width: 40px;
+      height: 40px;
+      animation: xxSpin 1.2s linear infinite;
+    }
+    .xx-ui-spinner-circle {
+      fill: none;
+      stroke: url(#logoGrad);
+      stroke-width: 4;
+      stroke-linecap: round;
+      stroke-dasharray: 126;
+      stroke-dashoffset: 126;
+      animation: xxSpinDash 1.5s ease-in-out infinite;
     }
 
     /* ===== LIGHT THEME: transparent layout backgrounds (all pages) ===== */
@@ -118,10 +184,13 @@
       -webkit-backdrop-filter: blur(20px) !important;
       border: 1px solid rgba(255, 255, 255, 0.50) !important;
       box-shadow: 0 4px 24px rgba(120, 140, 220, 0.12) !important;
+      transition: all 0.3s ease !important;
     }
     .light #content-layout .ant-card:hover {
       background: rgba(255, 255, 255, 0.42) !important;
-      box-shadow: 0 6px 32px rgba(120, 140, 220, 0.20) !important;
+      box-shadow: 0 0 20px var(--xx-glow-color), 0 6px 32px rgba(120, 140, 220, 0.20) !important;
+      border-color: var(--xx-glow-border) !important;
+      transform: translateY(-2px);
     }
 
     /* ===== DARK THEME: transparent layouts ===== */
@@ -157,17 +226,20 @@
       background: transparent !important;
     }
 
-    /* ===== DARK THEME: cards glassmorphism ===== */
+    /* ===== DARK THEME: cards glassmorphism + glow hover ===== */
     .dark #content-layout .ant-card {
       background: rgba(15, 25, 45, 0.45) !important;
       backdrop-filter: blur(20px) !important;
       -webkit-backdrop-filter: blur(20px) !important;
       border: 1px solid rgba(255, 255, 255, 0.08) !important;
       box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25) !important;
+      transition: all 0.3s ease !important;
     }
     .dark #content-layout .ant-card:hover {
       background: rgba(20, 32, 55, 0.50) !important;
-      box-shadow: 0 6px 32px rgba(0, 0, 0, 0.35) !important;
+      box-shadow: 0 0 24px var(--xx-glow-color), 0 6px 32px rgba(0, 0, 0, 0.35) !important;
+      border-color: var(--xx-glow-border) !important;
+      transform: translateY(-2px);
     }
     [v-cloak] {
       display: none;
@@ -194,7 +266,7 @@
         overscroll-behavior-x: contain;
         white-space: nowrap;
         max-width: 100%;
-        padding: 0 !important; /* Remove padding for arrows */
+        padding: 0 !important;
       }
       .ant-tabs-nav-wrap {
         overflow: visible !important;
@@ -206,13 +278,13 @@
       }
       .ant-tabs-nav {
          display: flex !important;
-         transform: none !important; /* Disable JS transform */
+         transform: none !important;
          width: auto !important;
          margin: 0 !important;
       }
       .ant-tabs-tab-prev,
       .ant-tabs-tab-next {
-        display: none !important; /* Hide arrows */
+        display: none !important;
       }
       .ant-tabs-nav-container::-webkit-scrollbar {
         display: none;
@@ -234,7 +306,15 @@
       function applyGradient() {
         try {
           var doc = document.documentElement;
-          doc.style.background = 'linear-gradient(135deg, #ff6b9d, #a855f7, #3b82f6, #14b8a6, #f97316, #ec4899, #8b5cf6)';
+          // Read gradient preset from localStorage, default 'aurora'
+          var gradPreset = localStorage.getItem('xxGradPreset') || 'aurora';
+          doc.setAttribute('data-grad', gradPreset);
+          // Apply inline styles for the gradient
+          var gradColors = getComputedStyle(doc).getPropertyValue('--xx-grad-colors').trim();
+          if (!gradColors || gradColors === '') {
+            gradColors = '#ff6b9d, #a855f7, #3b82f6, #14b8a6, #f97316, #ec4899, #8b5cf6';
+          }
+          doc.style.background = 'linear-gradient(135deg, ' + gradColors + ')';
           doc.style.backgroundSize = '800% 800%';
           doc.style.backgroundAttachment = 'fixed';
           doc.style.animation = 'pageFlowGradient 10s ease infinite';

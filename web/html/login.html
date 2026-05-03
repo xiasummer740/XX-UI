@@ -24,7 +24,17 @@
         <a-col :xs="22" :sm="12" :md="10" :lg="8" :xl="6" :xxl="5" id="login" class="my-3rem">
           <template v-if="!loadingStates.fetched">
             <div class="text-center">
-              <a-spin size="large" />
+              <!-- XX-UI custom spinner -->
+              <svg class="xx-ui-spinner" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <linearGradient id="loginSpinGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#a855f7" />
+                    <stop offset="50%" stop-color="#3b82f6" />
+                    <stop offset="100%" stop-color="#14b8a6" />
+                  </linearGradient>
+                </defs>
+                <circle class="xx-ui-spinner-circle" cx="20" cy="20" r="16" stroke="url(#loginSpinGrad)" />
+              </svg>
             </div>
           </template>
           <template v-else>
@@ -47,6 +57,41 @@
                 <a-button shape="circle" icon="setting"></a-button>
               </a-popover>
             </div>
+            <!-- XX-UI Brand Logo on Login Page -->
+            <a-row type="flex" justify="center" :style="{ marginBottom: '16px' }">
+              <a-col :style="{ textAlign: 'center' }">
+                <svg viewBox="0 0 40 40" width="56" height="56" fill="none" xmlns="http://www.w3.org/2000/svg"
+                  :style="{ filter: 'drop-shadow(0 0 12px rgba(168, 85, 247, 0.5))' }">
+                  <defs>
+                    <linearGradient id="loginLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#a855f7" />
+                      <stop offset="50%" stop-color="#3b82f6" />
+                      <stop offset="100%" stop-color="#14b8a6" />
+                    </linearGradient>
+                  </defs>
+                  <line x1="6" y1="6" x2="34" y2="34" stroke="url(#loginLogoGrad)" stroke-width="5" stroke-linecap="round" />
+                  <line x1="34" y1="6" x2="6" y2="34" stroke="url(#loginLogoGrad)" stroke-width="5" stroke-linecap="round" />
+                  <line x1="12" y1="12" x2="28" y2="28" stroke="url(#loginLogoGrad)" stroke-width="3" stroke-linecap="round" opacity="0.6" />
+                  <line x1="28" y1="12" x2="12" y2="28" stroke="url(#loginLogoGrad)" stroke-width="3" stroke-linecap="round" opacity="0.6" />
+                </svg>
+                <div :style="{
+                  fontSize: '24px',
+                  fontWeight: '700',
+                  letterSpacing: '3px',
+                  marginTop: '8px',
+                  background: 'linear-gradient(135deg, #a855f7, #3b82f6, #14b8a6)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text'
+                }">XX-UI</div>
+                <div :style="{
+                  fontSize: '12px',
+                  color: 'rgba(255,255,255,0.4)',
+                  marginTop: '4px',
+                  letterSpacing: '1px'
+                }">v{{ .cur_ver }} — Modern Proxy Panel</div>
+              </a-col>
+            </a-row>
             <a-row type="flex" justify="center">
               <a-col :style="{ width: '100%' }">
                 <h2 class="title headline zoom">

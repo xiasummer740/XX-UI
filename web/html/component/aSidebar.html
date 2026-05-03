@@ -3,6 +3,34 @@
     <div class="ant-sidebar">
         <a-layout-sider :theme="themeSwitcher.currentTheme" collapsible :collapsed="collapsed"
             @collapse="(isCollapsed, type) => collapseHandle(isCollapsed, type)" breakpoint="md">
+            <!-- XX-UI Brand Area -->
+            <div class="sidebar-brand" :class="{ 'sidebar-brand-collapsed': collapsed }">
+                <div class="sidebar-brand-inner">
+                    <!-- XX-UI SVG Logo: Double-X interlock -->
+                    <svg class="sidebar-logo-svg" viewBox="0 0 40 40" width="32" height="32" fill="none"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#a855f7" />
+                                <stop offset="50%" stop-color="#3b82f6" />
+                                <stop offset="100%" stop-color="#14b8a6" />
+                            </linearGradient>
+                        </defs>
+                        <!-- First X -->
+                        <line x1="6" y1="6" x2="34" y2="34" stroke="url(#logoGrad)" stroke-width="5"
+                            stroke-linecap="round" />
+                        <line x1="34" y1="6" x2="6" y2="34" stroke="url(#logoGrad)" stroke-width="5"
+                            stroke-linecap="round" />
+                        <!-- Second X (offset, thinner) -->
+                        <line x1="12" y1="12" x2="28" y2="28" stroke="url(#logoGrad)" stroke-width="3"
+                            stroke-linecap="round" opacity="0.6" />
+                        <line x1="28" y1="12" x2="12" y2="28" stroke="url(#logoGrad)" stroke-width="3"
+                            stroke-linecap="round" opacity="0.6" />
+                    </svg>
+                    <span class="sidebar-brand-text" v-show="!collapsed">XX-UI</span>
+                </div>
+                <div class="sidebar-version" v-show="!collapsed">v{{ .cur_ver }}</div>
+            </div>
             <a-theme-switch></a-theme-switch>
             <a-menu :theme="themeSwitcher.currentTheme" mode="inline" :selected-keys="activeTab"
                 @click="({key}) => openLink(key)">
@@ -16,6 +44,25 @@
             :wrap-class-name="themeSwitcher.currentTheme" :wrap-style="{ padding: 0 }" :style="{ height: '100%' }">
             <div class="drawer-handle" @click="toggleDrawer" slot="handle">
                 <a-icon :type="visible ? 'close' : 'menu-fold'"></a-icon>
+            </div>
+            <!-- XX-UI Brand Area (drawer) -->
+            <div class="sidebar-brand">
+                <div class="sidebar-brand-inner">
+                    <svg class="sidebar-logo-svg" viewBox="0 0 40 40" width="32" height="32" fill="none"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <use href="#logoGrad" />
+                        <line x1="6" y1="6" x2="34" y2="34" stroke="url(#logoGrad)" stroke-width="5"
+                            stroke-linecap="round" />
+                        <line x1="34" y1="6" x2="6" y2="34" stroke="url(#logoGrad)" stroke-width="5"
+                            stroke-linecap="round" />
+                        <line x1="12" y1="12" x2="28" y2="28" stroke="url(#logoGrad)" stroke-width="3"
+                            stroke-linecap="round" opacity="0.6" />
+                        <line x1="28" y1="12" x2="12" y2="28" stroke="url(#logoGrad)" stroke-width="3"
+                            stroke-linecap="round" opacity="0.6" />
+                    </svg>
+                    <span class="sidebar-brand-text">XX-UI</span>
+                </div>
+                <div class="sidebar-version">v{{ .cur_ver }}</div>
             </div>
             <a-theme-switch></a-theme-switch>
             <a-menu :theme="themeSwitcher.currentTheme" mode="inline" :selected-keys="activeTab"
@@ -34,6 +81,58 @@
 <style>
     .ant-sidebar>.ant-layout-sider {
         height: 100%;
+    }
+
+    /* ===== XX-UI Sidebar Brand Area ===== */
+    .sidebar-brand {
+        padding: 16px 16px 8px 16px;
+        text-align: center;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        margin-bottom: 4px;
+        transition: all 0.3s ease;
+    }
+    .sidebar-brand-collapsed {
+        padding: 12px 8px 8px 8px;
+    }
+    .sidebar-brand-inner {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+    }
+    .sidebar-brand-collapsed .sidebar-brand-inner {
+        gap: 0;
+    }
+    .sidebar-logo-svg {
+        flex-shrink: 0;
+        filter: drop-shadow(0 0 6px rgba(168, 85, 247, 0.4));
+        transition: filter 0.3s ease;
+    }
+    .sidebar-brand:hover .sidebar-logo-svg {
+        filter: drop-shadow(0 0 10px rgba(168, 85, 247, 0.7));
+    }
+    .sidebar-brand-text {
+        font-size: 20px;
+        font-weight: 700;
+        letter-spacing: 2px;
+        background: linear-gradient(135deg, #a855f7, #3b82f6, #14b8a6);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    .sidebar-version {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.35);
+        margin-top: 2px;
+        letter-spacing: 1px;
+    }
+
+    /* Light theme brand overrides */
+    .light .sidebar-brand {
+        border-bottom-color: rgba(0, 0, 0, 0.06);
+    }
+    .light .sidebar-version {
+        color: rgba(0, 0, 0, 0.35);
     }
 </style>
 
