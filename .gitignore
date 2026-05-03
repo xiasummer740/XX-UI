@@ -43,3 +43,6 @@ docker-compose.override.yml
 # Ignore build artifacts and packages
 package/
 x-ui-pkg/
+
+# Ignore temporary PowerShell scripts
+*.ps1
