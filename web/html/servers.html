@@ -1,46 +1,36 @@
 {{ template "page/head_start" .}}
 <style>
-    .server-card .ant-card-head-title {
-        font-size: 16px;
-        font-weight: 600;
+    @media (min-width: 769px) {
+        .ant-layout-content {
+            margin: 24px 16px;
+        }
     }
-    .server-card .ant-card-extra {
-        padding: 0;
+    @media (max-width: 768px) {
+        .ant-layout-content {
+            margin: 10px 10px;
+        }
     }
-    .server-card .ant-statistic {
-        text-align: center;
+    .ant-card-body {
+        padding: 24px;
     }
-    .server-card .ant-statistic-title {
-        font-size: 13px;
+    .dark-theme .ping-check-modal + .ant-modal-wrap .ant-modal-mask,
+    .dark-theme .ping-check-modal .ant-modal-mask {
+        background: transparent !important;
     }
-    .server-card .ant-statistic-content {
-        font-size: 20px;
+    .ant-modal .ant-alert-info {
+        background-color: #f0f8ff !important;
+        border: 1px solid #91d5ff !important;
+        border-radius: 8px;
     }
-    .status-tag-online {
-        color: #52c41a !important;
+    .ant-modal .ant-alert-info,
+    .ant-modal .ant-alert-info * {
+        color: #333333 !important;
     }
-    .status-tag-offline {
-        color: #ff4d4f !important;
+    .ant-modal .ant-alert-info .anticon-info-circle {
+        color: #1890ff !important;
     }
-    .deploy-hint {
-        margin-bottom: 15px;
-        color: #666;
-        font-style: italic;
-        font-size: 13px;
-        line-height: 1.6;
-    }
-    .dark .deploy-hint {
-        color: #999;
-    }
-    .qrcode-container {
-        text-align: center;
-        margin-bottom: 16px;
-    }
-    .qrcode-container canvas {
-        cursor: pointer;
-    }
-    .link-input {
-        cursor: pointer;
+    .ant-modal .ant-alert-info svg {
+        fill: #1890ff !important;
     }
 </style>
 {{ template "page/head_end" .}}
@@ -48,84 +38,90 @@
 {{ template "page/body_start" .}}
 <a-layout id="app" v-cloak :class="themeSwitcher.currentTheme">
     <a-sidebar></a-sidebar>
+    
     <a-layout id="content-layout">
         <a-layout-content>
-            <a-spin :spinning="loading" tip='{{ i18n "pages.servers.loading" }}'>
+            <a-spin :spinning="loading" tip="加载中...">
                 <transition name="list" appear>
                     <a-row :gutter="[isMobile ? 8 : 16, isMobile ? 0 : 12]">
-                        <!-- Controlled VPS (被控端) -->
-                        <a-col :span="24">
-                            <a-card class="server-card" hoverable
-                                :title='{{ i18n "pages.servers.controlledTitle" }}'>
-                                <template #extra>
-                                    <a-button type="primary" icon="plus" size="small"
-                                        @click="openAddModal(0)">
-                                        {{ i18n "pages.servers.addControlled" }}
-                                    </a-button>
-                                </template>
-                                <a-table :columns="normalColumns" :data-source="normalServers"
-                                    :row-key="record => record.id" :pagination="false"
-                                    :scroll="isMobile ? { x: 'max-content' } : {}"
-                                    :loading="loading">
-                                    <template slot="status" slot-scope="text, record">
-                                        <a-tag v-if="record.online" color="green">{{ i18n "pages.servers.online" }}</a-tag>
-                                        <a-tag v-else color="red">{{ i18n "pages.servers.offline" }}</a-tag>
-                                    </template>
-                                    <template slot="action" slot-scope="text, record">
-                                        <a-space>
-                                            <a-button type="primary" size="small" icon="search"
-                                                @click="checkServerStatus(record)">
-                                                {{ i18n "pages.servers.checkStatus" }}
+                        <a-col>
+                            <a-card hoverable>
+                                <a-row>
+                                    <a-col :span="24">
+                                        <a-space :size="15">
+                                            
+                                            <a-button type="primary" @click="openAddModal(0)">
+                                                <a-icon type="plus"></a-icon> 添加〔被控端 VPS〕
                                             </a-button>
-                                            <a-button type="danger" size="small" icon="delete"
-                                                @click="deleteServer(record)">
-                                                {{ i18n "pages.servers.delete" }}
-                                            </a-button>
-                                        </a-space>
-                                    </template>
-                                </a-table>
-                            </a-card>
-                        </a-col>
 
-                        <!-- Transit VPS (中转机) -->
-                        <a-col :span="24" style="margin-top: 16px;">
-                            <a-card class="server-card" hoverable
-                                :title='{{ i18n "pages.servers.transitTitle" }}'>
-                                <template #extra>
-                                    <a-button type="primary" icon="plus" size="small"
-                                        @click="openAddModal(1)">
-                                        {{ i18n "pages.servers.addTransit" }}
-                                    </a-button>
-                                </template>
-                                <div class="deploy-hint">
-                                    {{ i18n "pages.servers.transitHint" }}
-                                </div>
-                                <a-table :columns="transitColumns" :data-source="transitServers"
-                                    :row-key="record => record.id" :pagination="false"
-                                    :scroll="isMobile ? { x: 'max-content' } : {}"
-                                    :loading="loading">
-                                    <template slot="status" slot-scope="text, record">
-                                        <a-tag v-if="record.online" color="green">{{ i18n "pages.servers.online" }}</a-tag>
-                                        <a-tag v-else color="red">{{ i18n "pages.servers.offline" }}</a-tag>
-                                    </template>
-                                    <template slot="action" slot-scope="text, record">
-                                        <a-space>
-                                            <a-button size="small" icon="link"
-                                                @click="getLastLink(record)">
-                                                {{ i18n "pages.servers.lastLink" }}
+                                            <a-button type="primary" style="cursor: default;">
+                                                <a-icon type="info-circle"></a-icon>
+                                                当前已绑定：[[ normalCount ]] 台
                                             </a-button>
-                                            <a-button type="primary" size="small" icon="cloud-upload"
-                                                @click="setupRelay(record)">
-                                                {{ i18n "pages.servers.deploy" }}
+
+                                            <a-button type="default" icon="reload" @click="getServers">
+                                                刷新列表
                                             </a-button>
-                                            <a-button type="danger" size="small" icon="delete"
-                                                @click="deleteServer(record)">
-                                                {{ i18n "pages.servers.delete" }}
+
+                                        </a-space>
+                                    </a-col>
+                                </a-row>
+
+                                <a-table :columns="columns" :data-source="normalServersPage" :row-key="record => record.ID || record.id" :pagination="normalPagination" @change="handleNormalTableChange" style="margin-top: 20px">
+    <template slot="action" slot-scope="text, record">
+        <a-space>
+            <a-button type="primary" size="small" icon="search" @click="checkServerStatus(record)">查看状态</a-button>
+            <a-button type="danger" size="small" icon="delete" @click="deleteServer(record)">删除</a-button>
+        </a-space>
+    </template>
+</a-table>
+                            </a-card>
+                            
+<a-card hoverable title="一键部署中转节点">
+<a-row>
+                                    <a-col :span="24">
+                                        <div style="margin-bottom: 15px; color: #666;">
+                                            <a-icon type="info-circle"></a-icon> 
+                                            说明：在此添加远程中转机（落地机）信息，点击"一键部署"即可自动完成中转链路部署。
+                                        </div>
+                                        <a-space :size="15">
+                                            <a-button type="primary" @click="openAddModal(1)">
+                <a-icon type="plus"></a-icon> 添加〔中转机 VPS〕
+            </a-button>
+            
+            <a-button type="primary" style="cursor: default;">
+                <a-icon type="info-circle"></a-icon>
+                当前已绑定：[[ transitCount ]] 台
+            </a-button>
+
+            <a-button type="default" icon="reload" @click="getServers">
+                刷新列表
+            </a-button>
+
+											<a-button type="primary" icon="thunderbolt" @click="openCheckModal">
+                                                检测中转节点连通性
                                             </a-button>
                                         </a-space>
-                                    </template>
-                                </a-table>
-                            </a-card>
+                                    </a-col>
+                                </a-row>
+    
+    <a-table :columns="columns" :data-source="transitServersPage" :row-key="record => record.ID || record.id" :pagination="transitPagination" @change="handleTransitTableChange" :scroll="isMobile ? { x: 'max-content' } : {}" style="margin-top: 20px">
+        <template slot="action" slot-scope="text, record">
+            <a-space>
+                <a-button v-if="record.LastLink || record.lastLink" type="default" size="small" icon="link" @click="getLastLink(record)" :loading="record.linkLoading">
+                    获取上次链接
+                </a-button>
+                
+                <a-button type="primary" size="small" icon="cloud-upload" @click="setupRelay(record)" :loading="record.setupLoading">
+                    一键部署中转
+                </a-button>
+                
+                <a-button type="danger" size="small" icon="delete" @click="deleteServer(record)">删除</a-button>
+            </a-space>
+        </template>
+    </a-table>
+</a-card>
+                            
                         </a-col>
                     </a-row>
                 </transition>
@@ -133,207 +129,326 @@
         </a-layout-content>
     </a-layout>
 
-    <!-- Add/Edit Server Modal -->
-    <a-modal v-model="addModal.visible"
-        :title="addModal.formType === 1 ? '{{ i18n "pages.servers.addTransit" }}' : '{{ i18n "pages.servers.addControlled" }}'"
-        @ok="submitServer" :confirm-loading="addModal.loading"
-        :ok-text='{{ i18n "pages.servers.confirm" }}'
-        :cancel-text='{{ i18n "pages.servers.cancel" }}'>
-        <a-form :model="addModal.form" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
-            <a-form-item :label='{{ i18n "pages.servers.nameLabel" }}'>
-                <a-input v-model="addModal.form.name" :placeholder='{{ i18n "pages.servers.namePlaceholder" }}' />
+  <a-modal v-model="visible" :title="formType === 1 ? '添加〔中转机 VPS〕' : '添加〔被控端 VPS〕'" @ok="submitServer" :confirm-loading="modalLoading">
+        <a-form :model="form" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
+            <a-form-item label="备注名称">
+                <a-input v-model="form.name" placeholder="例如：香港鸡"></a-input>
             </a-form-item>
-            <a-form-item :label='{{ i18n "pages.servers.urlLabel" }}'>
-                <a-input v-model="addModal.form.url" :placeholder='{{ i18n "pages.servers.urlPlaceholder" }}' />
+            <a-form-item label="面板地址">
+                <a-input v-model="form.url" placeholder="https://aaa.xxxx.com:54321/path"></a-input>
+                <span style="font-size: 12px; color: #888;">* 必须包含协议头 (https://) 和端口+路径</span>
             </a-form-item>
-            <a-form-item :label='{{ i18n "pages.servers.usernameLabel" }}'>
-                <a-input v-model="addModal.form.username" :placeholder='{{ i18n "pages.servers.usernamePlaceholder" }}' />
+            <a-form-item label="用 户 名">
+                <a-input v-model="form.username" placeholder="面板登录用户名"></a-input>
             </a-form-item>
-            <a-form-item :label='{{ i18n "pages.servers.passwordLabel" }}'>
-                <a-input-password v-model="addModal.form.password" :placeholder='{{ i18n "pages.servers.passwordPlaceholder" }}' />
+            <a-form-item label="登录密码">
+                <a-input-password v-model="form.password" placeholder="面板登录密码"></a-input-password>
             </a-form-item>
         </a-form>
-        <div v-if="addModal.formType === 0" style="margin-top: 20px; color: red; font-style: italic; text-align: center; line-height: 1.6;">
-            {{ i18n "pages.servers.controlledWarning" }}
+
+        <div v-if="formType === 0" style="margin-top: 20px; color: red; font-style: italic; text-align: center; line-height: 1.6;">
+            1、此功能用于集中管理多个远程面板，<br>
+            2、请确保被控端面板未开启两步验证，<br>
+            3、添加后可在列表中查看被控端状态。
         </div>
-        <div v-else style="margin-top: 20px; color: #1890ff; font-style: italic; text-align: center; line-height: 1.6;">
-            {{ i18n "pages.servers.transitInfo" }}
+
+         <div v-else style="margin-top: 20px; color: #1890ff; font-style: italic; text-align: center; line-height: 1.6;">
+         1、此功能用于建立中转链路，<br>
+         2、在此处添加的中转机面板不能开启两步验证，<br>
+         3、添加后请点击列表中的一键部署中转按钮，<br>
+         4、中转机无需额外设置，只需确保防火墙放行端口即可。
+         </div>
+
+    </a-modal>
+
+<a-modal v-model="resultModalVisible" :title="resultTitle" :footer="null" :width="450">
+		<div style="text-align: center;">
+
+			<div style="text-align: left; color: #555; white-space: pre-wrap; line-height: 1.6; margin-bottom: 20px;">[[ resultSubtitle ]]</div>
+
+			<p style="color: #888; margin-bottom: 5px;">链路：本机(Reality) --->> 中转机(Socks) --->> 互联网</p>
+
+			<div 
+				id="qrcode-canvas" 
+				style="display: flex; justify-content: center; margin: 10px 0; cursor: pointer;" 
+				title="点击复制链接" 
+				@click="copyLink"
+			></div>
+			<p style="font-size: 12px; color: #aaa;">(点击二维码或链接即可复制)</p>
+
+			<p style="font-weight:bold; margin-top:15px; text-align: left;">👇 VLESS Reality 中转链接：</p>
+			<a-input v-model="resultLink" read-only @click="copyLink">
+				<a-icon slot="addonAfter" type="copy" @click="copyLink" style="cursor: pointer;"/>
+			</a-input>
+		</div>
+	</a-modal>
+
+<!-- Status Check Modal -->
+<a-modal v-model="statusModal.visible" title="查看服务器状态" :footer="null" :width="500">
+    <a-spin :spinning="statusModal.loading">
+        <a-descriptions :column="1" bordered size="small">
+            <a-descriptions-item label="名称">
+                [[ statusModal.data.name ]]
+            </a-descriptions-item>
+            <a-descriptions-item label="地址">
+                [[ statusModal.data.url ]]
+            </a-descriptions-item>
+            <a-descriptions-item label="CPU 使用率">
+                [[ statusModal.data.cpu ]]
+            </a-descriptions-item>
+            <a-descriptions-item label="内存使用率">
+                [[ statusModal.data.mem ]]
+            </a-descriptions-item>
+            <a-descriptions-item label="运行时间">
+                [[ statusModal.data.uptime ]]
+            </a-descriptions-item>
+            <a-descriptions-item label="Xray 状态">
+                [[ statusModal.data.xray ]]
+            </a-descriptions-item>
+        </a-descriptions>
+    </a-spin>
+</a-modal>
+
+<a-modal v-model="checkModalVisible" title="检测中转节点连通性" :footer="null" width="700px" wrap-class-name="ping-check-modal">
+
+    <a-alert
+        type="info"
+        show-icon
+        bordered
+        style="margin-bottom: 15px;"
+    >
+        <template slot="message">
+            此功能通过 TCP Ping 检测中转节点对应端口的连通性。
+        </template>
+    </a-alert>
+        
+        <a-table 
+            :columns="checkColumns" 
+            :data-source="checkList" 
+            :row-key="record => record.ID || record.id" 
+            :pagination="false"
+            size="small"
+        >
+            <template slot="status" slot-scope="text, record">
+                <span v-if="record.pingLoading">
+                    <a-icon type="loading" /> 检测中...
+                </span>
+                <span v-else>
+                    <a-tag v-if="record.pingResult === undefined">待检测</a-tag>
+                    <a-tag v-else-if="record.pingResult > 0" color="green">正常: [[ record.pingResult ]]ms</a-tag>
+                    <a-tag v-else color="red">无效 / 不通</a-tag>
+                </span>
+            </template>
+            <template slot="action" slot-scope="text, record">
+                <a-button type="primary" size="small" ghost @click="performPing(record)" :loading="record.pingLoading">
+                    立即检测
+                </a-button>
+            </template>
+        </a-table>
+        <div style="margin-top: 20px; text-align: right;">
+             <a-button @click="checkModalVisible = false">关闭</a-button>
         </div>
     </a-modal>
 
-    <!-- Deployment Result Modal -->
-    <a-modal v-model="resultModal.visible" :title="resultModal.title" :footer="null" :width="450">
-        <div class="qrcode-container">
-            <div :id="'qrcode-canvas-' + resultModal.id" @click="copyLink(resultModal.link)"></div>
-        </div>
-        <a-input class="link-input" v-model="resultModal.link" read-only @click="copyLink(resultModal.link)">
-            <a-icon slot="addonAfter" type="copy" @click="copyLink(resultModal.link)" />
-        </a-input>
-    </a-modal>
-
-    <!-- Status Check Modal -->
-    <a-modal v-model="statusModal.visible" :title='{{ i18n "pages.servers.statusTitle" }}' :footer="null" :width="500">
-        <a-spin :spinning="statusModal.loading">
-            <a-descriptions :column="1" bordered size="small">
-                <a-descriptions-item :label='{{ i18n "pages.servers.statusName" }}'>
-                    [[ statusModal.data.name ]]
-                </a-descriptions-item>
-                <a-descriptions-item :label='{{ i18n "pages.servers.statusUrl" }}'>
-                    [[ statusModal.data.url ]]
-                </a-descriptions-item>
-                <a-descriptions-item :label='{{ i18n "pages.servers.statusCpu" }}'>
-                    [[ statusModal.data.cpu ]]
-                </a-descriptions-item>
-                <a-descriptions-item :label='{{ i18n "pages.servers.statusMem" }}'>
-                    [[ statusModal.data.mem ]]
-                </a-descriptions-item>
-                <a-descriptions-item :label='{{ i18n "pages.servers.statusUptime" }}'>
-                    [[ statusModal.data.uptime ]]
-                </a-descriptions-item>
-                <a-descriptions-item :label='{{ i18n "pages.servers.statusXray" }}'>
-                    [[ statusModal.data.xray ]]
-                </a-descriptions-item>
-            </a-descriptions>
-        </a-spin>
-    </a-modal>
 </a-layout>
 
 {{template "page/body_scripts" .}}
 {{template "component/aSidebar" .}}
 {{template "component/aThemeSwitch" .}}
+
 <script>
     const API_BASE = 'panel/api/server';
 
-    new Vue({
-        el: '#app',
+    const app = new Vue({
         delimiters: ['[[', ']]'],
         mixins: [MediaQueryMixin],
-        data() {
-            return {
-                themeSwitcher,
+        el: '#app',
+        data: {
+            themeSwitcher,
+            loading: false,
+            modalLoading: false,
+            visible: false,
+            checkModalVisible: false,
+            resultModalVisible: false,
+            resultTitle: '部署结果',
+            resultSubtitle: '',
+            resultLink: '',
+
+            checkList: [],
+            checkColumns: [
+                { title: 'ID', dataIndex: 'ID', key: 'ID', width: 60 },
+                { title: '节点名称', dataIndex: 'name', key: 'name' },
+                { title: '状态', key: 'status', scopedSlots: { customRender: 'status' } },
+                { title: '操作', key: 'action', scopedSlots: { customRender: 'action' }, align: 'right' }
+            ],
+
+            servers: [],
+            normalCount: 0,
+            transitCount: 0,
+            form: {
+                name: '',
+                url: '',
+                username: '',
+                password: '',
+                type: 0
+            },
+            formType: 0,
+            paginationConfig: {
+                pageSize: 10,
+                showSizeChanger: false,
+                hideOnSinglePage: true,
+            },
+            normalCurrentPage: 1,
+            transitCurrentPage: 1,
+
+            columns: [
+                { title: 'ID', dataIndex: 'ID', key: 'ID', width: 80 },
+                { title: '备注名称', dataIndex: 'name', key: 'name' },
+                { title: '面板地址', dataIndex: 'url', key: 'url' },
+                { title: '用户名', dataIndex: 'username', key: 'username' },
+                { 
+                    title: '添加时间', 
+                    dataIndex: 'CreatedAt',
+                    key: 'CreatedAt',
+                    width: 180,
+                    customRender: (text) => {
+                        if (!text) return '';
+                        return text.replace('T', ' ').substring(0, 19);
+                    }
+                },
+                { title: '操作', key: 'action', scopedSlots: { customRender: 'action' }, width: 220 }
+            ],
+
+            statusModal: {
+                visible: false,
                 loading: false,
-                normalServers: [],
-                transitServers: [],
-                normalColumns: [
-                    { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-                    { title: '{{ i18n "pages.servers.colName" }}', dataIndex: 'name', key: 'name' },
-                    { title: '{{ i18n "pages.servers.colUrl" }}', dataIndex: 'url', key: 'url' },
-                    { title: '{{ i18n "pages.servers.colStatus" }}', key: 'status', scopedSlots: { customRender: 'status' }, width: 100 },
-                    { title: '{{ i18n "pages.servers.colAction" }}', key: 'action', scopedSlots: { customRender: 'action' }, width: 200 },
-                ],
-                transitColumns: [
-                    { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-                    { title: '{{ i18n "pages.servers.colName" }}', dataIndex: 'name', key: 'name' },
-                    { title: '{{ i18n "pages.servers.colUrl" }}', dataIndex: 'url', key: 'url' },
-                    { title: '{{ i18n "pages.servers.colStatus" }}', key: 'status', scopedSlots: { customRender: 'status' }, width: 100 },
-                    { title: '{{ i18n "pages.servers.colAction" }}', key: 'action', scopedSlots: { customRender: 'action' }, width: 280 },
-                ],
-                addModal: {
-                    visible: false,
-                    loading: false,
-                    formType: 0,
-                    form: {
-                        name: '',
-                        url: '',
-                        username: '',
-                        password: '',
-                    }
-                },
-                resultModal: {
-                    visible: false,
-                    title: '',
-                    link: '',
-                    id: 0,
-                },
-                statusModal: {
-                    visible: false,
-                    loading: false,
-                    data: {
-                        name: '',
-                        url: '',
-                        cpu: '',
-                        mem: '',
-                        uptime: '',
-                        xray: '',
-                    }
-                },
-            }
+                data: {
+                    name: '',
+                    url: '',
+                    cpu: '',
+                    mem: '',
+                    uptime: '',
+                    xray: '',
+                }
+            },
         },
-        created() {
-            this.loadServers();
+
+        computed: {
+            normalServers() {
+                return this.servers.filter(s => s.type === 0 || s.type === undefined);
+            },
+            transitServers() {
+                return this.servers.filter(s => s.type === 1);
+            },
+            normalServersPage() {
+                const start = (this.normalCurrentPage - 1) * this.paginationConfig.pageSize;
+                const end = start + this.paginationConfig.pageSize;
+                return this.normalServers.slice(start, end);
+            },
+            transitServersPage() {
+                const start = (this.transitCurrentPage - 1) * this.paginationConfig.pageSize;
+                const end = start + this.paginationConfig.pageSize;
+                return this.transitServers.slice(start, end);
+            },
+            normalPagination() {
+                return {...this.paginationConfig, current: this.normalCurrentPage, total: this.normalServers.length};
+            },
+            transitPagination() {
+                return {...this.paginationConfig, current: this.transitCurrentPage, total: this.transitServers.length};
+            },
         },
+
         methods: {
-            loadServers() {
+            handleNormalTableChange(pagination) {
+                this.normalCurrentPage = pagination.current;
+            },
+            handleTransitTableChange(pagination) {
+                this.transitCurrentPage = pagination.current;
+            },
+
+            getServers() {
                 this.loading = true;
                 axios.get(API_BASE + '/remoteServers').then(res => {
                     if (res.data.success) {
                         const servers = res.data.obj || [];
-                        this.normalServers = servers.filter(s => s.type === 0);
-                        this.transitServers = servers.filter(s => s.type === 1);
+                        this.servers = servers;
+                        this.normalCount = this.normalServers.length;
+                        this.transitCount = this.transitServers.length;
                     } else {
-                        this.$message.error(res.data.msg || '{{ i18n "pages.servers.loadFailed" }}');
+                        this.$message.error(res.data.msg || '加载服务器列表失败');
                     }
                 }).catch(err => {
-                    this.$message.error('{{ i18n "pages.servers.loadFailed" }}: ' + (err.message || ''));
+                    this.$message.error('加载服务器列表失败: ' + (err.message || ''));
                 }).finally(() => {
                     this.loading = false;
                 });
             },
-            openAddModal(type) {
-                this.addModal.formType = type;
-                this.addModal.form = { name: '', url: '', username: '', password: '' };
-                this.addModal.visible = true;
+
+            openAddModal(type = 0) {
+                this.formType = type;
+                this.form = { 
+                    name: '', 
+                    url: 'https://', 
+                    username: '', 
+                    password: '',
+                    type: type
+                };
+                this.visible = true;
             },
+
             submitServer() {
-                const form = this.addModal.form;
+                const form = this.form;
                 if (!form.name || !form.url || !form.username || !form.password) {
-                    this.$message.warning('{{ i18n "pages.servers.fillRequired" }}');
+                    this.$message.warning('请填写所有必填字段');
                     return;
                 }
-                this.addModal.loading = true;
+                this.modalLoading = true;
                 const payload = {
                     name: form.name,
                     url: form.url,
                     username: form.username,
                     password: form.password,
-                    type: this.addModal.formType,
+                    type: this.formType,
                 };
                 axios.post(API_BASE + '/remoteServer/add', payload).then(res => {
                     if (res.data.success) {
-                        this.$message.success('{{ i18n "pages.servers.addSuccess" }}');
-                        this.addModal.visible = false;
-                        this.loadServers();
+                        this.$message.success('服务器添加成功');
+                        this.visible = false;
+                        this.getServers();
                     } else {
-                        this.$message.error(res.data.msg || '{{ i18n "pages.servers.addFailed" }}');
+                        this.$message.error(res.data.msg || '添加服务器失败');
                     }
                 }).catch(err => {
-                    this.$message.error('{{ i18n "pages.servers.addFailed" }}: ' + (err.message || ''));
+                    this.$message.error('添加服务器失败: ' + (err.message || ''));
                 }).finally(() => {
-                    this.addModal.loading = false;
+                    this.modalLoading = false;
                 });
             },
+
             deleteServer(record) {
                 const self = this;
                 this.$confirm({
-                    title: '{{ i18n "pages.servers.deleteConfirm" }}',
-                    content: `{{ i18n "pages.servers.deleteContent" }}: ${record.name}?`,
-                    okText: '{{ i18n "pages.servers.confirm" }}',
-                    cancelText: '{{ i18n "pages.servers.cancel" }}',
+                    title: '确认删除',
+                    content: '确定要删除 ' + (record.name || record.ID || record.id) + ' 吗？',
+                    okText: '确定',
+                    cancelText: '取消',
                     okType: 'danger',
                     onOk() {
-                        return axios.post(API_BASE + '/remoteServer/delete/' + record.id).then(res => {
+                        const id = record.ID || record.id;
+                        return axios.post(API_BASE + '/remoteServer/delete/' + id).then(res => {
                             if (res.data.success) {
-                                self.$message.success('{{ i18n "pages.servers.deleteSuccess" }}');
-                                self.loadServers();
+                                self.$message.success('服务器删除成功');
+                                self.getServers();
                             } else {
-                                self.$message.error(res.data.msg || '{{ i18n "pages.servers.deleteFailed" }}');
+                                self.$message.error(res.data.msg || '删除服务器失败');
                             }
                         }).catch(err => {
-                            self.$message.error('{{ i18n "pages.servers.deleteFailed" }}: ' + (err.message || ''));
+                            self.$message.error('删除服务器失败: ' + (err.message || ''));
                         });
                     }
                 });
             },
+
             checkServerStatus(record) {
                 this.statusModal.visible = true;
                 this.statusModal.loading = true;
@@ -345,7 +460,8 @@
                     uptime: '...',
                     xray: '...',
                 };
-                axios.get(API_BASE + '/remoteServer/status/' + record.id).then(res => {
+                const id = record.ID || record.id;
+                axios.get(API_BASE + '/remoteServer/status/' + id).then(res => {
                     if (res.data.success) {
                         const obj = res.data.obj || {};
                         this.statusModal.data.cpu = obj.cpu != null ? obj.cpu + '%' : 'N/A';
@@ -357,40 +473,72 @@
                         this.statusModal.data.mem = 'Error';
                         this.statusModal.data.uptime = 'Error';
                         this.statusModal.data.xray = 'Error';
-                        this.$message.error(res.data.msg || '{{ i18n "pages.servers.statusFailed" }}');
+                        this.$message.error(res.data.msg || '获取服务器状态失败');
                     }
                 }).catch(err => {
                     this.statusModal.data.cpu = 'Error';
                     this.statusModal.data.mem = 'Error';
                     this.statusModal.data.uptime = 'Error';
                     this.statusModal.data.xray = 'Error';
-                    this.$message.error('{{ i18n "pages.servers.statusFailed" }}: ' + (err.message || ''));
+                    this.$message.error('获取服务器状态失败: ' + (err.message || ''));
                 }).finally(() => {
                     this.statusModal.loading = false;
                 });
             },
+
             getLastLink(record) {
-                if (record.lastLink) {
-                    this.resultModal.title = '{{ i18n "pages.servers.lastLinkTitle" }}';
-                    this.resultModal.link = record.lastLink;
-                    this.resultModal.id = record.id;
-                    this.resultModal.visible = true;
+                const link = record.LastLink || record.lastLink;
+                if (link) {
+                    this.resultTitle = '上次部署链接';
+                    this.resultLink = link;
+                    this.resultSubtitle = '';
+                    this.resultModalVisible = true;
                     this.$nextTick(() => {
-                        this.generateQRCode(record.id, record.lastLink);
+                        this.generateQRCode(link);
                     });
                 } else {
-                    this.$message.info('{{ i18n "pages.servers.noLastLink" }}');
+                    this.$message.info('暂无部署链接');
                 }
             },
+
             setupRelay(record) {
-                this.$message.info('{{ i18n "pages.servers.deployComing" }}');
+                this.$message.info('中转部署功能即将推出');
             },
-            generateQRCode(id, text) {
-                const containerId = 'qrcode-canvas-' + id;
-                const container = document.getElementById(containerId);
+
+            openCheckModal() {
+                const transitServers = this.transitServers;
+                if (transitServers.length === 0) {
+                    this.$message.warning('暂无中转节点可检测');
+                    return;
+                }
+                this.checkList = transitServers.map(s => ({
+                    ...s,
+                    pingLoading: false,
+                    pingResult: undefined,
+                }));
+                this.checkModalVisible = true;
+            },
+
+            performPing(record) {
+                record.pingLoading = true;
+                const id = record.ID || record.id;
+                axios.get(API_BASE + '/remoteServer/ping/' + id).then(res => {
+                    if (res.data.success) {
+                        record.pingResult = res.data.obj && res.data.obj.latency ? res.data.obj.latency : -1;
+                    } else {
+                        record.pingResult = -1;
+                    }
+                }).catch(() => {
+                    record.pingResult = -1;
+                }).finally(() => {
+                    record.pingLoading = false;
+                });
+            },
+
+            generateQRCode(text) {
+                const container = document.getElementById('qrcode-canvas');
                 if (!container) return;
                 container.innerHTML = '';
-                // Use QRCode if available
                 if (typeof QRCode !== 'undefined') {
                     new QRCode(container, {
                         text: text,
@@ -399,16 +547,20 @@
                     });
                 }
             },
-            copyLink(link) {
-                if (!link) return;
-                const textarea = document.createElement('textarea');
-                textarea.value = link;
-                document.body.appendChild(textarea);
-                textarea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textarea);
-                this.$message.success('{{ i18n "pages.servers.copied" }}');
+
+            copyLink() {
+                if (!this.resultLink) return;
+                const input = document.createElement('input');
+                input.value = this.resultLink;
+                document.body.appendChild(input);
+                input.select();
+                document.execCommand('Copy');
+                document.body.removeChild(input);
+                this.$message.success('复制成功');
             },
+        },
+        mounted() {
+            this.getServers();
         }
     });
 </script>
