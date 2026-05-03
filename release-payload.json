@@ -1,8 +1,0 @@
-{
-  "tag_name": "v2.13.0",
-  "target_commitish": "main",
-  "name": "XX-UI v2.13.0",
-  "body": "## XX-UI v2.13.0\n\n### v2.13.0 修复\n\n1. **🔧 修复一键配置 TLS 协议节点不可用** - Trojan+TCP、Trojan+WS 和 VLESS+TCP+TLS 三种协议一键生成时不再缺少 TLS 证书配置。弹窗新增 \"TLS 证书配置\" 区域，用户可手动填写 certFile/keyFile 路径，或点击 \"从面板设置证书\" 按钮自动导入面板证书\n2. **🔗 修复二维码没有订阅链接** - 修复二维码弹窗 subId 始终为空的问题，现在正确读取节点配置的 subId 并显示订阅二维码\n3. **📅 修复添加入站流量重置日期字段** - 添加入站弹窗现在正确读取 VPS 配置中的 `defaultResetMethod` 和 `defaultResetDay`，而非从购买日期提取\n\n### 完整变更日志\n- 一键配置生成协议弹窗：新增 TLS 证书路径输入 + \"从面板设置证书\" 按钮\n- 新增 `hasTlsProtocolSelected()` 方法，仅在选择 Trojan+TCP/Trojan+WS/VLESS+TCP+TLS 时显示证书配置\n- Trojan+TCP 和 Trojan+WS build 函数：从 `security: \"none\"` 改为支持 TLS（用户提供证书时启用）\n- VLESS+TCP+TLS build 函数：在现有 `tlsSettings` 中增加 `certificates` 数组\n- QR 二维码弹窗：`show()` 函数中 `subId` 正确继承 client 的值\n- 添加入站：`onShow` 回调读取 `defaultResetMethod` 替代 `vpsPurchaseDate`",
-  "draft": false,
-  "prerelease": false
-}

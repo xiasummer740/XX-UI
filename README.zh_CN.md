@@ -1,10 +1,7 @@
 [English](/README.md) | [中文](/README.zh_CN.md)
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./media/3x-ui-dark.png">
-    <img alt="XX-UI" src="./media/3x-ui-light.png">
-  </picture>
+  <img alt="XX-UI" src="https://free.picui.cn/free/2026/05/03/69f74c4806e31.png" width="800">
 </p>
 
 <h1 align="center">XX-UI — 轻量级多协议代理管理面板</h1>
