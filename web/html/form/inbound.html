@@ -144,6 +144,11 @@
     {{template "form/tunnel"}}
 </template>
 
+<!-- socks -->
+<template v-if="inbound.protocol === Protocols.SOCKS">
+    {{template "form/socks"}}
+</template>
+
 <!-- mixed -->
 <template v-if="inbound.protocol === Protocols.MIXED">
     {{template "form/mixed"}}

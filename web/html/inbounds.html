@@ -133,15 +133,14 @@
                         <template v-if="!isMobile">{{ i18n
                           "pages.inbounds.addInbound" }}</template>
                       </a-button>
-                      <a-button type="primary" icon="rocket"
-                        @click="generalActions({key:'batchGenerate'})">
-                        <template v-if="!isMobile">{{ i18n
-                          "pages.inbounds.batchGenerate" }}</template>
-                      </a-button>
                       <a-button type="primary" icon="export"
                         @click="oneClickSubscribe()">
                         <template v-if="!isMobile">{{ i18n
                           "pages.inbounds.oneClickSubscribe" }}</template>
+                      </a-button>
+                      <a-button type="primary" icon="swap"
+                        @click="openSubscribeConvert()">
+                        <template v-if="!isMobile">订阅转换</template>
                       </a-button>
                       <a-dropdown :trigger="['click']">
                         <a-button type="primary" icon="menu">
@@ -322,6 +321,9 @@
                             <a-tag v-if="dbInbound.chainProxy && dbInbound.chainProxy !== '{}' && dbInbound.chainProxy !== ''" :color="dbInbound.enableChainProxy ? 'green' : 'orange'" :style="{ marginLeft: '6px', fontSize: '10px', lineHeight: '14px', padding: '0 4px' }">
                               [[ dbInbound.enableChainProxy ? 'ON' : 'OFF' ]]
                             </a-tag>
+                          </a-menu-item>
+                          <a-menu-item key="convertNode">
+                            <a-icon type="swap"></a-icon> 节点转换
                           </a-menu-item>
                           <a-menu-item key="clone">
                             <a-icon type="block"></a-icon> {{ i18n
@@ -915,55 +917,6 @@
       </a-form-item>
     </a-form>
   </a-modal>
-    <!-- 协议选择配置弹窗 -->
-    <a-modal :title="'生成协议节点'" :visible="protocolSelector.visible" @ok="generateProtocols" @cancel="protocolSelector.visible = false" ok-text="生成" cancel-text="取消" :confirm-loading="protocolSelector.saving" :class="themeSwitcher.currentTheme" width="650px">
-      <a-form layout="vertical">
-        <a-form-item label="选择要生成的协议类型（可多选）">
-          <a-checkbox-group v-model="protocolSelector.selected">
-            <a-row :gutter="[8, 8]">
-              <a-col :span="12" v-for="p in protocolSelector.options" :key="p.key">
-                <a-checkbox :value="p.key">
-                  <span style="font-weight:500;">[[ p.label ]]</span>
-                  <span style="color:#999;font-size:12px;">（起始端口: [[ p.basePort ]]）</span>
-                </a-checkbox>
-              </a-col>
-            </a-row>
-          </a-checkbox-group>
-        </a-form-item>
-        <a-form-item label="每组生成数量">
-          <a-input-number v-model="protocolSelector.count" :min="1" :max="10" :style="{ width: '100px' }" />
-          <span style="margin-left: 8px; color: #888;">（每个协议从起始端口开始连续生成 N 个节点）</span>
-        </a-form-item>
-        <a-form-item label="订阅 ID（可选，留空则不加入订阅）">
-          <a-input v-model="protocolSelector.subId" placeholder="留空不加入订阅，如：fz4crtmwo09m0xt3" :style="{ width: '280px' }" allow-clear />
-        </a-form-item>
-        <a-form-item label="节点名称前缀">
-          <a-input v-model="protocolSelector.namePrefix" placeholder="默认: rn" :style="{ width: '200px' }" allow-clear />
-          <span style="margin-left: 8px; color: #888;">节点将按 rn-01、rn-02 格式自动排序命名</span>
-        </a-form-item>
-        <template v-if="hasTlsProtocolSelected()">
-          <a-divider style="margin: 12px 0; font-size: 13px; color: #333;">TLS 证书配置（仅 Trojan+TCP、Trojan+WS、VLESS+TCP+TLS 需要）</a-divider>
-          <a-form-item label="公钥文件路径（certFile）">
-            <a-input v-model="protocolSelector.certFile" placeholder="/root/cert/example.com/fullchain.pem" allow-clear />
-          </a-form-item>
-          <a-form-item label="私钥文件路径（keyFile）">
-            <a-input v-model="protocolSelector.keyFile" placeholder="/root/cert/example.com/privkey.pem" allow-clear />
-          </a-form-item>
-          <a-form-item label=" ">
-            <a-button type="primary" icon="import" @click="setProtocolCertData()">
-              从面板设置证书
-            </a-button>
-          </a-form-item>
-        </template>
-        <div v-if="protocolSelector.selected.length > 0 && protocolSelector.count > 0" style="padding: 12px; background: #f6f8fa; border-radius: 4px; border: 1px solid #e8e8e8;">
-          <div style="font-weight: bold; margin-bottom: 8px; color: #333;">&#x1F4E1; 端口范围预览：</div>
-          <div v-for="p in getSelectedProtocols()" :key="p.key" style="margin-bottom: 6px; display: flex; align-items: center;">
-            <a-tag color="blue" style="min-width: 120px; text-align: center;">[[ p.label ]]</a-tag>
-            <span style="color: #666;">[[ p.basePort ]] ~ [[ p.basePort + protocolSelector.count - 1 ]]</span>
-          </div>
-        </div>
-      </a-form>
-    </a-modal>
   </a-layout>
 {{template "page/body_scripts" .}}
 <script
@@ -1309,27 +1262,6 @@
     el: '#app',
     mixins: [MediaQueryMixin],
     data: {
-      protocolSelector: {
-        visible: false,
-        saving: false,
-        count: 3,
-        selected: [],
-        subId: '',
-        namePrefix: 'rn',
-        certFile: '',
-        keyFile: '',
-        options: [
-          { key: 'vless-reality', label: 'VLESS+Reality', basePort: 44301 },
-          { key: 'vmess-tcp', label: 'VMess+TCP', basePort: 44302 },
-          { key: 'shadowsocks', label: 'Shadowsocks', basePort: 44303 },
-          { key: 'trojan-tcp', label: 'Trojan+TCP', basePort: 44304 },
-          { key: 'vless-ws', label: 'VLESS+WS', basePort: 44305 },
-          { key: 'vmess-ws', label: 'VMess+WS', basePort: 44306 },
-          { key: 'vless-grpc', label: 'VLESS+gRPC', basePort: 44307 },
-          { key: 'trojan-ws', label: 'Trojan+WS', basePort: 44308 },
-          { key: 'vless-tcp-tls', label: 'VLESS+TCP+TLS', basePort: 44309 },
-        ],
-      },
       themeSwitcher,
       persianDatepicker,
       loadingStates: {
@@ -1626,9 +1558,6 @@
           case "import":
             this.importInbound();
             break;
-          case "batchGenerate":
-            this.batchGenerate();
-            break;
           case "export":
             this.exportAllLinks();
             break;
@@ -1683,6 +1612,9 @@
             break;
           case "chainProxy":
             this.openChainProxyModal(dbInbound);
+            break;
+          case "convertNode":
+            this.convertNode(dbInbound);
             break;
           case "clone":
             this.openCloneInbound(dbInbound);
@@ -2444,55 +2376,6 @@
           [...new Set(subLinks)].join('\n'),
           dbInbound.remark + "-Subs");
       },
-      async batchGenerate() {
-        this.protocolSelector.selected = [];
-        this.protocolSelector.count = 3;
-        this.protocolSelector.visible = true;
-      },
-      async generateProtocols() {
-        if (this.protocolSelector.selected.length === 0) {
-          this.$message.warning('请至少选择一种协议类型');
-          return;
-        }
-        if (this.protocolSelector.count < 1 || this.protocolSelector.count > 10) {
-          this.$message.warning('生成数量请在 1-10 之间');
-          return;
-        }
-        this.protocolSelector.saving = true;
-        try {
-          const msg = await HttpUtil.post('/panel/api/inbounds/generateProtocol', {
-            protocols: this.protocolSelector.selected,
-            count: this.protocolSelector.count,
-            subId: this.protocolSelector.subId,
-            namePrefix: this.protocolSelector.namePrefix || 'rn',
-            certFile: this.protocolSelector.certFile,
-            keyFile: this.protocolSelector.keyFile,
-          });
-          if (msg.success) {
-            const count = msg.obj && msg.obj.length > 0 ? msg.obj.length : 0;
-            this.$message.success('成功生成 ' + count + ' 个节点');
-            this.protocolSelector.visible = false;
-            await this.getDBInbounds();
-          } else {
-            this.$message.error(msg.msg || '生成失败');
-          }
-        } catch (err) {
-          this.$message.error('请求失败: ' + (err.message || '未知错误'));
-        } finally {
-          this.protocolSelector.saving = false;
-        }
-      },
-      getSelectedProtocols() {
-        return this.protocolSelector.options.filter(p => this.protocolSelector.selected.includes(p.key));
-      },
-      hasTlsProtocolSelected() {
-        const tlsProtocols = ['trojan-tcp', 'trojan-ws', 'vless-tcp-tls'];
-        return this.protocolSelector.selected.some(key => tlsProtocols.includes(key));
-      },
-      setProtocolCertData() {
-        this.protocolSelector.certFile = this.defaultCert;
-        this.protocolSelector.keyFile = this.defaultKey;
-      },
       importInbound() {
         promptModal.open({
           title: '{{ i18n "pages.inbounds.importInbound" }}',
@@ -2580,6 +2463,66 @@
           '{{ i18n "pages.inbounds.oneClickSubscribe" }}',
           output,
           'Subscribe-All');
+      },
+      openSubscribeConvert() {
+        // Collect all share links for subscription conversion
+        let allLinks = [];
+        for (const dbInbound of this.dbInbounds) {
+          const links = dbInbound.genInboundLinks(this.remarkModel);
+          if (links && links.length > 0) {
+            allLinks.push(links);
+          }
+        }
+        const shareLinksText = allLinks.join('\r\n');
+        
+        // Build Clash-compatible output
+        let output = '';
+        output += '=== 原始链接 (Share Links) ===\r\n';
+        output += shareLinksText;
+        output += '\r\n\r\n';
+        output += '=== Clash 订阅链接 (Base64) ===\r\n';
+        try {
+          output += btoa(unescape(encodeURIComponent(shareLinksText)));
+        } catch(e) {
+          output += shareLinksText;
+        }
+        output += '\r\n\r\n';
+        output += '=== 说明 ===\r\n';
+        output += '将上方 Base64 编码的内容粘贴到 Clash 订阅转换服务中即可生成 Clash 配置文件。\r\n';
+        output += '推荐订阅转换服务：https://sub.v1.mk / https://sub.xeton.dev';
+        
+        txtModal.show(
+          '订阅转换',
+          output,
+          'Subscribe-Convert');
+      },
+      convertNode(dbInbound) {
+        // Generate node links for this inbound and show conversion options
+        const links = dbInbound.genInboundLinks(this.remarkModel);
+        if (!links || links.length === 0) {
+          this.$message.warning('该入站没有可用的节点链接');
+          return;
+        }
+        
+        let output = '';
+        output += '=== 节点链接 ===\r\n';
+        output += links;
+        output += '\r\n\r\n';
+        output += '=== Clash 配置 (Base64) ===\r\n';
+        try {
+          output += btoa(unescape(encodeURIComponent(links)));
+        } catch(e) {
+          output += links;
+        }
+        output += '\r\n\r\n';
+        output += '=== 说明 ===\r\n';
+        output += '将上方 Base64 编码的内容粘贴到 Clash 订阅转换服务中即可生成 Clash 配置文件。\r\n';
+        output += '推荐订阅转换服务：https://sub.v1.mk / https://sub.xeton.dev';
+        
+        txtModal.show(
+          '节点转换 - ' + dbInbound.remark,
+          output,
+          dbInbound.remark + '-Convert');
       },
       copy(dbInboundId) {
         dbInbound = this.dbInbounds.find(row => row.id === dbInboundId);

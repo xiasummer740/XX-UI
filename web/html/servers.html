@@ -78,53 +78,6 @@
 </a-table>
                             </a-card>
                             
-<a-card hoverable title="一键部署中转节点">
-<a-row>
-                                    <a-col :span="24">
-                                        <div style="margin-bottom: 15px; color: #666;">
-                                            <a-icon type="info-circle"></a-icon> 
-                                            说明：在此添加远程中转机（落地机）信息，点击"一键部署"即可自动完成中转链路部署。
-                                        </div>
-                                        <a-space :size="15">
-                                            <a-button type="primary" @click="openAddModal(1)">
-                <a-icon type="plus"></a-icon> 添加〔中转机 VPS〕
-            </a-button>
-            
-            <a-button type="primary" style="cursor: default;">
-                <a-icon type="info-circle"></a-icon>
-                当前已绑定：[[ transitCount ]] 台
-            </a-button>
-
-            <a-button type="default" icon="reload" @click="getServers">
-                刷新列表
-            </a-button>
-
-											<a-button type="primary" icon="thunderbolt" @click="openCheckModal">
-                                                检测中转节点连通性
-                                            </a-button>
-                                        </a-space>
-                                    </a-col>
-                                </a-row>
-    
-    <a-table :columns="columns" :data-source="transitServersPage" :row-key="record => record.ID || record.id" :pagination="transitPagination" @change="handleTransitTableChange" :scroll="isMobile ? { x: 'max-content' } : {}" style="margin-top: 20px">
-        <template slot="action" slot-scope="text, record">
-            <a-space>
-                <a-button v-if="record.LastLink || record.lastLink" type="default" size="small" icon="link" @click="getLastLink(record)" :loading="record.linkLoading">
-                    获取上次链接
-                </a-button>
-                
-                <a-button type="primary" size="small" icon="cloud-upload" @click="setupRelay(record)" :loading="record.setupLoading">
-                    一键部署中转
-                </a-button>
-                
-                <a-button type="default" size="small" icon="link" @click="openRemotePanel(record)">打开面板</a-button>
-                
-                <a-button type="danger" size="small" icon="delete" @click="deleteServer(record)">删除</a-button>
-            </a-space>
-        </template>
-    </a-table>
-</a-card>
-                            
                         </a-col>
                     </a-row>
                 </transition>
