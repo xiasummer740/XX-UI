@@ -55,32 +55,56 @@
     }
     /* ===== SITE-WIDE GRADIENT: cycles through 5 color schemes ===== */
     /* NOTE: No !important on html background — @keyframes animation needs to override it */
+    /* 60s full cycle: each color scheme gets ~12s with smooth crossfade via background-position flow */
     html {
-      background: linear-gradient(135deg, #ff6b9d, #a855f7, #3b82f6, #14b8a6, #f97316, #ec4899, #8b5cf6);
+      background: linear-gradient(135deg, #f9a8d4, #c084fc, #93c5fd, #6ee7b7, #fdba74, #f9a8d4, #c084fc);
       background-size: 800% 800%;
       background-attachment: fixed;
-      animation: xxGradCycle 30s ease infinite;
+      animation: xxGradCycle 60s ease-in-out infinite;
       min-height: 100%;
     }
     body {
       background: transparent !important;
       min-height: 100vh;
     }
-    /* Unified gradient animation: cycles through all 5 color schemes */
+    /*
+     * Unified gradient animation: smoothly cycles through 5 harmonious color schemes.
+     * Each scheme uses soft, mid-brightness pastel/vibrant colors to avoid jarring transitions.
+     * background-position flows continuously for a liquid, flowing effect.
+     * The background shorthand is only set at scheme boundaries; between them, only
+     * background-position animates, creating smooth crossfades.
+     */
     @keyframes xxGradCycle {
-      0%   { background: linear-gradient(135deg, #ff6b9d, #a855f7, #3b82f6, #14b8a6, #f97316, #ec4899, #8b5cf6); background-size: 800% 800%; background-position: 0% 50%; }
-      10%  { background-position: 25% 25%; }
-      20%  { background: linear-gradient(135deg, #0f0c29, #302b63, #24243e, #4a00e0, #8e2de2, #e94057, #f27121); background-size: 800% 800%; background-position: 50% 0%; }
-      30%  { background-position: 75% 25%; }
-      40%  { background: linear-gradient(135deg, #00f260, #0575e6, #7f00ff, #e100ff, #00f260, #0575e6, #7f00ff); background-size: 800% 800%; background-position: 100% 50%; }
-      50%  { background-position: 75% 75%; }
-      60%  { background: linear-gradient(135deg, #ff512f, #dd2476, #ff6b6b, #f093fb, #f5576c, #ff512f, #dd2476); background-size: 800% 800%; background-position: 50% 100%; }
-      70%  { background-position: 25% 75%; }
-      80%  { background: linear-gradient(135deg, #2193b0, #6dd5ed, #00b4db, #0083b0, #2193b0, #6dd5ed, #00b4db); background-size: 800% 800%; background-position: 0% 50%; }
-      90%  { background-position: 50% 25%; }
-      100% { background: linear-gradient(135deg, #ff6b9d, #a855f7, #3b82f6, #14b8a6, #f97316, #ec4899, #8b5cf6); background-size: 800% 800%; background-position: 0% 50%; }
+      /* Aurora (粉紫蓝青橙) — soft pastel */
+      0%   { background: linear-gradient(135deg, #f9a8d4, #c084fc, #93c5fd, #6ee7b7, #fdba74, #f9a8d4, #c084fc); background-size: 800% 800%; background-position: 0% 50%; }
+      5%   { background-position: 15% 40%; }
+      /* Transition to Cyber */
+      10%  { background: linear-gradient(135deg, #a78bfa, #818cf8, #6366f1, #8b5cf6, #a78bfa, #818cf8, #6366f1); background-size: 800% 800%; background-position: 30% 30%; }
+      15%  { background-position: 45% 20%; }
+      /* Transition to Neon */
+      20%  { background: linear-gradient(135deg, #2dd4bf, #60a5fa, #a78bfa, #c084fc, #2dd4bf, #60a5fa, #a78bfa); background-size: 800% 800%; background-position: 60% 25%; }
+      25%  { background-position: 75% 35%; }
+      /* Transition to Sunset */
+      30%  { background: linear-gradient(135deg, #fb923c, #f472b6, #e879f9, #fb923c, #fbbf24, #f472b6, #e879f9); background-size: 800% 800%; background-position: 85% 50%; }
+      35%  { background-position: 75% 65%; }
+      /* Transition to Ocean */
+      40%  { background: linear-gradient(135deg, #38bdf8, #2dd4bf, #67e8f9, #22d3ee, #38bdf8, #2dd4bf, #67e8f9); background-size: 800% 800%; background-position: 60% 75%; }
+      45%  { background-position: 45% 80%; }
+      /* Transition back to Aurora */
+      50%  { background: linear-gradient(135deg, #f9a8d4, #c084fc, #93c5fd, #6ee7b7, #fdba74, #f9a8d4, #c084fc); background-size: 800% 800%; background-position: 30% 70%; }
+      55%  { background-position: 15% 60%; }
+      /* Second half: repeat the cycle with different position flow for variety */
+      60%  { background: linear-gradient(135deg, #a78bfa, #818cf8, #6366f1, #8b5cf6, #a78bfa, #818cf8, #6366f1); background-size: 800% 800%; background-position: 10% 45%; }
+      65%  { background-position: 25% 35%; }
+      70%  { background: linear-gradient(135deg, #2dd4bf, #60a5fa, #a78bfa, #c084fc, #2dd4bf, #60a5fa, #a78bfa); background-size: 800% 800%; background-position: 40% 25%; }
+      75%  { background-position: 55% 30%; }
+      80%  { background: linear-gradient(135deg, #fb923c, #f472b6, #e879f9, #fb923c, #fbbf24, #f472b6, #e879f9); background-size: 800% 800%; background-position: 70% 45%; }
+      85%  { background-position: 65% 60%; }
+      90%  { background: linear-gradient(135deg, #38bdf8, #2dd4bf, #67e8f9, #22d3ee, #38bdf8, #2dd4bf, #67e8f9); background-size: 800% 800%; background-position: 50% 75%; }
+      95%  { background-position: 30% 65%; }
+      100% { background: linear-gradient(135deg, #f9a8d4, #c084fc, #93c5fd, #6ee7b7, #fdba74, #f9a8d4, #c084fc); background-size: 800% 800%; background-position: 0% 50%; }
     }
-    /* Subtle animated overlay for extra depth */
+    /* Subtle animated overlay for extra depth — reduced opacity for less visual interference */
     html::before {
       content: '';
       position: fixed;
@@ -88,14 +112,14 @@
       left: 0;
       right: 0;
       bottom: 0;
-      background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.06) 0%, transparent 60%);
+      background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.04) 0%, transparent 60%);
       pointer-events: none;
       z-index: 0;
-      animation: pulseGlow 4s ease-in-out infinite alternate;
+      animation: pulseGlow 6s ease-in-out infinite alternate;
     }
     @keyframes pulseGlow {
-      0%   { opacity: 0.4; transform: scale(1); }
-      100% { opacity: 0.8; transform: scale(1.1); }
+      0%   { opacity: 0.2; transform: scale(1); }
+      100% { opacity: 0.5; transform: scale(1.05); }
     }
 
     /* ===== XX-UI CUSTOM LOADING SPINNER ===== */
@@ -135,6 +159,21 @@
     .light .login-app .under,
     .light .login-app .ant-layout {
       background: transparent !important;
+    }
+
+    /* ===== LIGHT THEME: login card glassmorphism ===== */
+    .light #login {
+      background: rgba(255, 255, 255, 0.20) !important;
+      backdrop-filter: blur(16px) !important;
+      -webkit-backdrop-filter: blur(16px) !important;
+      border: 1px solid rgba(255, 255, 255, 0.30) !important;
+      border-radius: 16px !important;
+      padding: 32px !important;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.10) !important;
+    }
+    /* Login page waves — very subtle so gradient shows through */
+    .light .waves-header .waves use {
+      opacity: 0.3 !important;
     }
 
     /* ===== LIGHT THEME: sidebar glassmorphism ===== */
@@ -188,6 +227,21 @@
     .dark .login-app .under,
     .dark .login-app .ant-layout {
       background: transparent !important;
+    }
+
+    /* ===== DARK THEME: login card glassmorphism ===== */
+    .dark #login {
+      background: rgba(10, 18, 34, 0.35) !important;
+      backdrop-filter: blur(16px) !important;
+      -webkit-backdrop-filter: blur(16px) !important;
+      border: 1px solid rgba(255, 255, 255, 0.10) !important;
+      border-radius: 16px !important;
+      padding: 32px !important;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.30) !important;
+    }
+    /* Login page waves — very subtle so gradient shows through */
+    .dark .waves-header .waves use {
+      opacity: 0.2 !important;
     }
 
     /* ===== DARK THEME: sidebar glassmorphism ===== */
