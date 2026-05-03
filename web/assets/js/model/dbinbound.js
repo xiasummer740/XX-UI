@@ -67,6 +67,10 @@ class DBInbound {
         return this.protocol === Protocols.WIREGUARD;
     }
 
+    get isSocks() {
+        return this.protocol === Protocols.SOCKS;
+    }
+
     get address() {
         let address = location.hostname;
         if (!ObjectUtil.isEmpty(this.listen) && this.listen !== "0.0.0.0") {
