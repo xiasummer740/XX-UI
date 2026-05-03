@@ -219,7 +219,7 @@ jobs:
             mingw-w64-x86_64-sqlite3
             mingw-w64-x86_64-pkg-config
 
-      - name: Build 3X-UI for Windows (CGO)
+      - name: Build XX-UI for Windows (CGO)
         shell: msys2 {0}
         run: |
           export PATH="/c/hostedtoolcache/windows/go/$(ls /c/hostedtoolcache/windows/go | sort -V | tail -n1)/x64/bin:$PATH"

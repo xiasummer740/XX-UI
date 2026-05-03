@@ -7,7 +7,7 @@
 <h1 align="center">XX-UI — 轻量级多协议代理管理面板</h1>
 
 <p align="center">
-  <b>基于 3X-UI 深度定制优化，更易用、更美观、更稳定</b>
+  <b>基于 XX-UI 深度定制优化，更易用、更美观、更稳定</b>
 </p>
 
 <p align="center">

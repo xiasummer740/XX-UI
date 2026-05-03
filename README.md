@@ -7,7 +7,7 @@
 <h1 align="center">XX-UI — Lightweight Multi-Protocol Proxy Management Panel</h1>
 
 <p align="center">
-  <b>Deeply customized and optimized from 3X-UI — more beautiful, easier to use, more stable</b>
+  <b>Deeply customized and optimized from XX-UI — more beautiful, easier to use, more stable</b>
 </p>
 
 <p align="center">
