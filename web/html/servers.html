@@ -468,10 +468,32 @@
                     const msg = await HttpUtil.get(API_BASE + '/remoteServer/status/' + id);
                     if (msg.success) {
                         const obj = msg.obj || {};
-                        this.statusModal.data.cpu = obj.cpu != null ? obj.cpu + '%' : 'N/A';
-                        this.statusModal.data.mem = obj.mem != null ? obj.mem + '%' : 'N/A';
-                        this.statusModal.data.uptime = obj.uptime || 'N/A';
-                        this.statusModal.data.xray = obj.xray || 'N/A';
+                        // cpu is a float64 (e.g., 12.5)
+                        this.statusModal.data.cpu = obj.cpu != null ? obj.cpu.toFixed(1) + '%' : 'N/A';
+                        // mem is an object: { current: bytes, total: bytes }
+                        if (obj.mem && obj.mem.total > 0) {
+                            const memPct = (obj.mem.current / obj.mem.total * 100).toFixed(1);
+                            this.statusModal.data.mem = memPct + '%';
+                        } else {
+                            this.statusModal.data.mem = 'N/A';
+                        }
+                        // uptime is seconds
+                        if (obj.uptime != null) {
+                            const days = Math.floor(obj.uptime / 86400);
+                            const hours = Math.floor((obj.uptime % 86400) / 3600);
+                            const mins = Math.floor((obj.uptime % 3600) / 60);
+                            this.statusModal.data.uptime = days + '天 ' + hours + '小时 ' + mins + '分钟';
+                        } else {
+                            this.statusModal.data.uptime = 'N/A';
+                        }
+                        // xray is an object: { state: "running", version: "1.8.0", errorMsg: "" }
+                        if (obj.xray && obj.xray.state) {
+                            const stateText = obj.xray.state === 'running' ? '运行中' : (obj.xray.state === 'error' ? '错误' : obj.xray.state);
+                            const versionText = obj.xray.version || '';
+                            this.statusModal.data.xray = stateText + (versionText ? ' (' + versionText + ')' : '');
+                        } else {
+                            this.statusModal.data.xray = 'N/A';
+                        }
                     } else {
                         this.statusModal.data.cpu = 'Error';
                         this.statusModal.data.mem = 'Error';
