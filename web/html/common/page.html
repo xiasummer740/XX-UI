@@ -55,29 +55,29 @@
     }
     /* ===== SITE-WIDE GRADIENT SYSTEM ===== */
     /*
-     * Strategy: Use a base gradient on html that always shows, plus two pseudo-element
-     * overlay gradients (html::before and html::after) that fade in/out via opacity.
-     * This avoids the CSS limitation where @keyframes cannot interpolate between
-     * different linear-gradient() values — instead we crossfade layers.
+     * KEY DESIGN PRINCIPLES:
+     * 1. NEVER switch background in @keyframes — causes flash/repaint.
+     *    Instead, use ONLY background-position animation on fixed gradients.
+     * 2. All overlay layers use z-index: -1 to stay BEHIND content.
+     * 3. Opacity max is 0.3 — subtle enough to not obscure text.
+     * 4. Colors are soft pastel/light — no dark or intense colors.
      *
-     * Each overlay gradient slides in from a different direction (top→bottom, left→right,
-     * diagonal) and its opacity fades up then down, creating a smooth "slide in/out"
-     * effect. The base gradient continuously animates background-position for liquid flow.
-     *
-     * Colors progress from light/pastel → medium/vibrant → deeper/rich → back to light,
-     * giving a natural "浅→深→浅" breathing rhythm.
+     * Architecture:
+     * - html: base gradient, continuously flowing via background-position
+     * - html::before (z-index: -1): overlay that fades in/out, slides diagonally
+     * - .xx-glow-overlay (z-index: -1): subtle radial pulse for depth
      */
 
-    /* ===== BASE GRADIENT (always visible, continuously flowing) ===== */
+    /* ===== BASE GRADIENT ===== */
+    /* A single fixed gradient that never changes — only background-position animates */
     html {
-      /* Start with light pastel Aurora */
       background:
         linear-gradient(135deg,
           #fce4ec, #f3e5f5, #e3f2fd, #e0f2f1, #fff3e0,
           #fce4ec, #f3e5f5, #e3f2fd, #e0f2f1, #fff3e0);
       background-size: 1000% 1000%;
       background-attachment: fixed;
-      animation: baseFlow 90s ease-in-out infinite;
+      animation: baseFlow 120s ease-in-out infinite;
       min-height: 100%;
     }
     body {
@@ -85,43 +85,32 @@
       min-height: 100vh;
     }
 
-    /* ===== OVERLAY 1: slides in from top-left, fades in/out ===== */
+    /* ===== SUBTLE OVERLAY ===== */
+    /* A single overlay that fades in/out and slides diagonally.
+     * z-index: -1 ensures it's always BEHIND all content.
+     * Max opacity 0.3 — never obscures text.
+     * The gradient value is FIXED — only opacity and background-position animate.
+     */
     html::before {
       content: '';
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
       background:
         linear-gradient(135deg,
-          #f8bbd0, #e1bee7, #bbdefb, #b2dfdb, #ffe0b2,
-          #f8bbd0, #e1bee7, #bbdefb, #b2dfdb, #ffe0b2);
+          #e8eaf6, #f3e5f5, #e0f7fa, #e0f2f1, #fff8e1,
+          #e8eaf6, #f3e5f5, #e0f7fa, #e0f2f1, #fff8e1);
       background-size: 1000% 1000%;
       background-position: 0% 0%;
       pointer-events: none;
-      z-index: 0;
+      z-index: -1;
       opacity: 0;
-      animation: overlay1Cycle 90s ease-in-out infinite;
-    }
-
-    /* ===== OVERLAY 2: slides in from bottom-right, fades in/out ===== */
-    html::after {
-      content: '';
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background:
-        linear-gradient(135deg,
-          #c5cae9, #d1c4e9, #b3e5fc, #b2ebf2, #ffccbc,
-          #c5cae9, #d1c4e9, #b3e5fc, #b2ebf2, #ffccbc);
-      background-size: 1000% 1000%;
-      background-position: 100% 100%;
-      pointer-events: none;
-      z-index: 0;
-      opacity: 0;
-      animation: overlay2Cycle 90s ease-in-out infinite;
+      animation: overlayCycle 120s ease-in-out infinite;
     }
 
     /*
-     * Base gradient: continuously shifts background-position for a liquid flowing effect.
-     * The colors themselves stay the same (light pastel), creating a gentle shimmer.
+     * Base flow: continuously shifts background-position in a circular pattern.
+     * 120s full cycle — very slow, gentle movement.
+     * Only background-position changes — NO background value change = no flash.
      */
     @keyframes baseFlow {
       0%   { background-position: 0% 50%; }
@@ -132,98 +121,39 @@
     }
 
     /*
-     * Overlay 1: 90s cycle.
-     * Phase 1 (0-15%): fade IN from top-left, slide diagonally → medium vibrant colors
-     * Phase 2 (15-35%): hold visible, colors deepen
-     * Phase 3 (35-50%): fade OUT, slide toward center
-     * Phase 4 (50-100%): hidden, reset position
+     * Overlay cycle: 120s total.
+     * Only opacity and background-position animate — NO background value change = no flash.
+     * Phase 1 (0-15%): fade IN, slide from top-left toward center
+     * Phase 2 (15-40%): hold at peak opacity
+     * Phase 3 (40-55%): fade OUT, slide toward bottom-right
+     * Phase 4 (55-100%): hidden, waiting for next cycle
      */
-    @keyframes overlay1Cycle {
-      /* Hidden start */
+    @keyframes overlayCycle {
       0%   { opacity: 0; background-position: 0% 0%; }
-      /* Fade in — slide from top-left */
-      5%   { opacity: 0; background-position: 0% 0%;
-             background: linear-gradient(135deg,
-               #f8bbd0, #e1bee7, #bbdefb, #b2dfdb, #ffe0b2,
-               #f8bbd0, #e1bee7, #bbdefb, #b2dfdb, #ffe0b2); background-size: 1000% 1000%; }
-      10%  { opacity: 0.6; background-position: 20% 20%; }
-      /* Hold — colors deepen to medium vibrant */
-      15%  { opacity: 0.8; background-position: 30% 30%;
-             background: linear-gradient(135deg,
-               #f48fb1, #ce93d8, #90caf9, #80cbc4, #ffcc80,
-               #f48fb1, #ce93d8, #90caf9, #80cbc4, #ffcc80); background-size: 1000% 1000%; }
-      20%  { opacity: 0.9; background-position: 40% 40%; }
-      /* Peak — deepest colors */
-      25%  { opacity: 1.0; background-position: 50% 50%;
-             background: linear-gradient(135deg,
-               #ec407a, #ab47bc, #42a5f5, #26a69a, #ffa726,
-               #ec407a, #ab47bc, #42a5f5, #26a69a, #ffa726); background-size: 1000% 1000%; }
-      30%  { opacity: 0.9; background-position: 60% 60%; }
-      /* Fade out — slide toward center */
-      35%  { opacity: 0.6; background-position: 70% 70%;
-             background: linear-gradient(135deg,
-               #f48fb1, #ce93d8, #90caf9, #80cbc4, #ffcc80,
-               #f48fb1, #ce93d8, #90caf9, #80cbc4, #ffcc80); background-size: 1000% 1000%; }
-      40%  { opacity: 0.2; background-position: 85% 85%; }
-      45%  { opacity: 0;   background-position: 100% 100%; }
-      /* Hidden */
-      50%  { opacity: 0; background-position: 100% 100%; }
+      8%   { opacity: 0; background-position: 0% 0%; }
+      15%  { opacity: 0.25; background-position: 25% 25%; }
+      30%  { opacity: 0.30; background-position: 40% 40%; }
+      40%  { opacity: 0.25; background-position: 55% 55%; }
+      48%  { opacity: 0;   background-position: 70% 70%; }
+      55%  { opacity: 0;   background-position: 100% 100%; }
       100% { opacity: 0; background-position: 100% 100%; }
     }
 
     /*
-     * Overlay 2: 90s cycle, offset by 30s (starts at 33%).
-     * Slides from bottom-right → top-left with different color palette.
-     */
-    @keyframes overlay2Cycle {
-      0%   { opacity: 0; background-position: 100% 100%; }
-      /* Hidden during overlay1's active phase */
-      30%  { opacity: 0; background-position: 100% 100%; }
-      /* Fade in — slide from bottom-right */
-      33%  { opacity: 0; background-position: 100% 100%;
-             background: linear-gradient(135deg,
-               #c5cae9, #d1c4e9, #b3e5fc, #b2ebf2, #ffccbc,
-               #c5cae9, #d1c4e9, #b3e5fc, #b2ebf2, #ffccbc); background-size: 1000% 1000%; }
-      38%  { opacity: 0.6; background-position: 80% 80%; }
-      /* Hold — colors deepen */
-      43%  { opacity: 0.8; background-position: 70% 70%;
-             background: linear-gradient(135deg,
-               #7986cb, #9575cd, #4fc3f7, #4db6ac, #ffab91,
-               #7986cb, #9575cd, #4fc3f7, #4db6ac, #ffab91); background-size: 1000% 1000%; }
-      48%  { opacity: 0.9; background-position: 60% 60%; }
-      /* Peak */
-      53%  { opacity: 1.0; background-position: 50% 50%;
-             background: linear-gradient(135deg,
-               #5c6bc0, #7e57c2, #29b6f6, #26c6da, #ff8a65,
-               #5c6bc0, #7e57c2, #29b6f6, #26c6da, #ff8a65); background-size: 1000% 1000%; }
-      58%  { opacity: 0.9; background-position: 40% 40%; }
-      /* Fade out — slide toward top-left */
-      63%  { opacity: 0.6; background-position: 30% 30%;
-             background: linear-gradient(135deg,
-               #7986cb, #9575cd, #4fc3f7, #4db6ac, #ffab91,
-               #7986cb, #9575cd, #4fc3f7, #4db6ac, #ffab91); background-size: 1000% 1000%; }
-      68%  { opacity: 0.2; background-position: 15% 15%; }
-      73%  { opacity: 0;   background-position: 0% 0%; }
-      /* Hidden */
-      78%  { opacity: 0; background-position: 0% 0%; }
-      100% { opacity: 0; background-position: 0% 0%; }
-    }
-
-    /*
-     * Additional subtle shimmer: a radial glow that pulses slowly.
-     * This adds depth without obscuring the gradient layers below.
+     * Subtle radial glow pulse for depth.
+     * z-index: -1 ensures it's behind content.
      */
     .xx-glow-overlay {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.06) 0%, transparent 60%);
+      background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.08) 0%, transparent 60%);
       pointer-events: none;
-      z-index: 0;
-      animation: glowPulse 8s ease-in-out infinite alternate;
+      z-index: -1;
+      animation: glowPulse 10s ease-in-out infinite alternate;
     }
     @keyframes glowPulse {
-      0%   { opacity: 0.15; }
-      100% { opacity: 0.40; }
+      0%   { opacity: 0.10; }
+      100% { opacity: 0.30; }
     }
 
     /* ===== XX-UI CUSTOM LOADING SPINNER ===== */
