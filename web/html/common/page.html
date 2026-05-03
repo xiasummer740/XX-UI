@@ -54,11 +54,12 @@
       width: 100% !important;
     }
     /* ===== SITE-WIDE GRADIENT: cycles through 5 color schemes ===== */
+    /* NOTE: No !important on html background — @keyframes animation needs to override it */
     html {
-      background: linear-gradient(135deg, #ff6b9d, #a855f7, #3b82f6, #14b8a6, #f97316, #ec4899, #8b5cf6) !important;
-      background-size: 800% 800% !important;
-      background-attachment: fixed !important;
-      animation: xxGradCycle 30s ease infinite !important;
+      background: linear-gradient(135deg, #ff6b9d, #a855f7, #3b82f6, #14b8a6, #f97316, #ec4899, #8b5cf6);
+      background-size: 800% 800%;
+      background-attachment: fixed;
+      animation: xxGradCycle 30s ease infinite;
       min-height: 100%;
     }
     body {
@@ -123,12 +124,16 @@
       animation: xxSpinDash 1.5s ease-in-out infinite;
     }
 
-    /* ===== LIGHT THEME: transparent layout backgrounds (all pages) ===== */
+    /* ===== LIGHT THEME: transparent layout backgrounds (all pages including login) ===== */
     .light #app,
     .light #content-layout,
     .light #content-layout .ant-layout-content,
     .light #content-layout .ant-spin-nested-loading,
-    .light #content-layout .ant-spin-container {
+    .light #content-layout .ant-spin-container,
+    .light .login-app,
+    .light .login-app .ant-layout-content,
+    .light .login-app .under,
+    .light .login-app .ant-layout {
       background: transparent !important;
     }
 
@@ -172,12 +177,16 @@
       transform: translateY(-2px);
     }
 
-    /* ===== DARK THEME: transparent layouts ===== */
+    /* ===== DARK THEME: transparent layouts (all pages including login) ===== */
     .dark #app,
     .dark #content-layout,
     .dark #content-layout .ant-layout-content,
     .dark #content-layout .ant-spin-nested-loading,
-    .dark #content-layout .ant-spin-container {
+    .dark #content-layout .ant-spin-container,
+    .dark .login-app,
+    .dark .login-app .ant-layout-content,
+    .dark .login-app .under,
+    .dark .login-app .ant-layout {
       background: transparent !important;
     }
 
@@ -285,23 +294,28 @@
       function applyGradient() {
         try {
           var doc = document.documentElement;
-          doc.style.backgroundAttachment = 'fixed';
-          doc.style.minHeight = '100%';
-          document.body.style.background = 'transparent';
+          doc.style.setProperty('background-attachment', 'fixed', 'important');
+          doc.style.setProperty('min-height', '100%', 'important');
+          document.body.style.setProperty('background', 'transparent', 'important');
           var observer = new MutationObserver(function() {
             var app = document.getElementById('app');
             if (app) {
-              app.style.background = 'transparent';
+              app.style.setProperty('background', 'transparent', 'important');
+              /* Also ensure all ant-layout children are transparent */
+              var layouts = app.querySelectorAll('.ant-layout, .ant-layout-content, .ant-spin-nested-loading, .ant-spin-container');
+              for (var j = 0; j < layouts.length; j++) {
+                layouts[j].style.setProperty('background', 'transparent', 'important');
+              }
               var isDark = document.body.classList.contains('dark');
               var sider = app.querySelector('.ant-layout-sider');
               if (sider) {
-                sider.style.background = isDark ? 'rgba(10,18,34,0.40)' : 'rgba(255,255,255,0.15)';
-                sider.style.backdropFilter = 'blur(12px)';
+                sider.style.setProperty('background', isDark ? 'rgba(10,18,34,0.40)' : 'rgba(255,255,255,0.15)', 'important');
+                sider.style.setProperty('backdrop-filter', 'blur(12px)', 'important');
               }
               var cards = app.querySelectorAll('.ant-card');
               for (var i = 0; i < cards.length; i++) {
-                cards[i].style.background = isDark ? 'rgba(15,25,45,0.45)' : 'rgba(255,255,255,0.35)';
-                cards[i].style.backdropFilter = 'blur(20px)';
+                cards[i].style.setProperty('background', isDark ? 'rgba(15,25,45,0.45)' : 'rgba(255,255,255,0.35)', 'important');
+                cards[i].style.setProperty('backdrop-filter', 'blur(20px)', 'important');
               }
             }
           });
