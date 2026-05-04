@@ -68,6 +68,28 @@
                                 </a-row>
 
                                 <a-table :columns="columns" :data-source="normalServersPage" :row-key="record => record.ID || record.id" :pagination="normalPagination" @change="handleNormalTableChange" style="margin-top: 20px">
+    <template slot="username" slot-scope="text, record">
+        <span @click="copyToClipboard(text)" style="cursor: pointer;" :title="'点击复制用户名'">
+            [[ text ]]
+        </span>
+    </template>
+    <template slot="password" slot-scope="text, record">
+        <a-space>
+            <span @click="copyToClipboard(text)" style="cursor: pointer;" :title="'点击复制密码'">
+                <template v-if="passwordVisible[record.id || record.ID]">
+                    [[ text ]]
+                </template>
+                <template v-else>
+                    [[ text ? text.substring(0, 1) + '****' + text.substring(text.length - 1) : '' ]]
+                </template>
+            </span>
+            <a-icon
+                :type="passwordVisible[record.id || record.ID] ? 'eye' : 'eye-invisible'"
+                @click="togglePassword(record.id || record.ID)"
+                style="cursor: pointer; font-size: 14px;"
+            />
+        </a-space>
+    </template>
     <template slot="action" slot-scope="text, record">
         <a-space>
             <a-button type="primary" size="small" icon="search" @click="checkServerStatus(record)">查看状态</a-button>
@@ -256,19 +278,14 @@
             },
             normalCurrentPage: 1,
             transitCurrentPage: 1,
+            passwordVisible: {},
 
             columns: [
                 { title: 'ID', dataIndex: 'id', key: 'id', width: 80 },
                 { title: '备注名称', dataIndex: 'name', key: 'name' },
                 { title: '面板地址', dataIndex: 'url', key: 'url' },
-                { title: '用户名', dataIndex: 'username', key: 'username' },
-                { title: '登录密码', dataIndex: 'password', key: 'password', width: 120,
-                    customRender: (text) => {
-                        if (!text) return '';
-                        if (text.length <= 2) return text;
-                        return text.substring(0, 1) + '****' + text.substring(text.length - 1);
-                    }
-                },
+                { title: '用户名', dataIndex: 'username', key: 'username', scopedSlots: { customRender: 'username' } },
+                { title: '登录密码', dataIndex: 'password', key: 'password', width: 120, scopedSlots: { customRender: 'password' } },
                 {
                     title: '添加时间',
                     dataIndex: 'createdAt',
@@ -322,6 +339,39 @@
         },
 
         methods: {
+            togglePassword(id) {
+                this.$set(this.passwordVisible, id, !this.passwordVisible[id]);
+            },
+
+            copyToClipboard(text) {
+                if (!text) return;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        this.$message.success('已复制到剪贴板');
+                    }).catch(() => {
+                        this.fallbackCopy(text);
+                    });
+                } else {
+                    this.fallbackCopy(text);
+                }
+            },
+
+            fallbackCopy(text) {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                try {
+                    document.execCommand('copy');
+                    this.$message.success('已复制到剪贴板');
+                } catch (e) {
+                    this.$message.error('复制失败');
+                }
+                document.body.removeChild(textarea);
+            },
+
             handleNormalTableChange(pagination) {
                 this.normalCurrentPage = pagination.current;
             },

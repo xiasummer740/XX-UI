@@ -36,7 +36,11 @@
                 @click="({key}) => openLink(key)">
                 <a-menu-item v-for="tab in tabs" :key="tab.key">
                     <a-icon :type="tab.icon"></a-icon>
-                    <span v-text="tab.title"></span>
+                    <span v-if="!tab.subtitle" v-text="tab.title"></span>
+                    <span v-else style="line-height: 1.3; display: inline-block; vertical-align: middle;">
+                        <div v-text="tab.title" style="font-size: 13px;"></div>
+                        <div v-text="tab.subtitle" style="font-size: 10px; opacity: 0.7;"></div>
+                    </span>
                 </a-menu-item>
             </a-menu>
         </a-layout-sider>
@@ -75,7 +79,11 @@
                 @click="({key}) => openLink(key)">
                 <a-menu-item v-for="tab in tabs" :key="tab.key">
                     <a-icon :type="tab.icon"></a-icon>
-                    <span v-text="tab.title"></span>
+                    <span v-if="!tab.subtitle" v-text="tab.title"></span>
+                    <span v-else style="line-height: 1.3; display: inline-block; vertical-align: middle;">
+                        <div v-text="tab.title" style="font-size: 13px;"></div>
+                        <div v-text="tab.subtitle" style="font-size: 10px; opacity: 0.7;"></div>
+                    </span>
                 </a-menu-item>
             </a-menu>
         </a-drawer>
@@ -182,7 +190,8 @@
                     {
                         key: 'https://xnow.taikon.top/',
                         icon: 'global',
-                        title: '全球社交媒体'
+                        title: '全球社交媒体',
+                        subtitle: '涨粉/点赞/播放/分享'
                     },
                     {
                         key: '{{ .base_path }}logout/',
