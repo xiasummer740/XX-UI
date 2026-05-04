@@ -258,14 +258,21 @@
             transitCurrentPage: 1,
 
             columns: [
-                { title: 'ID', dataIndex: 'ID', key: 'ID', width: 80 },
+                { title: 'ID', dataIndex: 'id', key: 'id', width: 80 },
                 { title: '备注名称', dataIndex: 'name', key: 'name' },
                 { title: '面板地址', dataIndex: 'url', key: 'url' },
                 { title: '用户名', dataIndex: 'username', key: 'username' },
-                { 
-                    title: '添加时间', 
-                    dataIndex: 'CreatedAt',
-                    key: 'CreatedAt',
+                { title: '登录密码', dataIndex: 'password', key: 'password', width: 120,
+                    customRender: (text) => {
+                        if (!text) return '';
+                        if (text.length <= 2) return text;
+                        return text.substring(0, 1) + '****' + text.substring(text.length - 1);
+                    }
+                },
+                {
+                    title: '添加时间',
+                    dataIndex: 'createdAt',
+                    key: 'createdAt',
                     width: 180,
                     customRender: (text) => {
                         if (!text) return '';
