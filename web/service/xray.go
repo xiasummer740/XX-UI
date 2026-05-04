@@ -368,61 +368,27 @@ func buildChainProxyOutbound(cp struct {
 	}
 
 	switch cp.Protocol {
-	case "socks":
-		server := map[string]any{
-			"address": cp.Address,
-			"port":    cp.Port,
-		}
-		if cp.User != "" {
-			user := map[string]any{
-				"user": cp.User,
-			}
-			if cp.Password != "" {
-				user["pass"] = cp.Password
-			}
-			server["users"] = []any{user}
-		}
-		outbound["settings"] = map[string]any{
-			"servers": []any{server},
-		}
-	case "http":
-		server := map[string]any{
-			"address": cp.Address,
-			"port":    cp.Port,
-		}
-		if cp.User != "" {
-			user := map[string]any{
-				"user": cp.User,
-			}
-			if cp.Password != "" {
-				user["pass"] = cp.Password
-			}
-			server["users"] = []any{user}
-		}
-		outbound["settings"] = map[string]any{
-			"servers": []any{server},
-		}
+	case "socks", "http":
+		// supported protocols
 	default:
-		// For unsupported protocols, fall back to SOCKS5 settings
-		// to avoid generating invalid config that would crash Xray.
 		logger.Warningf("[ChainProxy] Unsupported protocol %q for dynamic outbound, falling back to socks", cp.Protocol)
 		outbound["protocol"] = "socks"
-		server := map[string]any{
-			"address": cp.Address,
-			"port":    cp.Port,
+	}
+	server := map[string]any{
+		"address": cp.Address,
+		"port":    cp.Port,
+	}
+	if cp.User != "" {
+		user := map[string]any{
+			"user": cp.User,
 		}
-		if cp.User != "" {
-			user := map[string]any{
-				"user": cp.User,
-			}
-			if cp.Password != "" {
-				user["pass"] = cp.Password
-			}
-			server["users"] = []any{user}
+		if cp.Password != "" {
+			user["pass"] = cp.Password
 		}
-		outbound["settings"] = map[string]any{
-			"servers": []any{server},
-		}
+		server["users"] = []any{user}
+	}
+	outbound["settings"] = map[string]any{
+		"servers": []any{server},
 	}
 
 	return outbound

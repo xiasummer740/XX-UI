@@ -88,13 +88,15 @@ func GetAccessLogPath() (string, error) {
 	}
 
 	if jsonConfig["log"] != nil {
-		jsonLog := jsonConfig["log"].(map[string]any)
-		if jsonLog["access"] != nil {
-			accessLogPath := jsonLog["access"].(string)
-			return accessLogPath, nil
+		jsonLog, ok := jsonConfig["log"].(map[string]any)
+		if ok && jsonLog["access"] != nil {
+			accessLogPath, ok := jsonLog["access"].(string)
+			if ok {
+				return accessLogPath, nil
+			}
 		}
 	}
-	return "", err
+	return "", nil
 }
 
 // stopProcess calls Stop on the given Process instance.

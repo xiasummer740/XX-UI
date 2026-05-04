@@ -1,4 +1,4 @@
-// Package web provides the main web server implementation for the 3x-ui panel,
+// Package web provides the main web server implementation for the XX-UI panel,
 // including HTTP/HTTPS serving, routing, templates, and background job scheduling.
 package web
 
@@ -92,7 +92,7 @@ func EmbeddedAssets() embed.FS {
 	return assetsFS
 }
 
-// Server represents the main web server for the 3x-ui panel with controllers, services, and scheduled jobs.
+// Server represents the main web server for the XX-UI panel with controllers, services, and scheduled jobs.
 type Server struct {
 	httpServer *http.Server
 	listener   net.Listener
@@ -184,6 +184,9 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 
 	engine := gin.Default()
 
+	// API rate limiting: 200 requests per minute per IP
+	engine.Use(middleware.RateLimiter(200, time.Minute))
+
 	webDomain, err := s.settingService.GetWebDomain()
 	if err != nil {
 		return nil, err
@@ -216,7 +219,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 		sessionOptions.MaxAge = sessionMaxAge * 60 // minutes -> seconds
 	}
 	store.Options(sessionOptions)
-	engine.Use(sessions.Sessions("3x-ui", store))
+	engine.Use(sessions.Sessions("XX-UI", store))
 	engine.Use(func(c *gin.Context) {
 		c.Set("base_path", basePath)
 	})
@@ -373,7 +376,6 @@ func (s *Server) startTask() {
 	}
 
 	// Make a traffic condition every day, 8:30
-	var entry cron.EntryID
 	isTgbotenabled, err := s.settingService.GetTgbotEnabled()
 	if (err == nil) && (isTgbotenabled) {
 		runtime, err := s.settingService.GetTgbotRuntime()
@@ -396,8 +398,6 @@ func (s *Server) startTask() {
 		if (err == nil) && (cpuThreshold > 0) {
 			s.cron.AddJob("@every 10s", job.NewCheckCpuJob())
 		}
-	} else {
-		s.cron.Remove(entry)
 	}
 }
 
@@ -525,6 +525,10 @@ func (s *Server) Start() (err error) {
 
 // Stop gracefully shuts down the web server, stops Xray, cron jobs, and Telegram bot.
 func (s *Server) Stop() error {
+	var err1 error
+	if s.httpServer != nil {
+		err1 = s.httpServer.Shutdown(context.Background())
+	}
 	s.cancel()
 	s.xrayService.StopXray()
 	if s.cron != nil {
@@ -537,11 +541,7 @@ func (s *Server) Stop() error {
 	if s.wsHub != nil {
 		s.wsHub.Stop()
 	}
-	var err1 error
 	var err2 error
-	if s.httpServer != nil {
-		err1 = s.httpServer.Shutdown(s.ctx)
-	}
 	if s.listener != nil {
 		err2 = s.listener.Close()
 	}

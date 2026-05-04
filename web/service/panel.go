@@ -43,7 +43,7 @@ func (s *PanelService) RestartPanel(delay time.Duration) error {
 	return nil
 }
 
-// GetUpdateInfo checks GitHub for the latest 3x-ui release.
+// GetUpdateInfo checks GitHub for the latest XX-UI release.
 func (s *PanelService) GetUpdateInfo() (*PanelUpdateInfo, error) {
 	latest, err := fetchLatestPanelVersion()
 	if err != nil {
@@ -73,8 +73,9 @@ func (s *PanelService) StartUpdate() error {
 	}
 
 	mainFolder, serviceFolder := resolveUpdateFolders()
-	updateScript := fmt.Sprintf("set -o pipefail; %s -fLs https://raw.githubusercontent.com/MHSanaei/3x-ui/main/update.sh | %s", shellQuote(curl), shellQuote(bash))
+	updateScript := fmt.Sprintf("set -o pipefail; %s -fLs https://raw.githubusercontent.com/XiaSummer740/XX-UI/main/update.sh | %s", shellQuote(curl), shellQuote(bash))
 
+	// Try systemd-run first for proper process lifecycle management
 	if systemdRun, err := exec.LookPath("systemd-run"); err == nil {
 		unitName := fmt.Sprintf("x-ui-web-update-%d", time.Now().Unix())
 		cmd := exec.Command(systemdRun,
@@ -84,19 +85,21 @@ func (s *PanelService) StartUpdate() error {
 			bash, "-lc", updateScript,
 		)
 		out, err := cmd.CombinedOutput()
-		if err != nil {
-			output := strings.TrimSpace(string(out))
-			if !strings.Contains(output, "System has not been booted with systemd") &&
-				!strings.Contains(output, "Failed to connect to bus") {
-				return fmt.Errorf("failed to start panel update job: %w: %s", err, output)
-			}
-			logger.Warning("systemd-run is unavailable, falling back to detached update process:", output)
-		} else {
+		if err == nil {
 			logger.Infof("started panel update job via systemd-run unit %s", unitName)
 			return nil
 		}
+		output := strings.TrimSpace(string(out))
+		if !strings.Contains(output, "System has not been booted with systemd") &&
+			!strings.Contains(output, "Failed to connect to bus") {
+			return fmt.Errorf("failed to start panel update job: %w: %s", err, output)
+		}
+		logger.Warning("systemd-run is unavailable, falling back to detached update process:", output)
+	} else {
+		logger.Debug("systemd-run not found; using detached process fallback:", err)
 	}
 
+	// Fallback: run update script as a detached background process
 	cmd := exec.Command(bash, "-lc", updateScript)
 	cmd.Env = append(os.Environ(),
 		"XUI_MAIN_FOLDER="+mainFolder,
@@ -115,7 +118,7 @@ func (s *PanelService) StartUpdate() error {
 
 func fetchLatestPanelVersion() (string, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get("https://api.github.com/repos/MHSanaei/3x-ui/releases/latest")
+	resp, err := client.Get("https://api.github.com/repos/XiaSummer740/XX-UI/releases/latest")
 	if err != nil {
 		return "", err
 	}

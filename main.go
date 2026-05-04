@@ -1,4 +1,4 @@
-// Package main is the entry point for the 3x-ui web panel application.
+// Package main is the entry point for the XX-UI web panel application.
 // It initializes the database, web server, and handles command-line operations for managing the panel.
 package main
 
@@ -9,8 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	_ "unsafe"
-
 	"github.com/XiaSummer740/XX-UI/config"
 	"github.com/XiaSummer740/XX-UI/database"
 	"github.com/XiaSummer740/XX-UI/logger"
@@ -25,7 +23,7 @@ import (
 	"github.com/op/go-logging"
 )
 
-// runWebServer initializes and starts the web server for the 3x-ui panel.
+// runWebServer initializes and starts the web server for the XX-UI panel.
 func runWebServer() {
 	log.Printf("Starting XX-UI %v", config.GetVersion())
 
@@ -44,7 +42,9 @@ func runWebServer() {
 		log.Fatalf("Unknown log level: %v", config.GetLogLevel())
 	}
 
-	godotenv.Load()
+	if err := godotenv.Load(); err != nil {
+		logger.Warning("Failed to load .env file:", err)
+	}
 
 	err := database.InitDB(config.GetDBPath())
 	if err != nil {
@@ -392,7 +392,7 @@ func GetListenIP(getListen bool) {
 	}
 }
 
-// migrateDb performs database migration operations for the 3x-ui panel.
+// migrateDb performs database migration operations for the XX-UI panel.
 func migrateDb() {
 	inboundService := service.InboundService{}
 
@@ -405,7 +405,7 @@ func migrateDb() {
 	fmt.Println("Migration done!")
 }
 
-// main is the entry point of the 3x-ui application.
+// main is the entry point of the XX-UI application.
 // It parses command-line arguments to run the web server, migrate database, or update settings.
 func main() {
 	if len(os.Args) < 2 {

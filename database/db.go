@@ -1,5 +1,5 @@
 // Package database provides database initialization, migration, and management utilities
-// for the 3x-ui panel using GORM with SQLite.
+// for the XX-UI panel using GORM with SQLite.
 package database
 
 import (
@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"slices"
+	"strings"
 
 	"github.com/XiaSummer740/XX-UI/config"
 	"github.com/XiaSummer740/XX-UI/database/model"
@@ -96,6 +97,10 @@ func runSeeders(isUsersEmpty bool) error {
 			db.Find(&users)
 
 			for _, user := range users {
+				// Skip users whose password is already bcrypt-hashed to avoid double-hashing
+				if strings.HasPrefix(user.Password, "$2a$") || strings.HasPrefix(user.Password, "$2b$") || strings.HasPrefix(user.Password, "$2y$") {
+					continue
+				}
 				hashedPassword, err := crypto.HashPasswordAsBcrypt(user.Password)
 				if err != nil {
 					log.Printf("Error hashing password for user '%s': %v", user.Username, err)
