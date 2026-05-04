@@ -600,6 +600,7 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 		s.xrayApi.Close()
 	}
 
+	logger.Infof("[DEBUG] UpdateInbound SAVING: id=%d allowRemote=%v", oldInbound.Id, oldInbound.AllowRemote)
 	return inbound, needRestart, tx.Save(oldInbound).Error
 }
 
