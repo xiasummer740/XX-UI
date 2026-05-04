@@ -2486,6 +2486,25 @@ func (s *InboundService) UpdateClientTrafficByEmail(email string, upload int64, 
 	return nil
 }
 
+// UpdateClientTraffic updates the total traffic limit, expiry time, and enable status for a client by email.
+func (s *InboundService) UpdateClientTraffic(email string, totalGB int64, expiryTime int64, enable *bool) error {
+	db := database.GetDB()
+	updates := map[string]any{}
+	if totalGB > 0 {
+		updates["total"] = totalGB * 1073741824 // convert GB to bytes
+	}
+	if expiryTime > 0 {
+		updates["expiry_time"] = expiryTime
+	}
+	if enable != nil {
+		updates["enable"] = *enable
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+	return db.Model(xray.ClientTraffic{}).Where("email = ?", email).Updates(updates).Error
+}
+
 func (s *InboundService) GetClientTrafficByID(id string) ([]xray.ClientTraffic, error) {
 	db := database.GetDB()
 	var traffics []xray.ClientTraffic
@@ -2658,6 +2677,16 @@ func (s *InboundService) MigrationRequirements() {
 			return
 		}
 		logger.Info("Added device_limit column to inbounds table")
+	}
+
+	// Add allow_remote column if not exists
+	if !tx.Migrator().HasColumn(&model.Inbound{}, "allow_remote") {
+		err = tx.Migrator().AddColumn(&model.Inbound{}, "allow_remote")
+		if err != nil {
+			logger.Warningf("Failed to add allow_remote column: %v", err)
+			return
+		}
+		logger.Info("Added allow_remote column to inbounds table")
 	}
 
 	// Calculate and backfill all_time from up+down for inbounds and clients

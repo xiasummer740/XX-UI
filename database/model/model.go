@@ -72,6 +72,9 @@ type Inbound struct {
 	// 0 means no limit.
 	DeviceLimit int `json:"deviceLimit" form:"deviceLimit" gorm:"default:0;column:device_limit"`
 
+	// AllowRemote controls whether this inbound can be managed via remote API.
+	AllowRemote bool `json:"allowRemote" form:"allowRemote" gorm:"default:false;column:allow_remote"`
+
 	// Xray configuration fields
 	Listen         string   `json:"listen" form:"listen"`
 	Port           int      `json:"port" form:"port"`

@@ -1,0 +1,31 @@
+{{ define "settings/panel/remote" }}
+<a-list :data-source="[]">
+  <a-list-item>
+    <a-row :gutter="[0, 8]" style="width: 100%">
+      <a-col :span="24">
+        <p style="font-size: 14px; margin-bottom: 4px;">
+          <b>{{ i18n "pages.settings.apiKey" }}</b>
+        </p>
+        <p style="color: #999; font-size: 12px; margin-bottom: 8px;">{{ i18n "pages.settings.apiKeyDesc" }}</p>
+        <a-input-group compact>
+          <a-input-password
+            :value="allSetting.apiKey || ''"
+            :placeholder="'{{ i18n "pages.settings.apiKeyPlaceholder" }}'"
+            :style="{ width: 'calc(100% - 160px)' }"
+            @change="e => allSetting.apiKey = e.target.value"
+            :addon-after="null"
+          >
+          </a-input-password>
+          <a-button
+            type="default"
+            @click="allSetting.apiKey = crypto.randomUUID().replace(/-/g, ''); saveBtnDisable = false"
+            style="border-left: none;"
+          >
+            {{ i18n "pages.settings.generate" }}
+          </a-button>
+        </a-input-group>
+      </a-col>
+    </a-row>
+  </a-list-item>
+</a-list>
+{{ end }}

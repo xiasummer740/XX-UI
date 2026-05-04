@@ -131,6 +131,9 @@ var defaultValueMap = map[string]string{
 
 	// URI randomization defaults
 	"uriRandomizeEnable": "false",
+
+	// Remote API access
+	"apiKey": "",
 }
 
 // SettingService provides business logic for application settings management.
@@ -800,6 +803,16 @@ func (s *SettingService) GetUriRandomizeEnable() (bool, error) {
 // SetUriRandomizeEnable enables or disables panel URI path randomization.
 func (s *SettingService) SetUriRandomizeEnable(enabled bool) error {
 	return s.setString("uriRandomizeEnable", fmt.Sprint(enabled))
+}
+
+// GetApiKey returns the API key for remote management access.
+func (s *SettingService) GetApiKey() (string, error) {
+	return s.getString("apiKey")
+}
+
+// SetApiKey sets the API key for remote management access.
+func (s *SettingService) SetApiKey(key string) error {
+	return s.setString("apiKey", key)
 }
 
 func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting) error {

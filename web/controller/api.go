@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/XiaSummer740/XX-UI/logger"
+	"github.com/XiaSummer740/XX-UI/web/middleware"
 	"github.com/XiaSummer740/XX-UI/web/service"
 	"github.com/XiaSummer740/XX-UI/web/session"
 
@@ -52,6 +53,11 @@ func (a *APIController) initRouter(g *gin.RouterGroup, customGeo *service.Custom
 	a.serverController = NewServerController(server)
 
 	NewCustomGeoController(api.Group("/custom-geo"), customGeo)
+
+	// Remote management API (uses API key auth, not session)
+	remote := g.Group("/panel/remote")
+	remote.Use(middleware.ApiKeyAuth())
+	NewRemoteController(remote)
 
 	// Extra routes
 	api.GET("/backuptotgbot", a.BackuptoTgbot)

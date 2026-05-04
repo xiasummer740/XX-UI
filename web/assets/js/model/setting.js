@@ -79,6 +79,7 @@ class AllSetting {
         this.ldapDefaultTotalGB = 0;
         this.ldapDefaultExpiryDays = 0;
         this.ldapDefaultLimitIP = 0;
+        this.apiKey = "";
 
         if (data == null) {
             return

@@ -123,6 +123,9 @@ type AllSetting struct {
 	// URI randomization settings
 	UriRandomizeEnable bool `json:"uriRandomizeEnable" form:"uriRandomizeEnable"` // Enable panel URI path randomization on startup
 
+	// Remote API access
+	ApiKey string `json:"apiKey" form:"apiKey"`
+
 	// VPS information settings
 	VpsName         string `json:"vpsName" form:"vpsName"`                 // VPS name/label
 	VpsIP           string `json:"vpsIP" form:"vpsIP"`                     // VPS IP address

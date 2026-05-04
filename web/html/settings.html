@@ -100,6 +100,13 @@
                     </template>
                     {{ template "settings/panel/xray_restart" . }}
                   </a-tab-pane>
+                  <a-tab-pane key="8" :style="{ paddingTop: '20px' }">
+                    <template #tab>
+                      <a-icon type="api"></a-icon>
+                      <span>{{ i18n "pages.settings.remoteAccess" }}</span>
+                    </template>
+                    {{ template "settings/panel/remote" . }}
+                  </a-tab-pane>
                 </a-tabs>
               </a-col>
             </a-row>
