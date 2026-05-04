@@ -548,6 +548,12 @@
 "telegramBotLanguage" = "Idioma del Bot de Telegram"
 "vpsConfigure" = "Configurar VPS"
 
+"remoteAccess" = "Remote Access"
+"apiKey" = "API Key"
+"apiKeyDesc" = "Used for remote API authentication. Keep this secret."
+"apiKeyPlaceholder" = "API Key (empty = disabled)"
+"generate" = "Generate"
+
 [pages.xray]
 "title" = "Xray Configuración"
 "save" = "Guardar configuración"

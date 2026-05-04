@@ -548,6 +548,12 @@
 "telegramBotLanguage" = "Telegram 機器人語言"
 "vpsConfigure" = "VPS 配置"
 
+"remoteAccess" = "Remote Access"
+"apiKey" = "API Key"
+"apiKeyDesc" = "Used for remote API authentication. Keep this secret."
+"apiKeyPlaceholder" = "API Key (empty = disabled)"
+"generate" = "Generate"
+
 [pages.xray]
 "title" = "Xray 配置"
 "save" = "儲存"

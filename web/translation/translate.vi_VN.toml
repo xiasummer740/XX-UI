@@ -548,6 +548,12 @@
 "telegramBotLanguage" = "Ngôn ngữ của Bot Telegram"
 "vpsConfigure" = "Cấu hình VPS"
 
+"remoteAccess" = "Remote Access"
+"apiKey" = "API Key"
+"apiKeyDesc" = "Used for remote API authentication. Keep this secret."
+"apiKeyPlaceholder" = "API Key (empty = disabled)"
+"generate" = "Generate"
+
 [pages.xray]
 "title" = "Cài đặt Xray"
 "save" = "Lưu cài đặt"

@@ -620,6 +620,11 @@
 "xrayRestartInterval6h" = "每 6 小时"
 "xrayRestartInterval12h" = "每 12 小时"
 "xrayRestartIntervalDaily" = "每天"
+"remoteAccess" = "远程访问"
+"apiKey" = "API 密钥"
+"apiKeyDesc" = "用于远程 API 认证，请妥善保管"
+"apiKeyPlaceholder" = "API 密钥（留空则禁用）"
+"generate" = "生成密钥"
 
 [pages.xray]
 "title" = "Xray 配置"

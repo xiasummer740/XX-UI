@@ -548,6 +548,12 @@
 "telegramBotLanguage" = "Telegram Bot Dili"
 "vpsConfigure" = "VPS Yapılandırma"
 
+"remoteAccess" = "Remote Access"
+"apiKey" = "API Key"
+"apiKeyDesc" = "Used for remote API authentication. Keep this secret."
+"apiKeyPlaceholder" = "API Key (empty = disabled)"
+"generate" = "Generate"
+
 [pages.xray]
 "title" = "Xray Yapılandırmaları"
 "save" = "Kaydet"
