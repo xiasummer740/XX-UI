@@ -14,7 +14,6 @@ import (
 type RemoteController struct {
 	BaseController
 	inboundService service.InboundService
-	serverService  service.ServerService
 	xrayService    service.XrayService
 }
 
