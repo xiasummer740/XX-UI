@@ -22,6 +22,7 @@ class DBInbound {
         this.tag = "";
         this.sniffing = "";
         this.deviceLimit = 0;
+        this.allowRemote = false;
         this.clientStats = ""
         this.chainProxy = "";
         this.enableChainProxy = false;

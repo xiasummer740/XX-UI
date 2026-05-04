@@ -237,6 +237,8 @@
 "allTimeTrafficUsage" = "所有时间总使用量"
 "deviceLimit" = "设备限制"
 "deviceLimitDesc" = "限制此入站所有客户端的总连接设备数，0 = 无限制"
+"allowRemote" = "允许远程管理"
+"allowRemoteDesc" = "允许通过 API 远程管理此入站下的客户端"
 "title" = "入站列表"
 "totalDownUp" = "总上传 / 下载"
 "totalUsage" = "总用量"
@@ -625,6 +627,7 @@
 "apiKeyDesc" = "用于远程 API 认证，请妥善保管"
 "apiKeyPlaceholder" = "API 密钥（留空则禁用）"
 "generate" = "生成密钥"
+"apiKeySaveTip" = "生成后请点击页面顶部的「保存」按钮，否则不会生效"
 
 [pages.xray]
 "title" = "Xray 配置"

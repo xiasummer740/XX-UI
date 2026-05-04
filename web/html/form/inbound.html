@@ -62,6 +62,19 @@
         <template slot="label">
             <a-tooltip>
                 <template slot="title">
+                    <span>{{ i18n "pages.inbounds.allowRemoteDesc" }}</span>
+                </template>
+                {{ i18n "pages.inbounds.allowRemote" }}
+                <a-icon type="question-circle"></a-icon>
+            </a-tooltip>
+        </template>
+        <a-switch v-model="dbInbound.allowRemote"></a-switch>
+    </a-form-item>
+
+    <a-form-item>
+        <template slot="label">
+            <a-tooltip>
+                <template slot="title">
                     <span>{{ i18n "pages.inbounds.periodicTrafficResetDesc"
                         }}</span>
                     <br v-if="dbInbound.lastTrafficResetTime && dbInbound.lastTrafficResetTime > 0">

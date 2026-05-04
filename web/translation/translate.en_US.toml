@@ -237,6 +237,8 @@
 "allTimeTrafficUsage" = "All Time Total Usage"
 "deviceLimit" = "Device Limit"
 "deviceLimitDesc" = "Limit total connected devices across all clients in this inbound, 0 = unlimited"
+"allowRemote" = "Allow Remote Management"
+"allowRemoteDesc" = "Allow remote API access to manage clients under this inbound"
 "title" = "Inbounds"
 "totalDownUp" = "Total Sent/Received"
 "totalUsage" = "Total Usage"
@@ -625,6 +627,7 @@
 "apiKeyDesc" = "Used for remote API authentication. Keep this secret."
 "apiKeyPlaceholder" = "API Key (empty = disabled)"
 "generate" = "Generate"
+"apiKeySaveTip" = "After generating, click the Save button at the top of the page to apply"
 
 [pages.xray]
 "title" = "Xray Configs"
