@@ -5,10 +5,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
-	"os"
-	"os/signal"
-	"syscall"
 	"github.com/XiaSummer740/XX-UI/config"
 	"github.com/XiaSummer740/XX-UI/database"
 	"github.com/XiaSummer740/XX-UI/logger"
@@ -18,6 +14,10 @@ import (
 	"github.com/XiaSummer740/XX-UI/web"
 	"github.com/XiaSummer740/XX-UI/web/global"
 	"github.com/XiaSummer740/XX-UI/web/service"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/joho/godotenv"
 	"github.com/op/go-logging"
