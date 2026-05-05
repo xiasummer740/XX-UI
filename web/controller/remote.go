@@ -123,7 +123,10 @@ func (a *RemoteController) setClientTraffic(c *gin.Context) {
 // getConnectUrl returns the full connection URL including all reality/tls params.
 func (a *RemoteController) getConnectUrl(c *gin.Context) {
 	email := c.Param("email")
-	host := c.Request.Host
+	host := c.GetHeader("X-Forwarded-Host")
+	if host == "" {
+		host = c.Request.Host
+	}
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
 	}
@@ -133,6 +136,9 @@ func (a *RemoteController) getConnectUrl(c *gin.Context) {
 		return
 	}
 	for _, inbound := range allInbounds {
+		if !inbound.AllowRemote {
+			continue
+		}
 		clients, _ := a.inboundService.GetClients(inbound)
 		for _, cl := range clients {
 			if cl.Email == email {
@@ -154,6 +160,9 @@ func (a *RemoteController) deleteClient(c *gin.Context) {
 		return
 	}
 	for _, inbound := range allInbounds {
+		if !inbound.AllowRemote {
+			continue
+		}
 		clients, _ := a.inboundService.GetClients(inbound)
 		for _, cl := range clients {
 			if cl.Email == email {
