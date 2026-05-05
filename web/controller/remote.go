@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"net"
 	"strconv"
 
 	"github.com/XiaSummer740/XX-UI/database/model"
@@ -40,7 +41,6 @@ func (a *RemoteController) listInbounds(c *gin.Context) {
 		jsonMsg(c, "failed to list inbounds", err)
 		return
 	}
-	// Filter to only remote-accessible inbounds
 	result := make([]*model.Inbound, 0)
 	for _, inbound := range all {
 		if inbound.AllowRemote {
@@ -57,7 +57,6 @@ func (a *RemoteController) createClient(c *gin.Context) {
 		jsonMsg(c, "invalid inbound id", err)
 		return
 	}
-
 	inbound, err := a.inboundService.GetInbound(id)
 	if err != nil {
 		jsonMsg(c, "inbound not found", err)
@@ -67,28 +66,23 @@ func (a *RemoteController) createClient(c *gin.Context) {
 		jsonMsg(c, "inbound not accessible", nil)
 		return
 	}
-
 	data := &model.Inbound{}
 	if err := c.ShouldBind(data); err != nil {
 		jsonMsg(c, "invalid request", err)
 		return
 	}
 	data.Id = id
-
 	needRestart, err := a.inboundService.AddInboundClient(data)
 	if err != nil {
 		jsonMsg(c, "failed to create client", err)
 		return
 	}
-
-	// Re-read to get the newly created client info
 	updated, err := a.inboundService.GetInbound(id)
 	if err != nil {
 		jsonObj(c, gin.H{"needRestart": needRestart}, nil)
 		return
 	}
 	jsonObj(c, gin.H{"inbound": updated, "needRestart": needRestart}, nil)
-
 	if needRestart {
 		a.xrayService.SetToNeedRestart()
 	}
@@ -118,7 +112,6 @@ func (a *RemoteController) setClientTraffic(c *gin.Context) {
 		jsonMsg(c, "invalid request", err)
 		return
 	}
-
 	if err := a.inboundService.UpdateClientTraffic(email, req.TotalGB, req.ExpiryTime, req.Enable); err != nil {
 		jsonMsg(c, "failed to update client", err)
 		return
@@ -127,9 +120,13 @@ func (a *RemoteController) setClientTraffic(c *gin.Context) {
 	jsonMsg(c, "updated", nil)
 }
 
-// getConnectUrl returns the full VMess/VLESS/Trojan connection URL for a client.
+// getConnectUrl returns the full connection URL including all reality/tls params.
 func (a *RemoteController) getConnectUrl(c *gin.Context) {
 	email := c.Param("email")
+	host := c.Request.Host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
 	allInbounds, err := a.inboundService.GetAllInbounds()
 	if err != nil {
 		jsonMsg(c, "failed to find client", err)
@@ -139,7 +136,7 @@ func (a *RemoteController) getConnectUrl(c *gin.Context) {
 		clients, _ := a.inboundService.GetClients(inbound)
 		for _, cl := range clients {
 			if cl.Email == email {
-				url := a.inboundService.BuildClientConnectUrl(inbound, &cl)
+				url := a.inboundService.BuildClientConnectUrl(inbound, &cl, host)
 				jsonObj(c, gin.H{"url": url, "remark": inbound.Remark, "email": email}, nil)
 				return
 			}

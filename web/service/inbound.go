@@ -2986,12 +2986,12 @@ func (s *InboundService) DelInboundClientByEmail(inboundId int, email string) (b
 
 // BuildClientConnectUrl generates the full connection URL (vless:// vmess:// trojan:// etc.)
 // including all stream/tls/reality parameters from the inbound configuration.
-func (s *InboundService) BuildClientConnectUrl(inbound *model.Inbound, client *model.Client) string {
+// externalHost is the public hostname/IP of the panel, used when inbound listens on 0.0.0.0
+func (s *InboundService) BuildClientConnectUrl(inbound *model.Inbound, client *model.Client, externalHost string) string {
 	protocol := string(inbound.Protocol)
 	host := inbound.Listen
-	if host == "" || host == "0.0.0.0" || host == "::" {
-		// Use the panel's external hostname — caller should provide it
-		host = ""
+	if host == "" || host == "0.0.0.0" || host == "::" || host == "::0" {
+		host = externalHost
 	}
 
 	var stream map[string]any
