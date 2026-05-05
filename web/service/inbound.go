@@ -3078,8 +3078,24 @@ func (s *InboundService) BuildClientConnectUrl(inbound *model.Inbound, client *m
 			params = append(params, "spx="+spx)
 		}
 	} else if tlsSettings != nil {
-		if sni, ok := tlsSettings["serverName"].(string); ok && sni != "" {
+		ts := tlsSettings
+		if inner, ok := tlsSettings["settings"].(map[string]any); ok {
+			ts = inner
+		}
+		if sni, ok := ts["serverName"].(string); ok && sni != "" {
 			params = append(params, "sni="+sni)
+		}
+		if fp, ok := ts["fingerprint"].(string); ok && fp != "" {
+			params = append(params, "fp="+fp)
+		}
+		if alpn, ok := ts["alpn"].(string); ok && alpn != "" {
+			params = append(params, "alpn="+alpn)
+		} else if alpnList, ok := ts["alpn"].([]any); ok && len(alpnList) > 0 {
+			parts := make([]string, len(alpnList))
+			for i, a := range alpnList {
+				parts[i] = fmt.Sprint(a)
+			}
+			params = append(params, "alpn="+strings.Join(parts, ","))
 		}
 	}
 
