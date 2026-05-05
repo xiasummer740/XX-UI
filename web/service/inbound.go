@@ -3044,21 +3044,37 @@ func (s *InboundService) BuildClientConnectUrl(inbound *model.Inbound, client *m
 		params = append(params, "flow="+client.Flow)
 	}
 
-	// Reality parameters
+	// Reality parameters (may be nested under "settings" sub-object)
 	if realitySettings != nil {
-		if pbk, ok := realitySettings["publicKey"].(string); ok && pbk != "" {
+		rs := realitySettings
+		if inner, ok := realitySettings["settings"].(map[string]any); ok {
+			rs = inner
+		}
+		if pbk, ok := rs["publicKey"].(string); ok && pbk != "" {
 			params = append(params, "pbk="+pbk)
 		}
-		if fp, ok := realitySettings["fingerprint"].(string); ok && fp != "" {
+		if fp, ok := rs["fingerprint"].(string); ok && fp != "" {
 			params = append(params, "fp="+fp)
 		}
-		if sni, ok := realitySettings["serverName"].(string); ok && sni != "" {
+		sni := ""
+		if sn, ok := rs["serverName"].(string); ok && sn != "" {
+			sni = sn
+		} else if names, ok := realitySettings["serverNames"].([]any); ok && len(names) > 0 {
+			if s, ok := names[0].(string); ok {
+				sni = s
+			}
+		}
+		if sni != "" {
 			params = append(params, "sni="+sni)
 		}
-		if sid, ok := realitySettings["shortId"].(string); ok && sid != "" {
+		if ids, ok := realitySettings["shortIds"].([]any); ok && len(ids) > 0 {
+			if sid, ok := ids[0].(string); ok && sid != "" {
+				params = append(params, "sid="+sid)
+			}
+		} else if sid, ok := rs["shortId"].(string); ok && sid != "" {
 			params = append(params, "sid="+sid)
 		}
-		if spx, ok := realitySettings["spiderX"].(string); ok && spx != "" {
+		if spx, ok := rs["spiderX"].(string); ok && spx != "" {
 			params = append(params, "spx="+spx)
 		}
 	} else if tlsSettings != nil {
