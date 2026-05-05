@@ -2986,7 +2986,9 @@ func (s *InboundService) DelInboundClientByEmail(inboundId int, email string) (b
 
 func getKeys(m map[string]any) []string {
 	keys := make([]string, 0, len(m))
-	for k := range m { keys = append(keys, k) }
+	for k := range m {
+		keys = append(keys, k)
+	}
 	return keys
 }
 
@@ -3003,7 +3005,9 @@ func (s *InboundService) BuildClientConnectUrl(inbound *model.Inbound, client *m
 	var stream map[string]any
 	json.Unmarshal([]byte(inbound.StreamSettings), &stream)
 	sPreview := inbound.StreamSettings
-	if len(sPreview) > 400 { sPreview = sPreview[:400] }
+	if len(sPreview) > 400 {
+		sPreview = sPreview[:400]
+	}
 	logger.Debugf("[ConnectURL] inbound=%d streamSettings=%s", inbound.Id, sPreview)
 
 	network := "tcp"
