@@ -2,6 +2,7 @@ package controller
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/XiaSummer740/XX-UI/logger"
 	"github.com/XiaSummer740/XX-UI/web/middleware"
@@ -40,9 +41,10 @@ func (a *APIController) checkAPIAuth(c *gin.Context) {
 
 // initRouter sets up the API routes for inbounds, server, and other endpoints.
 func (a *APIController) initRouter(g *gin.RouterGroup, customGeo *service.CustomGeoService) {
-	// Main API group
+	// Main API group (session auth + rate limited)
 	api := g.Group("/panel/api")
 	api.Use(a.checkAPIAuth)
+	api.Use(middleware.RateLimiter(500, time.Minute))
 
 	// Inbounds API
 	inbounds := api.Group("/inbounds")

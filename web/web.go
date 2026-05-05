@@ -184,8 +184,8 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 
 	engine := gin.Default()
 
-	// API rate limiting: 200 requests per minute per IP
-	engine.Use(middleware.RateLimiter(200, time.Minute))
+	// Session-authenticated routes get rate-limited in api.go
+	// Remote API routes (API key auth) are excluded from rate limiting
 
 	webDomain, err := s.settingService.GetWebDomain()
 	if err != nil {
