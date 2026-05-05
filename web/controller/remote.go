@@ -28,6 +28,7 @@ func (a *RemoteController) initRouter(g *gin.RouterGroup) {
 	g.GET("/inbounds", a.listInbounds)
 	g.POST("/inbound/:id/client", a.createClient)
 	g.GET("/client/:email", a.getClient)
+		g.GET("/client/:email/connect", a.getConnectUrl)
 	g.POST("/client/:email/traffic", a.setClientTraffic)
 	g.POST("/client/:email/delete", a.deleteClient)
 }
@@ -124,6 +125,27 @@ func (a *RemoteController) setClientTraffic(c *gin.Context) {
 	}
 	logger.Infof("remote updated client %s: totalGB=%d expiry=%d", email, req.TotalGB, req.ExpiryTime)
 	jsonMsg(c, "updated", nil)
+}
+
+// getConnectUrl returns the full VMess/VLESS/Trojan connection URL for a client.
+func (a *RemoteController) getConnectUrl(c *gin.Context) {
+	email := c.Param("email")
+	allInbounds, err := a.inboundService.GetAllInbounds()
+	if err != nil {
+		jsonMsg(c, "failed to find client", err)
+		return
+	}
+	for _, inbound := range allInbounds {
+		clients, _ := a.inboundService.GetClients(inbound)
+		for _, cl := range clients {
+			if cl.Email == email {
+				url := a.inboundService.BuildClientConnectUrl(inbound, &cl)
+				jsonObj(c, gin.H{"url": url, "remark": inbound.Remark, "email": email}, nil)
+				return
+			}
+		}
+	}
+	jsonMsg(c, "client not found", nil)
 }
 
 // deleteClient removes a client by email from its parent inbound.

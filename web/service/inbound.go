@@ -2984,6 +2984,95 @@ func (s *InboundService) DelInboundClientByEmail(inboundId int, email string) (b
 	return needRestart, db.Save(oldInbound).Error
 }
 
+// BuildClientConnectUrl generates the full connection URL (vless:// vmess:// trojan:// etc.)
+// including all stream/tls/reality parameters from the inbound configuration.
+func (s *InboundService) BuildClientConnectUrl(inbound *model.Inbound, client *model.Client) string {
+	protocol := string(inbound.Protocol)
+	host := inbound.Listen
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		// Use the panel's external hostname — caller should provide it
+		host = ""
+	}
+
+	var stream map[string]any
+	json.Unmarshal([]byte(inbound.StreamSettings), &stream)
+
+	network := "tcp"
+	security := ""
+	var tlsSettings, realitySettings map[string]any
+
+	if s, ok := stream["network"].(string); ok && s != "" {
+		network = s
+	}
+	if s, ok := stream["security"].(string); ok && s != "" {
+		security = s
+	}
+	if t, ok := stream["tlsSettings"].(map[string]any); ok {
+		tlsSettings = t
+	}
+	if r, ok := stream["realitySettings"].(map[string]any); ok {
+		realitySettings = r
+	}
+
+	// Build URL params
+	params := make([]string, 0, 8)
+	params = append(params, "type="+network)
+	params = append(params, "encryption=none")
+
+	if security != "" {
+		params = append(params, "security="+security)
+	}
+
+	// Add flow if present
+	if client.Flow != "" {
+		params = append(params, "flow="+client.Flow)
+	}
+
+	// Reality parameters
+	if realitySettings != nil {
+		if pbk, ok := realitySettings["publicKey"].(string); ok && pbk != "" {
+			params = append(params, "pbk="+pbk)
+		}
+		if fp, ok := realitySettings["fingerprint"].(string); ok && fp != "" {
+			params = append(params, "fp="+fp)
+		}
+		if sni, ok := realitySettings["serverName"].(string); ok && sni != "" {
+			params = append(params, "sni="+sni)
+		}
+		if sid, ok := realitySettings["shortId"].(string); ok && sid != "" {
+			params = append(params, "sid="+sid)
+		}
+		if spx, ok := realitySettings["spiderX"].(string); ok && spx != "" {
+			params = append(params, "spx="+spx)
+		}
+	} else if tlsSettings != nil {
+		if sni, ok := tlsSettings["serverName"].(string); ok && sni != "" {
+			params = append(params, "sni="+sni)
+		}
+	}
+
+	remark := ""
+	if inbound.Remark != "" {
+		remark = inbound.Remark + "-" + client.Email
+	} else {
+		remark = client.Email
+	}
+
+	port := fmt.Sprintf("%d", inbound.Port)
+	addr := host + ":" + port
+
+	switch model.Protocol(protocol) {
+	case model.VLESS:
+		return fmt.Sprintf("vless://%s@%s?%s#%s", client.ID, addr, strings.Join(params, "&"), remark)
+	case model.VMESS:
+		return fmt.Sprintf("vmess://%s@%s?%s#%s", client.ID, addr, strings.Join(params, "&"), remark)
+	case model.Trojan:
+		return fmt.Sprintf("trojan://%s@%s?%s#%s", client.Password, addr, strings.Join(params, "&"), remark)
+	default:
+		return fmt.Sprintf("%s://%s@%s?%s#%s", protocol, client.ID, addr, strings.Join(params, "&"), remark)
+	}
+}
+
 // BatchGenerateInbounds generates 10 VLESS+TCP+Reality+Vision inbounds on ports 44301-44310.
 func (s *InboundService) BatchGenerateInbounds(userId int) ([]*model.Inbound, error) {
 	var created []*model.Inbound
