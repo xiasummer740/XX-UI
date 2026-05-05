@@ -28,7 +28,7 @@ func (a *RemoteController) initRouter(g *gin.RouterGroup) {
 	g.GET("/inbounds", a.listInbounds)
 	g.POST("/inbound/:id/client", a.createClient)
 	g.GET("/client/:email", a.getClient)
-		g.GET("/client/:email/connect", a.getConnectUrl)
+	g.GET("/client/:email/connect", a.getConnectUrl)
 	g.POST("/client/:email/traffic", a.setClientTraffic)
 	g.POST("/client/:email/delete", a.deleteClient)
 }
