@@ -37,8 +37,22 @@ func RateLimiter(maxRequests int, window time.Duration) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ip := c.ClientIP()
 		mu.Lock()
+		// Prune if map grows too large (potential attack)
+		if len(visitors) > 50000 {
+			now := time.Now()
+			for k, v := range visitors {
+				if now.Sub(v.lastSeen) > window {
+					delete(visitors, k)
+				}
+			}
+		}
 		v, exists := visitors[ip]
 		if !exists {
+			if len(visitors) > 50000 {
+				mu.Unlock()
+				c.Next() // under attack, fall through to avoid OOM
+				return
+			}
 			v = &visitor{count: 0, lastSeen: time.Now()}
 			visitors[ip] = v
 		}

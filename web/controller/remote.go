@@ -130,22 +130,17 @@ func (a *RemoteController) getConnectUrl(c *gin.Context) {
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
 	}
-	allInbounds, err := a.inboundService.GetAllInbounds()
-	if err != nil {
-		jsonMsg(c, "failed to find client", err)
+	inbound, err := a.inboundService.FindInboundByClientEmail(email)
+	if err != nil || !inbound.AllowRemote {
+		jsonMsg(c, "client not found", nil)
 		return
 	}
-	for _, inbound := range allInbounds {
-		if !inbound.AllowRemote {
-			continue
-		}
-		clients, _ := a.inboundService.GetClients(inbound)
-		for _, cl := range clients {
-			if cl.Email == email {
-				url := a.inboundService.BuildClientConnectUrl(inbound, &cl, host)
-				jsonObj(c, gin.H{"url": url, "remark": inbound.Remark, "email": email}, nil)
-				return
-			}
+	clients, _ := a.inboundService.GetClients(inbound)
+	for _, cl := range clients {
+		if cl.Email == email {
+			url := a.inboundService.BuildClientConnectUrl(inbound, &cl, host)
+			jsonObj(c, gin.H{"url": url, "remark": inbound.Remark, "email": email}, nil)
+			return
 		}
 	}
 	jsonMsg(c, "client not found", nil)
@@ -154,29 +149,17 @@ func (a *RemoteController) getConnectUrl(c *gin.Context) {
 // deleteClient removes a client by email from its parent inbound.
 func (a *RemoteController) deleteClient(c *gin.Context) {
 	email := c.Param("email")
-	allInbounds, err := a.inboundService.GetAllInbounds()
-	if err != nil {
-		jsonMsg(c, "failed to find client", err)
+	inbound, err := a.inboundService.FindInboundByClientEmail(email)
+	if err != nil || !inbound.AllowRemote {
+		jsonMsg(c, "client not found or not accessible", nil)
 		return
 	}
-	for _, inbound := range allInbounds {
-		if !inbound.AllowRemote {
-			continue
-		}
-		clients, _ := a.inboundService.GetClients(inbound)
-		for _, cl := range clients {
-			if cl.Email == email {
-				_, err := a.inboundService.DelInboundClientByEmail(inbound.Id, email)
-				if err != nil {
-					jsonMsg(c, "failed to delete client", err)
-					return
-				}
-				a.xrayService.SetToNeedRestart()
-				logger.Infof("remote deleted client %s from inbound %d", email, inbound.Id)
-				jsonMsg(c, "deleted", nil)
-				return
-			}
-		}
+	_, err = a.inboundService.DelInboundClientByEmail(inbound.Id, email)
+	if err != nil {
+		jsonMsg(c, "failed to delete client", err)
+		return
 	}
-	jsonMsg(c, "client not found", nil)
+	a.xrayService.SetToNeedRestart()
+	logger.Infof("remote deleted client %s from inbound %d", email, inbound.Id)
+	jsonMsg(c, "deleted", nil)
 }

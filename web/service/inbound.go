@@ -1744,6 +1744,17 @@ func (s *InboundService) MigrationRemoveOrphanedTraffics() {
 	`)
 }
 
+// FindInboundByClientEmail finds the inbound a client belongs to by email.
+func (s *InboundService) FindInboundByClientEmail(email string) (*model.Inbound, error) {
+	db := database.GetDB()
+	var traffic xray.ClientTraffic
+	err := db.Where("email = ?", email).First(&traffic).Error
+	if err != nil {
+		return nil, err
+	}
+	return s.GetInbound(traffic.InboundId)
+}
+
 func (s *InboundService) AddClientStat(tx *gorm.DB, inboundId int, client *model.Client) error {
 	clientTraffic := xray.ClientTraffic{}
 	clientTraffic.InboundId = inboundId
