@@ -2984,6 +2984,12 @@ func (s *InboundService) DelInboundClientByEmail(inboundId int, email string) (b
 	return needRestart, db.Save(oldInbound).Error
 }
 
+func getKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m { keys = append(keys, k) }
+	return keys
+}
+
 // BuildClientConnectUrl generates the full connection URL (vless:// vmess:// trojan:// etc.)
 // including all stream/tls/reality parameters from the inbound configuration.
 // externalHost is the public hostname/IP of the panel, used when inbound listens on 0.0.0.0
@@ -2996,6 +3002,9 @@ func (s *InboundService) BuildClientConnectUrl(inbound *model.Inbound, client *m
 
 	var stream map[string]any
 	json.Unmarshal([]byte(inbound.StreamSettings), &stream)
+	sPreview := inbound.StreamSettings
+	if len(sPreview) > 400 { sPreview = sPreview[:400] }
+	logger.Debugf("[ConnectURL] inbound=%d streamSettings=%s", inbound.Id, sPreview)
 
 	network := "tcp"
 	security := ""
@@ -3012,6 +3021,9 @@ func (s *InboundService) BuildClientConnectUrl(inbound *model.Inbound, client *m
 	}
 	if r, ok := stream["realitySettings"].(map[string]any); ok {
 		realitySettings = r
+		logger.Debugf("[ConnectURL] realitySettings found: %v", realitySettings)
+	} else {
+		logger.Debugf("[ConnectURL] realitySettings NOT found in stream keys: %v", getKeys(stream))
 	}
 
 	// Build URL params
