@@ -47,18 +47,23 @@ func RateLimiter(maxRequests int, window time.Duration) gin.HandlerFunc {
 			}
 		}
 		v, exists := visitors[ip]
+		now := time.Now()
 		if !exists {
 			if len(visitors) > 50000 {
 				mu.Unlock()
-				c.Next() // under attack, fall through to avoid OOM
+				c.Next()
 				return
 			}
-			v = &visitor{count: 0, lastSeen: time.Now()}
+			v = &visitor{count: 0, lastSeen: now}
 			visitors[ip] = v
+		}
+		// Reset counter if window has passed
+		if now.Sub(v.lastSeen) > window {
+			v.count = 0
 		}
 		v.count++
 		count := v.count
-		v.lastSeen = time.Now()
+		v.lastSeen = now
 		mu.Unlock()
 
 		if count > maxRequests {
