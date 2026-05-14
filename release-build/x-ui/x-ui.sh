@@ -1003,6 +1003,32 @@ install_acme() {
     return 0
 }
 
+restore_service() {
+    local svc="$1"
+    if [[ -z "${svc}" ]]; then
+        return 0
+    fi
+    if [[ "${svc}" == pid:* ]]; then
+        local pid="${svc#pid:}"
+        kill -CONT "${pid}" 2>/dev/null
+        LOGI "Process ${pid} resumed."
+        return 0
+    fi
+    if systemctl start "${svc}" 2>/dev/null; then
+        LOGI "Service ${svc} restarted via systemctl."
+        return 0
+    fi
+    if service "${svc}" start 2>/dev/null; then
+        LOGI "Service ${svc} restarted via service."
+        return 0
+    fi
+    if rc-service "${svc}" start 2>/dev/null; then
+        LOGI "Service ${svc} restarted via rc-service."
+        return 0
+    fi
+    LOGW "Failed to restart service ${svc}. You may need to restart it manually."
+}
+
 ssl_cert_issue_main() {
     echo -e "${green}\t1.${plain} 获取 SSL 证书（域名）"
     echo -e "${green}\t2.${plain} 吊销证书"
@@ -1374,12 +1400,22 @@ ssl_cert_issue() {
     SSL_ISSUED_DOMAIN="${domain}"
 
     # detect existing certificate and reuse it if present
+    # Also verify the actual key file exists — acme.sh may have a stale entry
+    # from a previous failed attempt where the .key file was never created.
     local cert_exists=0
+    local acme_ecc_dir="${HOME}/.acme.sh/${domain}_ecc"
+    local acme_rsa_dir="${HOME}/.acme.sh/${domain}"
     if ~/.acme.sh/acme.sh --list 2>/dev/null | awk '{print $1}' | grep -Fxq "${domain}"; then
-        cert_exists=1
-        local certInfo=$(~/.acme.sh/acme.sh --list 2>/dev/null | grep -F "${domain}")
-        LOGI "Existing certificate found for ${domain}, will reuse it."
-        [[ -n "${certInfo}" ]] && LOGI "${certInfo}"
+        if [[ -f "${acme_ecc_dir}/${domain}.key" ]] || [[ -f "${acme_rsa_dir}/${domain}.key" ]]; then
+            cert_exists=1
+            local certInfo=$(~/.acme.sh/acme.sh --list 2>/dev/null | grep -F "${domain}")
+            LOGI "Existing certificate found for ${domain}, will reuse it."
+            [[ -n "${certInfo}" ]] && LOGI "${certInfo}"
+        else
+            LOGW "Stale acme.sh entry detected for ${domain} (key file missing). Will re-issue."
+            rm -rf "${acme_ecc_dir}" 2>/dev/null
+            rm -rf "${acme_rsa_dir}" 2>/dev/null
+        fi
     else
         LOGI "Your domain is ready for issuing certificates now..."
     fi
@@ -1395,23 +1431,148 @@ ssl_cert_issue() {
 
     # get the port number for the standalone server
     local WebPort=80
+    local use_webroot=0
+    local webroot_path=""
+    local stopped_service=""
+
     read -rp "请选择使用的端口（默认为 80）: " WebPort
     if [[ ${WebPort} -gt 65535 || ${WebPort} -lt 1 ]]; then
         LOGE "Your input ${WebPort} is invalid, will use default port 80."
         WebPort=80
     fi
-    LOGI "Will use port: ${WebPort} to issue certificates. Please make sure this port is open."
+    LOGI "Will use port: ${WebPort} to issue certificates."
+
+    # ——— Port conflict detection & resolution ———
+    if is_port_in_use "${WebPort}"; then
+        echo ""
+        LOGW "Port ${WebPort} is currently in use by another process."
+
+        # Detect which web server (if any) is running
+        local web_server_svc=""
+        local detected_webroot=""
+        if command -v nginx &>/dev/null; then
+            web_server_svc="nginx"
+            detected_webroot=$(grep -rh "root " /etc/nginx/conf.d/ /etc/nginx/sites-enabled/ /etc/nginx/sites-available/ 2>/dev/null | grep -v "#" | head -1 | awk '{print $2}' | tr -d ';')
+            [[ -z "${detected_webroot}" ]] && detected_webroot=$(grep -rh "root " /etc/nginx/nginx.conf 2>/dev/null | grep -v "#" | head -1 | awk '{print $2}' | tr -d ';')
+            [[ -z "${detected_webroot}" ]] && detected_webroot="/usr/share/nginx/html"
+        elif command -v apache2 &>/dev/null; then
+            web_server_svc="apache2"
+            detected_webroot=$(grep -rh "DocumentRoot " /etc/apache2/sites-enabled/ /etc/apache2/sites-available/ 2>/dev/null | grep -v "#" | head -1 | awk '{print $2}')
+            [[ -z "${detected_webroot}" ]] && detected_webroot="/var/www/html"
+        elif command -v httpd &>/dev/null; then
+            web_server_svc="httpd"
+            detected_webroot=$(grep -rh "DocumentRoot " /etc/httpd/conf.d/ /etc/httpd/conf/ 2>/dev/null | grep -v "#" | head -1 | awk '{print $2}')
+            [[ -z "${detected_webroot}" ]] && detected_webroot="/var/www/html"
+        elif command -v caddy &>/dev/null; then
+            web_server_svc="caddy"
+            detected_webroot="/var/www/html"
+        fi
+
+        echo -e "${yellow}端口 ${WebPort} 已被占用，请选择解决方案：${plain}"
+        echo -e "${green}  1.${plain} Webroot 模式 — 通过现有 Web 服务器验证（${green}推荐，不占用端口${plain}）"
+        if [[ -n "${web_server_svc}" ]]; then
+            echo -e "     → 检测到 ${web_server_svc}，自动 webroot: ${detected_webroot}"
+        fi
+        echo -e "${green}  2.${plain} 临时停服模式 — 停止占用端口的服务 → 签发证书 → 自动恢复"
+        echo -e "${green}  3.${plain} 更换端口 — 使用其他端口（需外部端口转发 80→新端口）"
+        echo -e "${green}  0.${plain} 放弃"
+        read -rp "请选择 [1]: " port_choice
+        port_choice="${port_choice:-1}"
+
+        case "${port_choice}" in
+        1)
+            use_webroot=1
+            if [[ -n "${web_server_svc}" && -d "${detected_webroot}" ]]; then
+                webroot_path="${detected_webroot}"
+                LOGI "Using webroot mode with auto-detected path: ${webroot_path} (${web_server_svc})"
+            else
+                read -rp "请输入 Web 服务器的根目录路径: " webroot_path
+                webroot_path="${webroot_path// /}"
+                if [[ ! -d "${webroot_path}" ]]; then
+                    LOGE "路径 ${webroot_path} 不存在，尝试创建..."
+                    mkdir -p "${webroot_path}" 2>/dev/null || {
+                        LOGE "无法创建目录，放弃。"
+                        exit 1
+                    }
+                fi
+            fi
+            mkdir -p "${webroot_path}/.well-known/acme-challenge"
+            LOGI "Webroot ACME challenge directory prepared: ${webroot_path}/.well-known/acme-challenge"
+            ;;
+        2)
+            if [[ -n "${web_server_svc}" ]]; then
+                stopped_service="${web_server_svc}"
+                LOGI "Temporarily stopping ${stopped_service}..."
+                if systemctl stop "${stopped_service}" 2>/dev/null; then
+                    LOGI "${stopped_service} stopped via systemctl."
+                elif service "${stopped_service}" stop 2>/dev/null; then
+                    LOGI "${stopped_service} stopped via service."
+                elif rc-service "${stopped_service}" stop 2>/dev/null; then
+                    LOGI "${stopped_service} stopped via rc-service."
+                else
+                    LOGE "Failed to stop ${stopped_service}. Please stop it manually and retry."
+                    exit 1
+                fi
+                sleep 1
+            else
+                # Try to kill the process holding the port
+                local pid_holder=""
+                if command -v ss &>/dev/null; then
+                    pid_holder=$(ss -tlnp 2>/dev/null | grep ":${WebPort} " | grep -oP 'pid=\K[0-9]+' | head -1)
+                fi
+                if [[ -n "${pid_holder}" ]]; then
+                    stopped_service="pid:${pid_holder}"
+                    kill -STOP "${pid_holder}" 2>/dev/null
+                    LOGI "Process ${pid_holder} suspended (will resume after certificate is installed)."
+                else
+                    LOGE "Cannot determine which process uses port ${WebPort}. Aborting."
+                    exit 1
+                fi
+            fi
+            ;;
+        3)
+            read -rp "请输入替代端口: " WebPort
+            if ! [[ "${WebPort}" =~ ^[0-9]+$ ]] || ((WebPort < 1 || WebPort > 65535)); then
+                LOGE "无效端口，放弃。"
+                exit 1
+            fi
+            LOGI "Will use port ${WebPort}."
+            echo -e "${yellow}注意：Let's Encrypt 始终从外部访问 80 端口！${plain}"
+            echo -e "${yellow}请确保已将外部 80 端口转发到本机 ${WebPort} 端口。${plain}"
+            read -rp "确认继续？ [y/N]: " confirm_forward
+            if [[ "${confirm_forward}" != "y" && "${confirm_forward}" != "Y" ]]; then
+                LOGE "User cancelled."
+                exit 1
+            fi
+            ;;
+        *)
+            LOGE "User cancelled."
+            exit 1
+            ;;
+        esac
+        echo ""
+    fi
+    # ——— End port conflict resolution ———
 
     if [[ ${cert_exists} -eq 0 ]]; then
         # issue the certificate
         ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt --force
-        ~/.acme.sh/acme.sh --issue -d ${domain} --listen-v6 --standalone --httpport ${WebPort} --force
-        if [ $? -ne 0 ]; then
+        local issue_rc=0
+        if [[ ${use_webroot} -eq 1 ]]; then
+            ~/.acme.sh/acme.sh --issue -d ${domain} --webroot "${webroot_path}" --force
+            issue_rc=$?
+        else
+            ~/.acme.sh/acme.sh --issue -d ${domain} --listen-v6 --standalone --httpport ${WebPort} --force
+            issue_rc=$?
+        fi
+        if [[ ${issue_rc} -ne 0 ]]; then
             LOGE "Issuing certificate failed, please check logs."
             rm -rf ~/.acme.sh/${domain}
+            rm -rf "${acme_ecc_dir}" 2>/dev/null
+            [[ -n "${stopped_service}" ]] && restore_service "${stopped_service}"
             exit 1
         else
-            LOGE "Issuing certificate succeeded, installing certificates..."
+            LOGI "Issuing certificate succeeded, installing certificates..."
         fi
     else
         LOGI "Using existing certificate, installing certificates..."
@@ -1463,8 +1624,12 @@ ssl_cert_issue() {
         if [[ ${cert_exists} -eq 0 ]]; then
             rm -rf ~/.acme.sh/${domain}
         fi
+        [[ -n "${stopped_service}" ]] && restore_service "${stopped_service}"
         exit 1
     fi
+
+    # Restore any service we temporarily stopped — cert is installed now
+    [[ -n "${stopped_service}" ]] && restore_service "${stopped_service}"
 
     # enable auto-renew
     ~/.acme.sh/acme.sh --upgrade --auto-upgrade
