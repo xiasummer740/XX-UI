@@ -234,7 +234,7 @@ server {
     server_name _;
 
     location /.well-known/acme-challenge/ {
-        root /var/www/acme-challenge;
+        alias /var/www/acme-challenge/;
     }
 
     location / {
@@ -280,7 +280,7 @@ server {
     server_name ${domain};
 
     location /.well-known/acme-challenge/ {
-        root /var/www/acme-challenge;
+        alias /var/www/acme-challenge/;
     }
 
     location / {

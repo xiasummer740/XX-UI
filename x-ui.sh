@@ -2386,7 +2386,7 @@ server {
     listen 80;
     server_name _;
     location /.well-known/acme-challenge/ {
-        root /var/www/acme-challenge;
+        alias /var/www/acme-challenge/;
     }
     location / { return 404; }
 }
@@ -2452,7 +2452,7 @@ EOF
 server {
     listen 80;
     server_name ${domain};
-    location /.well-known/acme-challenge/ { root /var/www/acme-challenge; }
+    location /.well-known/acme-challenge/ { alias /var/www/acme-challenge/; }
     location / { return 301 https://\$host\$request_uri; }
 }
 server {
