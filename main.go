@@ -194,7 +194,13 @@ func showSetting(show bool) {
 			return userModel.Username == "admin" && crypto.CheckPasswordHash(userModel.Password, "admin")
 		}()
 
-		fmt.Println("默认凭据:", hasDefaultCredential)
+			var defaultCred string
+			if hasDefaultCredential {
+				defaultCred = "是"
+			} else {
+				defaultCred = "否"
+			}
+			fmt.Println("默认凭据:", defaultCred)
 		fmt.Println("端口:", port)
 		fmt.Println("访问路径:", webBasePath)
 	}
