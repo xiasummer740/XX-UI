@@ -799,6 +799,7 @@ class LanguageManager {
                 const simularLangs = [
                     ["ar", this.supportedLanguages[0].value],
                     ["fa", this.supportedLanguages[2].value],
+                    ["zh", this.supportedLanguages[3].value],
                     ["ja", this.supportedLanguages[5].value],
                     ["ru", this.supportedLanguages[6].value],
                     ["vi", this.supportedLanguages[7].value],
