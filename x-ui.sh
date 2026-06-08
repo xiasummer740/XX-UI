@@ -301,9 +301,9 @@ check_config() {
         local domain=$(basename "$(dirname "$existing_cert")")
 
         if [[ "$domain" =~ ^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
-            echo -e "${green}Access URL: https://${domain}:${existing_port}${existing_webBasePath}${plain}"
+            echo -e "${green}访问地址: https://${domain}:${existing_port}${existing_webBasePath}${plain}"
         else
-            echo -e "${green}Access URL: https://${server_ip}:${existing_port}${existing_webBasePath}${plain}"
+            echo -e "${green}访问地址: https://${server_ip}:${existing_port}${existing_webBasePath}${plain}"
         fi
     else
         echo -e "${red}⚠ WARNING: No SSL certificate configured!${plain}"
@@ -313,7 +313,7 @@ check_config() {
             stop >/dev/null 2>&1
             ssl_cert_issue_for_ip
             if [[ $? -eq 0 ]]; then
-                echo -e "${green}Access URL: https://${server_ip}:${existing_port}${existing_webBasePath}${plain}"
+                echo -e "${green}访问地址: https://${server_ip}:${existing_port}${existing_webBasePath}${plain}"
                 # ssl_cert_issue_for_ip already restarts the panel, but ensure it's running
                 start >/dev/null 2>&1
             else
@@ -322,7 +322,7 @@ check_config() {
                 start >/dev/null 2>&1
             fi
         else
-            echo -e "${yellow}Access URL: http://${server_ip}:${existing_port}${existing_webBasePath}${plain}"
+            echo -e "${yellow}访问地址: http://${server_ip}:${existing_port}${existing_webBasePath}${plain}"
             echo -e "${yellow}For security, please configure SSL certificate using option 19 (SSL Certificate Management)${plain}"
         fi
     fi
@@ -689,15 +689,15 @@ show_status() {
     check_status
     case $? in
     0)
-        echo -e "Panel state: ${green}Running${plain}"
+        echo -e "面板状态: ${green}运行中${plain}"
         show_enable_status
         ;;
     1)
-        echo -e "Panel state: ${yellow}Not Running${plain}"
+        echo -e "面板状态: ${yellow}未运行${plain}"
         show_enable_status
         ;;
     2)
-        echo -e "Panel state: ${red}Not Installed${plain}"
+        echo -e "面板状态: ${red}未安装${plain}"
         ;;
     esac
     show_xray_status
@@ -706,9 +706,9 @@ show_status() {
 show_enable_status() {
     check_enabled
     if [[ $? == 0 ]]; then
-        echo -e "Start automatically: ${green}Yes${plain}"
+        echo -e "开机自启: ${green}已启用${plain}"
     else
-        echo -e "Start automatically: ${red}No${plain}"
+        echo -e "开机自启: ${red}未启用${plain}"
     fi
 }
 
@@ -1320,7 +1320,7 @@ ssl_cert_issue_for_ip() {
         LOGI "  - 证书文件: $webCertFile"
         LOGI "  - 私钥文件: $webKeyFile"
         LOGI "  - Validity: ~6 days (auto-renews via acme.sh cron)"
-        echo -e "${green}Access URL: https://${server_ip}:${existing_port}${existing_webBasePath}${plain}"
+        echo -e "${green}访问地址: https://${server_ip}:${existing_port}${existing_webBasePath}${plain}"
         LOGI "Panel will restart to apply SSL certificate..."
         restart
         return 0
@@ -1657,7 +1657,7 @@ ssl_cert_issue() {
             LOGI "面板证书路径已设置为域名: $domain"
             LOGI "  - 证书文件: $webCertFile"
             LOGI "  - 私钥文件: $webKeyFile"
-            echo -e "${green}Access URL: https://${domain}:${existing_port}${existing_webBasePath}${plain}"
+            echo -e "${green}访问地址: https://${domain}:${existing_port}${existing_webBasePath}${plain}"
             restart
         else
             LOGE "Error: Certificate or private key file not found for domain: $domain."
@@ -1798,7 +1798,7 @@ ssl_cert_issue_CF() {
                 LOGI "面板证书路径已设置为域名: $CF_Domain"
                 LOGI "  - 证书文件: $webCertFile"
                 LOGI "  - 私钥文件: $webKeyFile"
-                echo -e "${green}Access URL: https://${CF_Domain}:${existing_port}${existing_webBasePath}${plain}"
+                echo -e "${green}访问地址: https://${CF_Domain}:${existing_port}${existing_webBasePath}${plain}"
                 restart
             else
                 LOGE "Error: Certificate or private key file not found for domain: $CF_Domain."

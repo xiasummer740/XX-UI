@@ -319,7 +319,7 @@
                           <a-menu-item key="chainProxy">
                             <a-icon type="share-alt"></a-icon> 链式代理
                             <a-tag v-if="dbInbound.chainProxy && dbInbound.chainProxy !== '{}' && dbInbound.chainProxy !== ''" :color="dbInbound.enableChainProxy ? 'green' : 'orange'" :style="{ marginLeft: '6px', fontSize: '10px', lineHeight: '14px', padding: '0 4px' }">
-                              [[ dbInbound.enableChainProxy ? 'ON' : 'OFF' ]]
+                              [[ dbInbound.enableChainProxy ? "开" : "关" ]]
                             </a-tag>
                           </a-menu-item>
                           <a-menu-item key="convertNode">

@@ -137,16 +137,16 @@ func runWebServer() {
 func resetSetting() {
 	err := database.InitDB(config.GetDBPath())
 	if err != nil {
-		fmt.Println("Failed to initialize database:", err)
+		fmt.Println("数据库初始化失败：", err)
 		return
 	}
 
 	settingService := service.SettingService{}
 	err = settingService.ResetSettings()
 	if err != nil {
-		fmt.Println("Failed to reset settings:", err)
+		fmt.Println("重置设置失败：", err)
 	} else {
-		fmt.Println("Settings successfully reset.")
+		fmt.Println("设置已成功重置。")
 	}
 }
 
@@ -156,47 +156,47 @@ func showSetting(show bool) {
 		settingService := service.SettingService{}
 		port, err := settingService.GetPort()
 		if err != nil {
-			fmt.Println("get current port failed, error info:", err)
+			fmt.Println("获取端口失败：", err)
 		}
 
 		webBasePath, err := settingService.GetBasePath()
 		if err != nil {
-			fmt.Println("get webBasePath failed, error info:", err)
+			fmt.Println("获取访问路径失败：", err)
 		}
 
 		certFile, err := settingService.GetCertFile()
 		if err != nil {
-			fmt.Println("get cert file failed, error info:", err)
+			fmt.Println("获取证书文件失败：", err)
 		}
 		keyFile, err := settingService.GetKeyFile()
 		if err != nil {
-			fmt.Println("get key file failed, error info:", err)
+			fmt.Println("获取私钥文件失败：", err)
 		}
 
 		userService := service.UserService{}
 		userModel, err := userService.GetFirstUser()
 		if err != nil {
-			fmt.Println("get current user info failed, error info:", err)
+			fmt.Println("获取用户信息失败：", err)
 		}
 
 		if userModel.Username == "" || userModel.Password == "" {
-			fmt.Println("current username or password is empty")
+			fmt.Println("当前用户名或密码为空")
 		}
 
-		fmt.Println("current panel settings as follows:")
+		fmt.Println("当前面板设置如下：")
 		if certFile == "" || keyFile == "" {
-			fmt.Println("Warning: Panel is not secure with SSL")
+			fmt.Println("警告：面板未启用 SSL")
 		} else {
-			fmt.Println("Panel is secure with SSL")
+			fmt.Println("面板已启用 SSL 安全连接")
 		}
 
 		hasDefaultCredential := func() bool {
 			return userModel.Username == "admin" && crypto.CheckPasswordHash(userModel.Password, "admin")
 		}()
 
-		fmt.Println("hasDefaultCredential:", hasDefaultCredential)
-		fmt.Println("port:", port)
-		fmt.Println("webBasePath:", webBasePath)
+		fmt.Println("默认凭据:", hasDefaultCredential)
+		fmt.Println("端口:", port)
+		fmt.Println("访问路径:", webBasePath)
 	}
 }
 
@@ -224,7 +224,7 @@ func updateTgbotEnableSts(status bool) {
 func updateTgbotSetting(tgBotToken string, tgBotChatid string, tgBotRuntime string) {
 	err := database.InitDB(config.GetDBPath())
 	if err != nil {
-		fmt.Println("Error initializing database:", err)
+		fmt.Println("数据库初始化失败：", err)
 		return
 	}
 
@@ -262,7 +262,7 @@ func updateTgbotSetting(tgBotToken string, tgBotChatid string, tgBotRuntime stri
 func updateSetting(port int, username string, password string, webBasePath string, listenIP string, resetTwoFactor bool) {
 	err := database.InitDB(config.GetDBPath())
 	if err != nil {
-		fmt.Println("Database initialization failed:", err)
+		fmt.Println("数据库初始化失败：", err)
 		return
 	}
 
@@ -272,7 +272,7 @@ func updateSetting(port int, username string, password string, webBasePath strin
 	if port > 0 {
 		err := settingService.SetPort(port)
 		if err != nil {
-			fmt.Println("Failed to set port:", err)
+			fmt.Println("设置端口失败：", err)
 		} else {
 			fmt.Printf("Port set successfully: %v\n", port)
 		}
@@ -365,11 +365,11 @@ func GetCertificate(getCert bool) {
 		settingService := service.SettingService{}
 		certFile, err := settingService.GetCertFile()
 		if err != nil {
-			fmt.Println("get cert file failed, error info:", err)
+			fmt.Println("获取证书文件失败：", err)
 		}
 		keyFile, err := settingService.GetKeyFile()
 		if err != nil {
-			fmt.Println("get key file failed, error info:", err)
+			fmt.Println("获取私钥文件失败：", err)
 		}
 
 		fmt.Println("cert:", certFile)
