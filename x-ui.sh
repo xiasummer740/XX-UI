@@ -289,8 +289,8 @@ check_config() {
     fi
     LOGI "${info}"
 
-    local existing_webBasePath=$(echo "$info" | grep -Eo 'webBasePath: .+' | awk '{print $2}')
-    local existing_port=$(echo "$info" | grep -Eo 'port: .+' | awk '{print $2}')
+    local existing_webBasePath=$(echo "$info" | grep -Eo '(webBasePath|访问路径): .+' | awk '{print $2}')
+    local existing_port=$(echo "$info" | grep -Eo '(port|端口): .+' | awk '{print $2}')
     local existing_cert=$(${xui_folder}/x-ui setting -getCert true | grep 'cert:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
     local server_ip=$(curl -s --max-time 3 https://api.ipify.org)
     if [ -z "$server_ip" ]; then
@@ -420,11 +420,7 @@ restart_xray() {
 }
 
 status() {
-    if [[ $release == "alpine" ]]; then
-        rc-service x-ui status
-    else
-        systemctl status x-ui -l
-    fi
+    show_status
     if [[ $# == 0 ]]; then
         before_show_menu
     fi
@@ -1152,8 +1148,8 @@ ssl_cert_issue_for_ip() {
     LOGI "Starting automatic SSL certificate generation for server IP..."
     LOGI "Using Let's Encrypt shortlived profile (~6 days validity, auto-renews)"
     
-    local existing_webBasePath=$(${xui_folder}/x-ui setting -show true | grep -Eo 'webBasePath: .+' | awk '{print $2}')
-    local existing_port=$(${xui_folder}/x-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')
+    local existing_webBasePath=$(${xui_folder}/x-ui setting -show true | grep -Eo '(webBasePath|访问路径): .+' | awk '{print $2}')
+    local existing_port=$(${xui_folder}/x-ui setting -show true | grep -Eo '(port|端口): .+' | awk '{print $2}')
     
     # Get server IP
     local server_ip=$(curl -s --max-time 3 https://api.ipify.org)
@@ -1331,8 +1327,8 @@ ssl_cert_issue_for_ip() {
 }
 
 ssl_cert_issue() {
-    local existing_webBasePath=$(${xui_folder}/x-ui setting -show true | grep -Eo 'webBasePath: .+' | awk '{print $2}')
-    local existing_port=$(${xui_folder}/x-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')
+    local existing_webBasePath=$(${xui_folder}/x-ui setting -show true | grep -Eo '(webBasePath|访问路径): .+' | awk '{print $2}')
+    local existing_port=$(${xui_folder}/x-ui setting -show true | grep -Eo '(port|端口): .+' | awk '{print $2}')
     # check for acme.sh first
     if ! command -v ~/.acme.sh/acme.sh &>/dev/null; then
         echo "acme.sh could not be found. we will install it"
@@ -1668,8 +1664,8 @@ ssl_cert_issue() {
 }
 
 ssl_cert_issue_CF() {
-    local existing_webBasePath=$(${xui_folder}/x-ui setting -show true | grep -Eo 'webBasePath: .+' | awk '{print $2}')
-    local existing_port=$(${xui_folder}/x-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')
+    local existing_webBasePath=$(${xui_folder}/x-ui setting -show true | grep -Eo '(webBasePath|访问路径): .+' | awk '{print $2}')
+    local existing_port=$(${xui_folder}/x-ui setting -show true | grep -Eo '(port|端口): .+' | awk '{print $2}')
     LOGI "****** Instructions for Use ******"
     LOGI "Follow the steps below to complete the process:"
     LOGI "1. Cloudflare Registered E-mail."
@@ -2269,8 +2265,8 @@ SSH_port_forwarding() {
         fi
     done
 
-    local existing_webBasePath=$(${xui_folder}/x-ui setting -show true | grep -Eo 'webBasePath: .+' | awk '{print $2}')
-    local existing_port=$(${xui_folder}/x-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')
+    local existing_webBasePath=$(${xui_folder}/x-ui setting -show true | grep -Eo '(webBasePath|访问路径): .+' | awk '{print $2}')
+    local existing_port=$(${xui_folder}/x-ui setting -show true | grep -Eo '(port|端口): .+' | awk '{print $2}')
     local existing_listenIP=$(${xui_folder}/x-ui setting -getListen true | grep -Eo 'listenIP: .+' | awk '{print $2}')
     local existing_cert=$(${xui_folder}/x-ui setting -getCert true | grep -Eo 'cert: .+' | awk '{print $2}')
     local existing_key=$(${xui_folder}/x-ui setting -getCert true | grep -Eo 'key: .+' | awk '{print $2}')
@@ -2352,7 +2348,7 @@ SSH_port_forwarding() {
 # ═══════════════════════════════════════════════
 add_domain() {
     local domain="$1"
-    local upstream="${2:-127.0.0.1:$(/usr/local/x-ui/x-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')}"
+    local upstream="${2:-127.0.0.1:$(/usr/local/x-ui/x-ui setting -show true | grep -Eo '(port|端口): .+' | awk '{print $2}')}"
 
     if [[ -z "$domain" ]]; then
         LOGE "用法: x-ui add-domain <域名> [上游地址]"
@@ -2445,8 +2441,8 @@ EOF
         if [ -f "$site_conf" ]; then
             LOGW "nginx 配置已存在: ${site_conf}，跳过。"
         else
-            local panel_port=$(/usr/local/x-ui/x-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')
-            local web_base_path=$(/usr/local/x-ui/x-ui setting -show true | grep -Eo 'webBasePath: .+' | awk '{print $2}' | sed 's#^/##')
+            local panel_port=$(/usr/local/x-ui/x-ui setting -show true | grep -Eo '(port|端口): .+' | awk '{print $2}')
+            local web_base_path=$(/usr/local/x-ui/x-ui setting -show true | grep -Eo '(webBasePath|访问路径): .+' | awk '{print $2}')
 
             cat > "$site_conf" << NGINXEOF
 server {
