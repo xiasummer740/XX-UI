@@ -915,8 +915,17 @@ class IntlUtil {
         const diff = date < 0
             ? Math.round(date / (1000 * 60 * 60 * 24))
             : Math.round((date - now) / (1000 * 60 * 60 * 24))
-        const formatter = new Intl.RelativeTimeFormat(language, { numeric: 'auto' })
 
+        // Chinese: 使用手动格式化，确保显示中文
+        if (language === 'zh-CN' || language === 'zh-TW') {
+            if (diff === 0) return '今天到期'
+            if (diff === 1) return '明天到期'
+            if (diff === -1) return '昨天到期'
+            if (diff > 0) return `${diff}天后到期`
+            return `${Math.abs(diff)}天前到期`
+        }
+
+        const formatter = new Intl.RelativeTimeFormat(language, { numeric: 'auto' })
         return formatter.format(diff, 'day');
     }
 }
