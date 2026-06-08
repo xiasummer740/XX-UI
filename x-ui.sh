@@ -2344,6 +2344,158 @@ SSH_port_forwarding() {
     esac
 }
 
+# ═══════════════════════════════════════════════
+# 添加域名：自动签发 SSL 证书 + 生成 nginx 反代配置
+# 用法: x-ui add-domain <域名> [上游地址]
+# 示例: x-ui add-domain example.com
+# 示例: x-ui add-domain example.com 127.0.0.1:8080
+# ═══════════════════════════════════════════════
+add_domain() {
+    local domain="$1"
+    local upstream="${2:-127.0.0.1:$(/usr/local/x-ui/x-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')}"
+
+    if [[ -z "$domain" ]]; then
+        LOGE "用法: x-ui add-domain <域名> [上游地址]"
+        return 1
+    fi
+
+    if ! is_domain "$domain"; then
+        LOGE "无效的域名格式: ${domain}"
+        return 1
+    fi
+
+    # 1. 确保 acme.sh 已安装
+    if ! command -v ~/.acme.sh/acme.sh &>/dev/null; then
+        LOGI "acme.sh 未安装，正在安装..."
+        cd ~ || return 1
+        curl -s https://get.acme.sh | sh
+        if [ $? -ne 0 ]; then
+            LOGE "acme.sh 安装失败"
+            return 1
+        fi
+    fi
+
+    # 2. 检测 nginx，如没有全局 ACME 配置则添加
+    if command -v nginx &>/dev/null; then
+        local acme_conf="/etc/nginx/conf.d/00-acme-challenge.conf"
+        if [ ! -f "$acme_conf" ]; then
+            LOGI "添加全局 ACME 验证配置..."
+            mkdir -p /var/www/acme-challenge
+            cat > "$acme_conf" << 'EOF'
+server {
+    listen 80;
+    server_name _;
+    location /.well-known/acme-challenge/ {
+        root /var/www/acme-challenge;
+    }
+    location / { return 404; }
+}
+EOF
+            nginx -t && systemctl reload nginx
+            LOGI "全局 ACME 验证配置已添加"
+        fi
+    fi
+
+    # 3. 通过 webroot 签发证书
+    local acme_root="/var/www/acme-challenge"
+    local acme_ecc_dir="${HOME}/.acme.sh/${domain}_ecc"
+    local acme_rsa_dir="${HOME}/.acme.sh/${domain}"
+
+    # 清理残留条目
+    if ~/.acme.sh/acme.sh --list 2>/dev/null | awk '{print $1}' | grep -Fxq "${domain}"; then
+        if [[ ! -f "${acme_ecc_dir}/${domain}.key" ]] && [[ ! -f "${acme_rsa_dir}/${domain}.key" ]]; then
+            LOGW "检测到 ${domain} 的残留 acme.sh 条目，清理中..."
+            rm -rf "${acme_ecc_dir}" 2>/dev/null
+            rm -rf "${acme_rsa_dir}" 2>/dev/null
+        fi
+    fi
+
+    mkdir -p /root/cert/${domain}
+
+    echo ""
+    LOGI "正在为 ${domain} 签发 SSL 证书..."
+    if [ -d "${acme_root}" ]; then
+        ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt --force >/dev/null 2>&1
+        if ~/.acme.sh/acme.sh --issue -d ${domain} --webroot "${acme_root}" --force; then
+            LOGI "SSL 证书签发成功！"
+        else
+            LOGE "证书签发失败，尝试 standalone 模式..."
+            LOGE "请确保端口 80 未被占用，或先添加全局 ACME 配置。"
+            return 1
+        fi
+    else
+        LOGE "webroot 目录 ${acme_root} 不存在"
+        return 1
+    fi
+
+    # 4. 安装证书到 /root/cert/
+    ~/.acme.sh/acme.sh --install-cert -d ${domain} \
+        --key-file /root/cert/${domain}/privkey.pem \
+        --fullchain-file /root/cert/${domain}/fullchain.pem
+
+    # 5. 设置证书到面板
+    if [ -f "/root/cert/${domain}/fullchain.pem" ]; then
+        /usr/local/x-ui/x-ui cert -webCert "/root/cert/${domain}/fullchain.pem" -webCertKey "/root/cert/${domain}/privkey.pem"
+        LOGI "面板证书已更新为 ${domain}"
+    fi
+
+    # 6. 生成 nginx 反代配置
+    if command -v nginx &>/dev/null; then
+        local site_conf="/etc/nginx/sites-enabled/${domain}"
+        if [ -f "$site_conf" ]; then
+            LOGW "nginx 配置已存在: ${site_conf}，跳过。"
+        else
+            local panel_port=$(/usr/local/x-ui/x-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')
+            local web_base_path=$(/usr/local/x-ui/x-ui setting -show true | grep -Eo 'webBasePath: .+' | awk '{print $2}' | sed 's#^/##')
+
+            cat > "$site_conf" << NGINXEOF
+server {
+    listen 80;
+    server_name ${domain};
+    location /.well-known/acme-challenge/ { root /var/www/acme-challenge; }
+    location / { return 301 https://\$host\$request_uri; }
+}
+server {
+    listen 443 ssl http2;
+    server_name ${domain};
+    ssl_certificate /root/cert/${domain}/fullchain.pem;
+    ssl_certificate_key /root/cert/${domain}/privkey.pem;
+    client_max_body_size 100M;
+    location / {
+        proxy_pass https://127.0.0.1:${panel_port};
+        proxy_ssl_verify off;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+NGINXEOF
+            if nginx -t 2>/dev/null; then
+                systemctl reload nginx 2>/dev/null || true
+                LOGI "nginx 反代配置已生成: ${site_conf}"
+            else
+                LOGE "nginx 配置测试失败"
+                rm -f "$site_conf"
+                return 1
+            fi
+        fi
+    fi
+
+    # 7. 重启面板
+    systemctl restart x-ui 2>/dev/null || rc-service x-ui restart 2>/dev/null
+    LOGI "面板已重启"
+
+    echo ""
+    echo -e "${green}═══════════════════════════════════════════${plain}"
+    echo -e "${green}  域名配置完成！${plain}"
+    echo -e "${green}  https://${domain}/${web_base_path}${plain}"
+    echo -e "${green}═══════════════════════════════════════════${plain}"
+}
+
 show_usage() {
     echo -e "┌────────────────────────────────────────────────────────────────┐
 │  ${blue}x-ui 控制菜单使用说明（子命令）:${plain}                       │
@@ -2364,6 +2516,7 @@ show_usage() {
 │  ${blue}x-ui legacy${plain}                - Legacy version                   │
 │  ${blue}x-ui install${plain}               - Install                          │
 │  ${blue}x-ui uninstall${plain}             - Uninstall                        │
+│  ${blue}x-ui add-domain${plain}            - Add domain (SSL + nginx proxy)   │
 └────────────────────────────────────────────────────────────────┘"
 }
 
@@ -2540,6 +2693,16 @@ if [[ $# > 0 ]]; then
         ;;
     "uninstall")
         check_install 0 && uninstall 0
+        ;;
+    "add-domain")
+        if [ $# -lt 2 ]; then
+            LOGE "用法: x-ui add-domain <域名> [上游地址]"
+            LOGE "示例: x-ui add-domain example.com"
+            LOGE "示例: x-ui add-domain example.com 127.0.0.1:8080"
+            LOGE "说明: 自动签发 SSL 证书 + 生成 nginx 反代配置"
+            exit 1
+        fi
+        check_install 0 && add_domain "$2" "$3" 0
         ;;
     "update-all-geofiles")
         check_install 0 && update_all_geofiles 0 && restart 0

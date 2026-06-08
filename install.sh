@@ -8,6 +8,27 @@ plain='\033[0m'
 
 cur_dir=$(pwd)
 
+# 检查 git 是否安装（新 VPS 上经常没有 git）
+if ! command -v git &>/dev/null; then
+    echo -e "${yellow}未检测到 git，正在安装...${plain}"
+    if command -v apt-get &>/dev/null; then
+        apt-get update -qq && apt-get install -y -qq git
+    elif command -v dnf &>/dev/null; then
+        dnf install -y -q git
+    elif command -v yum &>/dev/null; then
+        yum install -y -q git
+    elif command -v apk &>/dev/null; then
+        apk add git
+    elif command -v pacman &>/dev/null; then
+        pacman -Syu --noconfirm git
+    else
+        echo -e "${red}无法自动安装 git，请手动安装后重试。${plain}"
+        echo -e "${yellow}Ubuntu/Debian: apt update && apt install git -y${plain}"
+        exit 1
+    fi
+    echo -e "${green}git 安装成功！${plain}"
+fi
+
 # Download mirror support (set XUI_DOWNLOAD_BASE to use a mirror, e.g. https://ghproxy.net/https://github.com)
 DOWNLOAD_BASE="${XUI_DOWNLOAD_BASE:-https://github.com}"
 RAW_BASE="${XUI_RAW_BASE:-https://raw.githubusercontent.com}"
@@ -181,6 +202,123 @@ restore_service() {
         return 0
     fi
     echo -e "${yellow}无法重新启动服务 ${svc}，您可能需要手动重启。${plain}"
+}
+
+# ─────────────────────────────────────────────
+# 为现有 nginx 添加全局 ACME 验证配置
+# 让后续所有域名签证书都走 webroot 模式，无需 standalone 争 80 端口
+# ─────────────────────────────────────────────
+setup_nginx_acme_global() {
+    if ! command -v nginx &>/dev/null; then
+        return 0
+    fi
+
+    local acme_conf="/etc/nginx/conf.d/00-acme-challenge.conf"
+    local acme_root="/var/www/acme-challenge"
+
+    if [ -f "$acme_conf" ]; then
+        echo -e "${green}[✓] 全局 ACME 验证配置已存在: ${acme_conf}${plain}"
+        return 0
+    fi
+
+    mkdir -p "$acme_root"
+
+    cat > "$acme_conf" << 'EOF'
+# ═══════════════════════════════════════════════
+# 全局 Let's Encrypt ACME 验证
+# 所有域名共用此路径，无需 standalone 模式
+# 使用: acme.sh --issue -d 域名 --webroot /var/www/acme-challenge
+# ═══════════════════════════════════════════════
+server {
+    listen 80;
+    server_name _;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/acme-challenge;
+    }
+
+    location / {
+        return 404;
+    }
+}
+EOF
+
+    if nginx -t 2>/dev/null; then
+        systemctl reload nginx 2>/dev/null || true
+        echo -e "${green}[✓] 全局 ACME 验证配置已添加${plain}"
+        echo -e "${green}    配置: ${acme_conf}${plain}"
+        echo -e "${green}    路径: ${acme_root}${plain}"
+        echo -e "${green}    用法: acme.sh --issue -d 域名 --webroot ${acme_root}${plain}"
+    else
+        echo -e "${yellow}[!] nginx 配置测试失败，请检查 ${acme_conf}${plain}"
+        rm -f "$acme_conf"
+    fi
+}
+
+# 生成 nginx 反代配置（面板通过 nginx 对外暴露）
+generate_nginx_proxy() {
+    local domain="$1"
+    local panel_port="$2"
+    local web_base_path="$3"
+
+    if ! command -v nginx &>/dev/null; then
+        echo -e "${yellow}未检测到 nginx，跳过反代配置。${plain}"
+        return 0
+    fi
+
+    local site_conf="/etc/nginx/sites-enabled/${domain}"
+
+    if [ -f "$site_conf" ]; then
+        echo -e "${yellow}nginx 配置已存在: ${site_conf}${plain}"
+        echo -e "${yellow}如需重新生成，请手动删除后重试。${plain}"
+        return 0
+    fi
+
+    cat > "$site_conf" << NGINXEOF
+server {
+    listen 80;
+    server_name ${domain};
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/acme-challenge;
+    }
+
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name ${domain};
+
+    ssl_certificate /root/cert/${domain}/fullchain.pem;
+    ssl_certificate_key /root/cert/${domain}/privkey.pem;
+
+    client_max_body_size 100M;
+
+    location / {
+        proxy_pass https://127.0.0.1:${panel_port};
+        proxy_ssl_verify off;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+NGINXEOF
+
+    if nginx -t 2>/dev/null; then
+        systemctl reload nginx 2>/dev/null || true
+        echo -e "${green}[✓] nginx 反代配置已生成: ${site_conf}${plain}"
+        echo -e "${green}    访问地址: https://${domain}/${web_base_path}${plain}"
+    else
+        echo -e "${yellow}[!] nginx 配置测试失败，请检查 ${site_conf}${plain}"
+        rm -f "$site_conf"
+    fi
 }
 
 setup_ssl_certificate() {
@@ -980,7 +1118,10 @@ config_after_install() {
             fi
             
             ${xui_folder}/x-ui setting -username "${config_username}" -password "${config_password}" -port "${config_port}" -webBasePath "${config_webBasePath}"
-            
+
+            echo ""
+            # 如果存在 nginx，添加全局 ACME 验证配置（让后续任何域名都能 webroot 签证书）
+            setup_nginx_acme_global
             echo ""
             echo -e "${green}═══════════════════════════════════════════${plain}"
             echo -e "${green}        SSL 证书设置（必选）              ${plain}"
@@ -990,7 +1131,22 @@ config_after_install() {
             echo ""
 
             prompt_and_setup_ssl "${config_port}" "${config_webBasePath}" "${server_ip}"
-            
+
+            # 如果 SSL 签发成功且是域名，询问是否生成 nginx 反代配置
+            if command -v nginx &>/dev/null && [[ -n "${SSL_HOST}" ]] && [[ ! "${SSL_HOST}" =~ ^[0-9.]+$ ]] && [[ ! "${SSL_HOST}" =~ ^[0-9a-fA-F:]+$ ]]; then
+                echo ""
+                echo -e "${green}═══════════════════════════════════════════${plain}"
+                echo -e "${green}        nginx 反代配置（可选）           ${plain}"
+                echo -e "${green}═══════════════════════════════════════════${plain}"
+                echo -e "${yellow}检测到域名 ${SSL_HOST}，可通过 nginx 反代让面板通过 443 端口访问。${plain}"
+                echo -e "${yellow}注意：当前面板直接访问需要端口 ${config_port}，${plain}"
+                echo -e "${yellow}配置 nginx 后可通过标准 HTTPS（443）访问。${plain}"
+                read -rp "是否生成 nginx 反代配置？[y/N]: " gen_nginx
+                if [[ "${gen_nginx}" == "y" || "${gen_nginx}" == "Y" ]]; then
+                    generate_nginx_proxy "${SSL_HOST}" "${config_port}" "${config_webBasePath}"
+                fi
+            fi
+
             # Display final credentials and access information
             echo ""
             echo -e "${green}═══════════════════════════════════════════${plain}"
