@@ -1544,6 +1544,7 @@ class Inbound extends XrayCommonClass {
         if (this.protocol !== Protocols.VMESS) {
             return '';
         }
+        if (address === '::') address = location.hostname;
         const tls = forceTls == 'same' ? this.stream.security : forceTls;
         let obj = {
             v: '2',
@@ -1605,6 +1606,7 @@ class Inbound extends XrayCommonClass {
     }
 
     genVLESSLink(address = '', port = this.port, forceTls, remark = '', clientId, flow) {
+        if (address === '::') address = location.hostname;
         const uuid = clientId;
         const type = this.stream.network;
         const security = forceTls == 'same' ? this.stream.security : forceTls;
@@ -1707,6 +1709,7 @@ class Inbound extends XrayCommonClass {
     }
 
     genSSLink(address = '', port = this.port, forceTls, remark = '', clientPassword) {
+        if (address === '::') address = location.hostname;
         let settings = this.settings;
         const type = this.stream.network;
         const security = forceTls == 'same' ? this.stream.security : forceTls;
@@ -1785,6 +1788,7 @@ class Inbound extends XrayCommonClass {
     }
 
     genTrojanLink(address = '', port = this.port, forceTls, remark = '', clientPassword) {
+        if (address === '::') address = location.hostname;
         const security = forceTls == 'same' ? this.stream.security : forceTls;
         const type = this.stream.network;
         const params = new Map();
@@ -1879,6 +1883,7 @@ class Inbound extends XrayCommonClass {
     }
 
     genHysteriaLink(address = '', port = this.port, remark = '', clientAuth) {
+        if (address === '::') address = location.hostname;
         const protocol = this.settings.version == 2 ? "hysteria2" : "hysteria";
         const link = `${protocol}://${clientAuth}@${address}:${port}`;
 
