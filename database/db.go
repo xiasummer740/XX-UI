@@ -18,7 +18,7 @@ import (
 	"github.com/XiaSummer740/XX-UI/util/crypto"
 	"github.com/XiaSummer740/XX-UI/xray"
 
-	"gorm.io/driver/sqlite"
+	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
