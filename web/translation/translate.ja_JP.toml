@@ -291,6 +291,7 @@
 "exportInbound" = "インバウンドルールをエクスポート"
 "import" = "インポート"
 "importInbound" = "インバウンドルールをインポート"
+"exportOutbound" = "すべてのアウトバウンドをエクスポート"
 "periodicTrafficResetTitle" = "トラフィックリセット"
 "periodicTrafficResetDesc" = "指定された間隔でトラフィックカウンタを自動的にリセット"
 "lastReset" = "最後のリセット"

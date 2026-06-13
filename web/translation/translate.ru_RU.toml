@@ -291,6 +291,7 @@
 "exportInbound" = "Экспорт подключений"
 "import" = "Импортировать"
 "importInbound" = "Импорт подключений"
+"exportOutbound" = "Экспортировать все исходящие"
 "periodicTrafficResetTitle" = "Сброс трафика"
 "periodicTrafficResetDesc" = "Автоматический сброс счетчика трафика через указанные интервалы"
 "lastReset" = "Последний сброс"

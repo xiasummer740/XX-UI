@@ -20,6 +20,7 @@ import (
 // InboundController handles HTTP requests related to Xray inbounds management.
 type InboundController struct {
 	inboundService service.InboundService
+	settingService service.SettingService
 	xrayService    service.XrayService
 }
 
@@ -52,6 +53,7 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/resetAllClientTraffics/:id", a.resetAllClientTraffics)
 	g.POST("/delDepletedClients/:id", a.delDepletedClients)
 	g.POST("/import", a.importInbound)
+	g.POST("/exportOutbounds", a.exportOutbounds)
 	g.POST("/batchGenerate", a.batchGenerate)
 	g.POST("/generateProtocol", a.generateProtocol)
 	g.POST("/onlines", a.onlines)
@@ -434,6 +436,29 @@ func (a *InboundController) importInbound(c *gin.Context) {
 	if err == nil && needRestart {
 		a.xrayService.SetToNeedRestart()
 	}
+}
+
+// exportOutbounds exports all outbound configurations from the Xray template config.
+func (a *InboundController) exportOutbounds(c *gin.Context) {
+	xraySetting, err := a.settingService.GetXrayConfigTemplate()
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+
+	var config map[string]any
+	if err := json.Unmarshal([]byte(xraySetting), &config); err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+
+	outbounds, ok := config["outbounds"]
+	if !ok || outbounds == nil {
+		jsonObj(c, []any{}, nil)
+		return
+	}
+
+	jsonObj(c, outbounds, nil)
 }
 
 // batchGenerate generates multiple VLESS+TCP+Reality+Vision inbounds (10 inbounds on ports 44301-44310).

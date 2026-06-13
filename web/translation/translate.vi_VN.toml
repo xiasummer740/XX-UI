@@ -291,6 +291,7 @@
 "exportInbound" = "Xuất nhập khẩu"
 "import" = "Nhập"
 "importInbound" = "Nhập inbound"
+"exportOutbound" = "Xuất tất cả outbound"
 "periodicTrafficResetTitle" = "Đặt lại lưu lượng"
 "periodicTrafficResetDesc" = "Tự động đặt lại bộ đếm lưu lượng theo khoảng thời gian xác định"
 "lastReset" = "Đặt lại lần cuối"

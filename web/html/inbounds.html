@@ -153,6 +153,10 @@
                             <a-icon type="import"></a-icon>
                             {{ i18n "pages.inbounds.importInbound" }}
                           </a-menu-item>
+                          <a-menu-item key="exportOutbound">
+                            <a-icon type="export"></a-icon>
+                            {{ i18n "pages.inbounds.exportOutbound" }}
+                          </a-menu-item>
                           <a-menu-item key="export">
                             <a-icon type="export"></a-icon>
                             {{ i18n "pages.inbounds.export" }}
@@ -1621,6 +1625,9 @@
           case "import":
             this.importInbound();
             break;
+          case "exportOutbound":
+            this.exportAllOutbounds();
+            break;
           case "export":
             this.exportAllLinks();
             break;
@@ -2451,6 +2458,19 @@
             await this.submit('/panel/api/inbounds/import', { data: dbInboundText }, promptModal);
           },
         });
+      },
+      async exportAllOutbounds() {
+        try {
+          const msg = await HttpUtil.post('/panel/api/inbounds/exportOutbounds');
+          if (msg.success) {
+            const text = JSON.stringify(msg.obj, null, 2);
+            txtModal.show('{{ i18n "pages.inbounds.exportOutbound" }}', text, 'All-Outbounds');
+          } else {
+            Vue.prototype.$message.error(msg.msg);
+          }
+        } catch (error) {
+          Vue.prototype.$message.error('{{ i18n "pages.inbounds.exportOutbound" }}: ' + error.message);
+        }
       },
       exportAllSubs() {
         let subLinks = []

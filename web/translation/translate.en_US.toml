@@ -319,6 +319,7 @@
 "exportInbound" = "Export Inbound"
 "import" = "Import"
 "importInbound" = "Import an Inbound"
+"exportOutbound" = "Export All Outbounds"
 "periodicTrafficResetTitle" = "Traffic Reset"
 "periodicTrafficResetDesc" = "Automatically reset traffic counter at specified intervals"
 "lastReset" = "Last Reset"

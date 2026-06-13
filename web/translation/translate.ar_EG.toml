@@ -291,6 +291,7 @@
 "exportInbound" = "تصدير الإدخال"
 "import" = "استيراد"
 "importInbound" = "استيراد إدخال"
+"exportOutbound" = "تصدير جميع القواعد الصادرة"
 "periodicTrafficResetTitle" = "إعادة تعيين حركة المرور"
 "periodicTrafficResetDesc" = "إعادة تعيين عداد حركة المرور تلقائيًا في فترات محددة"
 "lastReset" = "آخر إعادة تعيين"

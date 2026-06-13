@@ -291,6 +291,7 @@
 "exportInbound" = "匯出入站規則"
 "import" = "匯入"
 "importInbound" = "匯入入站規則"
+"exportOutbound" = "批量導出出站規則"
 "periodicTrafficResetTitle" = "流量重置"
 "periodicTrafficResetDesc" = "按指定間隔自動重置流量計數器"
 "lastReset" = "上次重置"
