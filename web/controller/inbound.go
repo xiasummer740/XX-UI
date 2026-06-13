@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/XiaSummer740/XX-UI/database/model"
@@ -408,15 +409,62 @@ func (a *InboundController) resetAllClientTraffics(c *gin.Context) {
 	jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.resetAllClientTrafficSuccess"), nil)
 }
 
-// importInbound imports an inbound configuration from provided data.
+// importInbound imports one or more inbound configurations from JSON data.
+// Supports both a single JSON object and a JSON array for bulk import.
 func (a *InboundController) importInbound(c *gin.Context) {
+	data := strings.TrimSpace(c.PostForm("data"))
+	if data == "" {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), fmt.Errorf("data is empty"))
+		return
+	}
+
+	user := session.GetLoginUser(c)
+	needRestart := false
+
+	// Try parsing as an array first (bulk import)
+	var inbounds []*model.Inbound
+	if err := json.Unmarshal([]byte(data), &inbounds); err == nil {
+		var successCount int
+		var lastErr error
+		for _, inbound := range inbounds {
+			inbound.Id = 0
+			inbound.UserId = user.Id
+			if inbound.Listen == "" || inbound.Listen == "0.0.0.0" || inbound.Listen == "::" || inbound.Listen == "::0" {
+				inbound.Tag = fmt.Sprintf("inbound-%v", inbound.Port)
+			} else {
+				inbound.Tag = fmt.Sprintf("inbound-%v:%v", inbound.Listen, inbound.Port)
+			}
+			for index := range inbound.ClientStats {
+				inbound.ClientStats[index].Id = 0
+				inbound.ClientStats[index].Enable = true
+			}
+			_, needRestartSingle, err := a.inboundService.AddInbound(inbound)
+			if err != nil {
+				lastErr = err
+				continue
+			}
+			successCount++
+			if needRestartSingle {
+				needRestart = true
+			}
+		}
+		if successCount == 0 {
+			jsonMsg(c, I18nWeb(c, "somethingWentWrong"), lastErr)
+			return
+		}
+		jsonMsgObj(c, fmt.Sprintf("成功导入 %d 条入站规则", successCount), nil, nil)
+		if needRestart {
+			a.xrayService.SetToNeedRestart()
+		}
+		return
+	}
+
+	// Fallback: single inbound object
 	inbound := &model.Inbound{}
-	err := json.Unmarshal([]byte(c.PostForm("data")), inbound)
-	if err != nil {
+	if err := json.Unmarshal([]byte(data), inbound); err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	user := session.GetLoginUser(c)
 	inbound.Id = 0
 	inbound.UserId = user.Id
 	if inbound.Listen == "" || inbound.Listen == "0.0.0.0" || inbound.Listen == "::" || inbound.Listen == "::0" {
@@ -430,10 +478,9 @@ func (a *InboundController) importInbound(c *gin.Context) {
 		inbound.ClientStats[index].Enable = true
 	}
 
-	needRestart := false
-	inbound, needRestart, err = a.inboundService.AddInbound(inbound)
+	inbound, needRestartSingle, err := a.inboundService.AddInbound(inbound)
 	jsonMsgObj(c, I18nWeb(c, "pages.inbounds.toasts.inboundCreateSuccess"), inbound, err)
-	if err == nil && needRestart {
+	if err == nil && needRestartSingle {
 		a.xrayService.SetToNeedRestart()
 	}
 }
