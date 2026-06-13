@@ -319,7 +319,7 @@
 "exportInbound" = "导出入站规则"
 "import" = "导入"
 "importInbound" = "导入入站规则"
-"exportOutbound" = "批量导出出站规则"
+"exportAllInbounds" = "批量导出入站规则"
 "periodicTrafficResetTitle" = "流量重置"
 "periodicTrafficResetDesc" = "按指定间隔自动重置流量计数器"
 "lastReset" = "上次重置"
@@ -1008,3 +1008,4 @@
 "deepsea" = "深海蓝"
 "lavender" = "薰衣草"
 "forest" = "森林绿"
+

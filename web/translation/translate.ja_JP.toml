@@ -291,7 +291,7 @@
 "exportInbound" = "インバウンドルールをエクスポート"
 "import" = "インポート"
 "importInbound" = "インバウンドルールをインポート"
-"exportOutbound" = "すべてのアウトバウンドをエクスポート"
+"exportAllInbounds" = "すべてのインバウンドをエクスポート"
 "periodicTrafficResetTitle" = "トラフィックリセット"
 "periodicTrafficResetDesc" = "指定された間隔でトラフィックカウンタを自動的にリセット"
 "lastReset" = "最後のリセット"
@@ -927,3 +927,4 @@
 "askToAddUserId" = "設定が見つかりませんでした！\r\n管理者に問い合わせて、設定にTelegramユーザーのChatIDを使用してください。\r\n\r\nあなたのユーザーChatID：<code>{{ .TgUserID }}</code>"
 "chooseClient" = "インバウンド {{ .Inbound }} のクライアントを選択"
 "chooseInbound" = "インバウンドを選択"
+

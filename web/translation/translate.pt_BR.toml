@@ -291,7 +291,7 @@
 "exportInbound" = "Exportar Inbound"
 "import" = "Importar"
 "importInbound" = "Importar um Inbound"
-"exportOutbound" = "Exportar Todos os Outbounds"
+"exportAllInbounds" = "Exportar Todos os Inbounds"
 "periodicTrafficResetTitle" = "Reset de Tráfego"
 "periodicTrafficResetDesc" = "Reinicia automaticamente o contador de tráfego em intervalos especificados"
 "lastReset" = "Último Reset"
@@ -927,3 +927,4 @@
 "askToAddUserId" = "Sua configuração não foi encontrada!\r\nPeça ao seu administrador para usar seu Telegram ChatID em suas configurações.\r\n\r\nSeu ChatID: <code>{{ .TgUserID }}</code>"
 "chooseClient" = "Escolha um cliente para Inbound {{ .Inbound }}"
 "chooseInbound" = "Escolha um Inbound"
+

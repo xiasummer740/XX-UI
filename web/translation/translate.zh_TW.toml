@@ -291,7 +291,7 @@
 "exportInbound" = "匯出入站規則"
 "import" = "匯入"
 "importInbound" = "匯入入站規則"
-"exportOutbound" = "批量導出出站規則"
+"exportAllInbounds" = "批量導出入站規則"
 "periodicTrafficResetTitle" = "流量重置"
 "periodicTrafficResetDesc" = "按指定間隔自動重置流量計數器"
 "lastReset" = "上次重置"
@@ -927,3 +927,4 @@
 "askToAddUserId" = "未找到您的配置！\r\n請向管理員詢問，在您的配置中使用您的 Telegram 使用者 ChatID。\r\n\r\n您的使用者 ChatID：<code>{{ .TgUserID }}</code>"
 "chooseClient" = "為入站 {{ .Inbound }} 選擇一個客戶"
 "chooseInbound" = "選擇一個入站"
+

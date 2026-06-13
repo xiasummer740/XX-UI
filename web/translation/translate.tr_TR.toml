@@ -291,7 +291,7 @@
 "exportInbound" = "Geleni Dışa Aktar"
 "import" = "İçe Aktar"
 "importInbound" = "Bir Gelen İçe Aktar"
-"exportOutbound" = "Tüm Çıkışları Dışa Aktar"
+"exportAllInbounds" = "Tüm Girişleri Dışa Aktar"
 "periodicTrafficResetTitle" = "Trafik Sıfırlama"
 "periodicTrafficResetDesc" = "Belirtilen aralıklarla trafik sayacını otomatik olarak sıfırla"
 "lastReset" = "Son Sıfırlama"
@@ -927,3 +927,4 @@
 "askToAddUserId" = "Yapılandırmanız bulunamadı!\r\nLütfen yöneticinizden yapılandırmalarınıza Telegram ChatID'nizi eklemesini isteyin.\r\n\r\nKullanıcı ChatID'niz: <code>{{ .TgUserID }}</code>"
 "chooseClient" = "Gelen {{ .Inbound }} için bir Müşteri Seçin"
 "chooseInbound" = "Bir Gelen Seçin"
+

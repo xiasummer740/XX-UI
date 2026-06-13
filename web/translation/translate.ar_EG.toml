@@ -291,7 +291,7 @@
 "exportInbound" = "تصدير الإدخال"
 "import" = "استيراد"
 "importInbound" = "استيراد إدخال"
-"exportOutbound" = "تصدير جميع القواعد الصادرة"
+"exportAllInbounds" = "تصدير جميع القواعد الواردة"
 "periodicTrafficResetTitle" = "إعادة تعيين حركة المرور"
 "periodicTrafficResetDesc" = "إعادة تعيين عداد حركة المرور تلقائيًا في فترات محددة"
 "lastReset" = "آخر إعادة تعيين"
@@ -927,3 +927,4 @@
 "askToAddUserId" = "مافيش إعدادات ليك!\r\nاطلب من الأدمن يضيف الـ Telegram ChatID الخاص بيك في إعداداتك.\r\n\r\nالـ ChatID بتاعك: <code>{{ .TgUserID }}</code>"
 "chooseClient" = "اختار عميل للإدخال {{ .Inbound }}"
 "chooseInbound" = "اختار الإدخال"
+

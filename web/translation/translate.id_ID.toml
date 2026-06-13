@@ -291,7 +291,7 @@
 "exportInbound" = "Ekspor Masuk"
 "import" = "Impor"
 "importInbound" = "Impor Masuk"
-"exportOutbound" = "Ekspor Semua Outbound"
+"exportAllInbounds" = "Ekspor Semua Inbound"
 "periodicTrafficResetTitle" = "Reset Trafik Berkala"
 "periodicTrafficResetDesc" = "Reset otomatis penghitung trafik pada interval tertentu"
 "lastReset" = "Reset Terakhir"
@@ -927,3 +927,4 @@
 "askToAddUserId" = "Konfigurasi Anda tidak ditemukan!\r\nSilakan minta admin Anda untuk menggunakan ChatID Telegram Anda dalam konfigurasi Anda.\r\n\r\nChatID Pengguna Anda: <code>{{ .TgUserID }}</code>"
 "chooseClient" = "Pilih Klien untuk Inbound {{ .Inbound }}"
 "chooseInbound" = "Pilih Inbound"
+

@@ -291,7 +291,7 @@
 "exportInbound" = "Xuất nhập khẩu"
 "import" = "Nhập"
 "importInbound" = "Nhập inbound"
-"exportOutbound" = "Xuất tất cả outbound"
+"exportAllInbounds" = "Xuất tất cả inbound"
 "periodicTrafficResetTitle" = "Đặt lại lưu lượng"
 "periodicTrafficResetDesc" = "Tự động đặt lại bộ đếm lưu lượng theo khoảng thời gian xác định"
 "lastReset" = "Đặt lại lần cuối"
@@ -927,3 +927,4 @@
 "askToAddUserId" = "Cấu hình của bạn không được tìm thấy!\r\nVui lòng yêu cầu Quản trị viên sử dụng ID người dùng telegram của bạn trong cấu hình của bạn.\r\n\r\nID người dùng của bạn: <code>{{ .TgUserID }}</code>"
 "chooseClient" = "Chọn một Khách hàng cho Inbound {{ .Inbound }}"
 "chooseInbound" = "Chọn một Inbound"
+

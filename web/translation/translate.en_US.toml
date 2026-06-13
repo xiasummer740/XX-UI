@@ -319,7 +319,7 @@
 "exportInbound" = "Export Inbound"
 "import" = "Import"
 "importInbound" = "Import an Inbound"
-"exportOutbound" = "Export All Outbounds"
+"exportAllInbounds" = "Export All Inbounds"
 "periodicTrafficResetTitle" = "Traffic Reset"
 "periodicTrafficResetDesc" = "Automatically reset traffic counter at specified intervals"
 "lastReset" = "Last Reset"
@@ -1008,3 +1008,4 @@
 "deepsea" = "Deep Sea"
 "lavender" = "Lavender"
 "forest" = "Forest"
+

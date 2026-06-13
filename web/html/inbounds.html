@@ -153,9 +153,9 @@
                             <a-icon type="import"></a-icon>
                             {{ i18n "pages.inbounds.importInbound" }}
                           </a-menu-item>
-                          <a-menu-item key="exportOutbound">
+                          <a-menu-item key="exportAllInbounds">
                             <a-icon type="export"></a-icon>
-                            {{ i18n "pages.inbounds.exportOutbound" }}
+                            {{ i18n "pages.inbounds.exportAllInbounds" }}
                           </a-menu-item>
                           <a-menu-item key="export">
                             <a-icon type="export"></a-icon>
@@ -1625,8 +1625,8 @@
           case "import":
             this.importInbound();
             break;
-          case "exportOutbound":
-            this.exportAllOutbounds();
+          case "exportAllInbounds":
+            this.exportAllInbounds();
             break;
           case "export":
             this.exportAllLinks();
@@ -2459,17 +2459,17 @@
           },
         });
       },
-      async exportAllOutbounds() {
+      async exportAllInbounds() {
         try {
-          const msg = await HttpUtil.post('/panel/api/inbounds/exportOutbounds');
+          const msg = await HttpUtil.post('/panel/api/inbounds/exportAllInbounds');
           if (msg.success) {
             const text = JSON.stringify(msg.obj, null, 2);
-            txtModal.show('{{ i18n "pages.inbounds.exportOutbound" }}', text, 'All-Outbounds');
+            txtModal.show('{{ i18n "pages.inbounds.exportAllInbounds" }}', text, 'All-Inbounds');
           } else {
             Vue.prototype.$message.error(msg.msg);
           }
         } catch (error) {
-          Vue.prototype.$message.error('{{ i18n "pages.inbounds.exportOutbound" }}: ' + error.message);
+          Vue.prototype.$message.error('{{ i18n "pages.inbounds.exportAllInbounds" }}: ' + error.message);
         }
       },
       exportAllSubs() {

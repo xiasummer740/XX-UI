@@ -291,7 +291,7 @@
 "exportInbound" = "Экспорт подключений"
 "import" = "Импортировать"
 "importInbound" = "Импорт подключений"
-"exportOutbound" = "Экспортировать все исходящие"
+"exportAllInbounds" = "Экспортировать все входящие"
 "periodicTrafficResetTitle" = "Сброс трафика"
 "periodicTrafficResetDesc" = "Автоматический сброс счетчика трафика через указанные интервалы"
 "lastReset" = "Последний сброс"
@@ -927,3 +927,4 @@
 "askToAddUserId" = "❌ Ваша конфигурация не найдена!\r\n💭 Пожалуйста, попросите администратора использовать ваш Telegram User ID в конфигурации.\r\n\r\n🆔 Ваш User ID: <code>{{ .TgUserID }}</code>"
 "chooseClient" = "Выберите клиента для входящего подключения {{ .Inbound }}"
 "chooseInbound" = "Выберите входящее подключение"
+

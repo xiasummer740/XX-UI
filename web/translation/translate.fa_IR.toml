@@ -291,7 +291,7 @@
 "exportInbound" = "استخراج ورودی"
 "import" = "افزودن"
 "importInbound" = "افزودن یک ورودی"
-"exportOutbound" = "خروج تمام خروجی‌ها"
+"exportAllInbounds" = "خروج تمام ورودی‌ها"
 "periodicTrafficResetTitle" = "بازنشانی ترافیک"
 "periodicTrafficResetDesc" = "بازنشانی خودکار شمارنده ترافیک در فواصل زمانی مشخص"
 "lastReset" = "آخرین بازنشانی"
@@ -927,3 +927,4 @@
 "askToAddUserId" = "پیکربندی شما یافت نشد!\r\nلطفاً از مدیر خود بخواهید که شناسه کاربر تلگرام خود را در پیکربندی (های) خود استفاده کند.\r\n\r\nشناسه کاربری شما: <code>{{ .TgUserID }}</code>"
 "chooseClient" = "یک مشتری برای ورودی {{ .Inbound }} انتخاب کنید"
 "chooseInbound" = "یک ورودی انتخاب کنید"
+
