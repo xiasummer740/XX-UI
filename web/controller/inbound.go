@@ -1,10 +1,8 @@
 package controller
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -424,9 +422,18 @@ func (a *InboundController) importInbound(c *gin.Context) {
 	// Try parsing as an array first (bulk import)
 	var inbounds []*model.Inbound
 	if err := json.Unmarshal([]byte(data), &inbounds); err == nil {
-		var successCount int
+		if len(inbounds) == 0 {
+			jsonMsg(c, I18nWeb(c, "somethingWentWrong"), fmt.Errorf("import data contains no inbound"))
+			return
+		}
+		var successCount, failCount int
 		var lastErr error
 		for _, inbound := range inbounds {
+			// 数组里可能有 null，直接解引用会 panic
+			if inbound == nil {
+				failCount++
+				continue
+			}
 			inbound.Id = 0
 			inbound.UserId = user.Id
 			if inbound.Listen == "" || inbound.Listen == "0.0.0.0" || inbound.Listen == "::" || inbound.Listen == "::0" {
@@ -441,6 +448,7 @@ func (a *InboundController) importInbound(c *gin.Context) {
 			_, needRestartSingle, err := a.inboundService.AddInbound(inbound)
 			if err != nil {
 				lastErr = err
+				failCount++
 				continue
 			}
 			successCount++
@@ -449,10 +457,20 @@ func (a *InboundController) importInbound(c *gin.Context) {
 			}
 		}
 		if successCount == 0 {
+			if lastErr == nil {
+				lastErr = fmt.Errorf("all %d inbounds were skipped", failCount)
+			}
 			jsonMsg(c, I18nWeb(c, "somethingWentWrong"), lastErr)
 			return
 		}
-		jsonMsgObj(c, fmt.Sprintf("成功导入 %d 条入站规则", successCount), nil, nil)
+		msg := fmt.Sprintf("成功导入 %d 条入站规则", successCount)
+		if failCount > 0 {
+			msg += fmt.Sprintf("，%d 条失败", failCount)
+			if lastErr != nil {
+				msg += fmt.Sprintf("（原因：%v）", lastErr)
+			}
+		}
+		jsonMsgObj(c, msg, nil, nil)
 		if needRestart {
 			a.xrayService.SetToNeedRestart()
 		}
@@ -519,17 +537,6 @@ func (a *InboundController) batchGenerate(c *gin.Context) {
 func (a *InboundController) generateProtocol(c *gin.Context) {
 	user := session.GetLoginUser(c)
 
-	// Log raw request body BEFORE ShouldBind consumes it
-	bodyBytes, _ := io.ReadAll(c.Request.Body)
-	if len(bodyBytes) > 0 {
-		preview := string(bodyBytes)
-		if len(preview) > 500 {
-			preview = preview[:500]
-		}
-		logger.Warningf("[DIAG] generateProtocol raw body: %s", preview)
-	}
-	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-
 	var req struct {
 		Protocols  []string `json:"protocols" form:"protocols"`
 		Count      int      `json:"count" form:"count"`
@@ -539,13 +546,11 @@ func (a *InboundController) generateProtocol(c *gin.Context) {
 		KeyFile    string   `json:"keyFile" form:"keyFile"`
 	}
 	if err := c.ShouldBind(&req); err != nil {
-		logger.Warningf("[DIAG] generateProtocol ShouldBind failed: %v", err)
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
 
 	if len(req.Protocols) == 0 {
-		logger.Warning("[DIAG] generateProtocol: no protocols selected")
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), fmt.Errorf("no protocols selected"))
 		return
 	}
@@ -558,15 +563,12 @@ func (a *InboundController) generateProtocol(c *gin.Context) {
 		req.NamePrefix = "rn"
 	}
 
-	logger.Debugf("[DIAG] generateProtocol: protocols=%v count=%d subId=%s namePrefix=%s certFile=%s keyFile=%s", req.Protocols, req.Count, req.SubId, req.NamePrefix, req.CertFile, req.KeyFile)
 	result, err := a.inboundService.GenerateProtocolInbounds(user.Id, req.Protocols, req.Count, req.SubId, req.NamePrefix, req.CertFile, req.KeyFile)
 	if err != nil {
-		logger.Warning("[DIAG] generateProtocol GenerateProtocolInbounds error:", err)
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
 
-	logger.Debugf("[DIAG] generateProtocol success: created %d inbounds", len(result))
 	jsonMsgObj(c, I18nWeb(c, "pages.inbounds.toasts.inboundCreateSuccess"), result, nil)
 	if len(result) > 0 {
 		a.xrayService.SetToNeedRestart()
@@ -606,7 +608,6 @@ func (a *InboundController) checkPort(c *gin.Context) {
 		return
 	}
 	result := a.inboundService.CheckPort(req.Port)
-	logger.Debugf("[DIAG] checkPort: port=%d reachable=%v latency=%v", req.Port, result["reachable"], result["latency"])
 	jsonObj(c, result, nil)
 }
 
@@ -626,7 +627,6 @@ func (a *InboundController) checkRemotePort(c *gin.Context) {
 		return
 	}
 	result := a.inboundService.CheckRemotePort(req.Host, req.Port)
-	logger.Debugf("[DIAG] checkRemotePort: host=%s port=%d reachable=%v latency=%v", req.Host, req.Port, result["reachable"], result["latency"])
 	jsonObj(c, result, nil)
 }
 

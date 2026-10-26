@@ -144,7 +144,6 @@ func (s *InboundService) GetClients(inbound *model.Inbound) ([]model.Client, err
 		if len(settingsPreview) > 200 {
 			settingsPreview = settingsPreview[:200]
 		}
-		logger.Warningf("[DIAG] GetClients: inbound=%d settings JSON parse error: %v, settings[:200]=%s", inbound.Id, err, settingsPreview)
 		return nil, fmt.Errorf("failed to parse settings: %v", err)
 	}
 	if settings == nil {
@@ -162,7 +161,6 @@ func (s *InboundService) GetClients(inbound *model.Inbound) ([]model.Client, err
 		if len(settingsPreview) > 500 {
 			settingsPreview = settingsPreview[:500]
 		}
-		logger.Warningf("[DIAG] GetClients: inbound=%d no 'clients' key in settings, keys=%v, settings[:500]=%s", inbound.Id, keys, settingsPreview)
 		return nil, nil
 	}
 
@@ -191,7 +189,6 @@ func (s *InboundService) GetClients(inbound *model.Inbound) ([]model.Client, err
 		}
 		var c model.Client
 		if err := json.Unmarshal(bs, &c); err != nil {
-			logger.Warningf("[DIAG] GetClients: inbound=%d unmarshal client error: %v, raw=%s", inbound.Id, err, string(bs))
 			continue
 		}
 		result = append(result, c)
@@ -290,7 +287,6 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 
 	clients, err := s.GetClients(inbound)
 	if err != nil {
-		logger.Warningf("[DIAG] AddInbound: GetClients failed for inbound tag=%s port=%d: %v", inbound.Tag, inbound.Port, err)
 		return inbound, false, err
 	}
 
@@ -3282,7 +3278,6 @@ func (s *InboundService) GenerateProtocolInbounds(userId int, protocols []string
 			resetDay = day
 		}
 	}
-	logger.Debugf("[DIAG] GenerateProtocolInbounds: subId=%s namePrefix=%s trafficReset=%s resetDay=%d certFile=%s keyFile=%s", subId, namePrefix, trafficReset, resetDay, certFile, keyFile)
 
 	globalSeq := 0
 	for pi, protocol := range protocols {
@@ -3880,16 +3875,13 @@ func (s *InboundService) generateX25519Key() (map[string]any, error) {
 	cmd.Stdout = &out
 	err := cmd.Run()
 	if err != nil {
-		logger.Warningf("[DIAG] generateX25519Key: xray binary=%s exec error: %v", binaryPath, err)
 		return nil, err
 	}
 
 	output := out.String()
-	logger.Debugf("[DIAG] generateX25519Key: xray binary=%s output=%s", binaryPath, output)
 
 	lines := strings.Split(output, "\n")
 	if len(lines) < 2 {
-		logger.Warningf("[DIAG] generateX25519Key: unexpected output (len(lines)=%d): %s", len(lines), output)
 		return nil, fmt.Errorf("unexpected x25519 output: %s", output)
 	}
 
@@ -3897,14 +3889,12 @@ func (s *InboundService) generateX25519Key() (map[string]any, error) {
 	publicKeyLine := strings.Split(lines[1], ":")
 
 	if len(privateKeyLine) < 2 || len(publicKeyLine) < 2 {
-		logger.Warningf("[DIAG] generateX25519Key: unexpected format pvt=%d pub=%d output=%s", len(privateKeyLine), len(publicKeyLine), output)
 		return nil, fmt.Errorf("unexpected x25519 output format: %s", output)
 	}
 
 	privateKey := strings.TrimSpace(privateKeyLine[1])
 	publicKey := strings.TrimSpace(publicKeyLine[1])
 
-	logger.Debugf("[DIAG] generateX25519Key: success privateKey=%s... publicKey=%s...", privateKey[:8], publicKey[:8])
 	return map[string]any{
 		"privateKey": privateKey,
 		"publicKey":  publicKey,

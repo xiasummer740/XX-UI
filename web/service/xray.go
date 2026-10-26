@@ -97,7 +97,6 @@ func RemoveIndex(s []any, index int) []any {
 func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 	templateConfig, err := s.settingService.GetXrayConfigTemplate()
 	if err != nil {
-		logger.Warningf("[DIAG] GetXrayConfig: GetXrayConfigTemplate failed: %v", err)
 		return nil, err
 	}
 
@@ -108,7 +107,6 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 		if len(preview) > 200 {
 			preview = preview[:200]
 		}
-		logger.Warningf("[DIAG] GetXrayConfig: template unmarshal failed: %v, preview=%s", err, preview)
 		return nil, err
 	}
 
@@ -133,7 +131,6 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 			if len(preview) > 200 {
 				preview = preview[:200]
 			}
-			logger.Warningf("[DIAG] GetXrayConfig: inbound=%d Settings json.Unmarshal error: %v, preview[:200]=%s", inbound.Id, err, preview)
 		}
 		clients, ok := settings["clients"].([]any)
 		if ok {
@@ -215,7 +212,6 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 				if len(preview) > 200 {
 					preview = preview[:200]
 				}
-				logger.Warningf("[DIAG] GetXrayConfig: inbound=%d StreamSettings json.Unmarshal error: %v, preview[:200]=%s", inbound.Id, err, preview)
 			}
 
 			// Remove the "settings" field under "tlsSettings" and "realitySettings"

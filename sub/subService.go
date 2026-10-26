@@ -13,7 +13,6 @@ import (
 
 	"github.com/XiaSummer740/XX-UI/database"
 	"github.com/XiaSummer740/XX-UI/database/model"
-	"github.com/XiaSummer740/XX-UI/logger"
 	"github.com/XiaSummer740/XX-UI/util/common"
 	"github.com/XiaSummer740/XX-UI/util/random"
 	"github.com/XiaSummer740/XX-UI/web/service"
@@ -50,15 +49,12 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.C
 	var clientTraffics []xray.ClientTraffic
 	inbounds, err := s.getInboundsBySubId(subId)
 	if err != nil {
-		logger.Warningf("[DIAG] GetSubs: getInboundsBySubId failed subId=%s err=%v", subId, err)
 		return nil, 0, traffic, "", 0, err
 	}
 
 	if len(inbounds) == 0 {
-		logger.Warningf("[DIAG] GetSubs: no inbounds found for subId=%s", subId)
 		return nil, 0, traffic, "", 0, common.NewError("No inbounds found with ", subId)
 	}
-	logger.Debugf("[DIAG] GetSubs: subId=%s found %d inbounds", subId, len(inbounds))
 
 	// Collect traffic reset info from the first matched inbound
 	trafficReset := inbounds[0].TrafficReset
@@ -70,55 +66,26 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.C
 	}
 	matchedCount := 0
 	for _, inbound := range inbounds {
-		// Debug: print inbound.Settings before calling GetClients
-		settingsPreview := inbound.Settings
-		if len(settingsPreview) > 500 {
-			settingsPreview = settingsPreview[:500]
-		}
-		logger.Warningf("[DIAG] GetSubs: inbound=%d Settings[:500]=%s", inbound.Id, settingsPreview)
-
-		// Manual parse clients from Settings to compare with GetClients
+		// 兜底解析：GetClients 返回 nil 时用这里的结果补齐客户端列表
 		var manualClients []model.Client
-		// Use json.RawMessage to avoid type assertion issues
 		var rawSettings map[string]json.RawMessage
-		if err := json.Unmarshal([]byte(inbound.Settings), &rawSettings); err != nil {
-			logger.Errorf("[DIAG] GetSubs: inbound=%d manual parse error: %v", inbound.Id, err)
-		} else {
-			var keys []string
-			for k := range rawSettings {
-				keys = append(keys, k)
-			}
-			logger.Warningf("[DIAG] GetSubs: inbound=%d manual parse keys=%v", inbound.Id, keys)
+		if err := json.Unmarshal([]byte(inbound.Settings), &rawSettings); err == nil {
 			if clientsRaw, ok := rawSettings["clients"]; ok {
-				logger.Warningf("[DIAG] GetSubs: inbound=%d 'clients' raw=%s", inbound.Id, string(clientsRaw))
-				if err := json.Unmarshal(clientsRaw, &manualClients); err != nil {
-					logger.Errorf("[DIAG] GetSubs: inbound=%d unmarshal clients error: %v", inbound.Id, err)
-				} else {
-					logger.Warningf("[DIAG] GetSubs: inbound=%d manual parsed %d clients", inbound.Id, len(manualClients))
-					for i, c := range manualClients {
-						logger.Warningf("[DIAG] GetSubs: inbound=%d manual client[%d] email=%s Enable=%v SubID=%s", inbound.Id, i, c.Email, c.Enable, c.SubID)
-					}
-				}
-			} else {
-				logger.Warningf("[DIAG] GetSubs: inbound=%d 'clients' key NOT FOUND in manual parse", inbound.Id)
+				_ = json.Unmarshal(clientsRaw, &manualClients)
 			}
 		}
 
 		clients, err := s.inboundService.GetClients(inbound)
 		if err != nil {
-			logger.Errorf("[DIAG] GetSubs: inbound=%d GetClients error: %v", inbound.Id, err)
 		}
 		if clients == nil {
-			logger.Warningf("[DIAG] GetSubs: inbound=%d clients is nil (no clients array in settings)", inbound.Id)
 			// Use manual clients as fallback
 			clients = manualClients
 			if len(clients) > 0 {
-				logger.Warningf("[DIAG] GetSubs: inbound=%d using %d manual clients as fallback", inbound.Id, len(clients))
 			} else {
 				continue
 			}
 		}
-		logger.Infof("[DIAG] GetSubs: inbound=%d protocol=%s got %d clients from GetClients", inbound.Id, inbound.Protocol, len(clients))
 		if len(inbound.Listen) > 0 && inbound.Listen[0] == '@' {
 			listen, port, streamSettings, err := s.getFallbackMaster(inbound.Listen, inbound.StreamSettings)
 			if err == nil {
@@ -128,7 +95,6 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.C
 			}
 		}
 		for _, client := range clients {
-			logger.Infof("[DIAG] GetSubs: inbound=%d client email=%s Enable=%v SubID=%q (expected subId=%q match=%v)", inbound.Id, client.Email, client.Enable, client.SubID, subId, client.Enable && client.SubID == subId)
 			if client.Enable && client.SubID == subId {
 				matchedCount++
 				link := s.getLink(inbound, client.Email)
@@ -145,7 +111,6 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.C
 			}
 		}
 	}
-	logger.Infof("[DIAG] GetSubs: subId=%s matched %d clients from %d inbounds, result=%d links", subId, matchedCount, len(inbounds), len(result))
 
 	// Prepare statistics
 	for index, clientTraffic := range clientTraffics {
@@ -183,10 +148,8 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 			JSON_EXTRACT(client.value, '$.subId') = ? AND enable = ?
 	)`, subId, true).Find(&inbounds).Error
 	if err != nil {
-		logger.Warningf("[DIAG] getInboundsBySubId: SQL error subId=%s err=%v", subId, err)
 		return nil, err
 	}
-	logger.Debugf("[DIAG] getInboundsBySubId: subId=%s found %d inbounds", subId, len(inbounds))
 	return inbounds, nil
 }
 
