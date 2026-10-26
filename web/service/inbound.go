@@ -140,10 +140,6 @@ func (s *InboundService) checkPortExist(listen string, port int, ignoreId int) (
 func (s *InboundService) GetClients(inbound *model.Inbound) ([]model.Client, error) {
 	var settings map[string]any
 	if err := json.Unmarshal([]byte(inbound.Settings), &settings); err != nil {
-		settingsPreview := inbound.Settings
-		if len(settingsPreview) > 200 {
-			settingsPreview = settingsPreview[:200]
-		}
 		return nil, fmt.Errorf("failed to parse settings: %v", err)
 	}
 	if settings == nil {
@@ -152,15 +148,6 @@ func (s *InboundService) GetClients(inbound *model.Inbound) ([]model.Client, err
 
 	rawClients, ok := settings["clients"]
 	if !ok || rawClients == nil {
-		// Debug: collect all top-level keys in settings
-		var keys []string
-		for k := range settings {
-			keys = append(keys, k)
-		}
-		settingsPreview := inbound.Settings
-		if len(settingsPreview) > 500 {
-			settingsPreview = settingsPreview[:500]
-		}
 		return nil, nil
 	}
 

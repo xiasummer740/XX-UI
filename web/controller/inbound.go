@@ -19,7 +19,6 @@ import (
 // InboundController handles HTTP requests related to Xray inbounds management.
 type InboundController struct {
 	inboundService service.InboundService
-	settingService service.SettingService
 	xrayService    service.XrayService
 }
 
