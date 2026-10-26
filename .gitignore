@@ -46,3 +46,13 @@ x-ui-pkg/
 
 # Ignore temporary PowerShell scripts
 *.ps1
+
+# Ignore release staging dirs and prebuilt artifacts
+release_temp/
+release-build/
+x-ui-linux-amd64
+x-ui-linux-*.tar.gz
+xray-linux-64.zip
+
+# Ignore local backups
+*.bak-*
