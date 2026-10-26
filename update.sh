@@ -401,8 +401,8 @@ setup_ip_certificate() {
 
 # Comprehensive manual SSL certificate issuance via acme.sh
 ssl_cert_issue() {
-    local existing_webBasePath=$(${xui_folder}/x-ui setting -show true | grep 'webBasePath:' | awk -F': ' '{print $2}' | tr -d '[:space:]' | sed 's#^/##')
-    local existing_port=$(${xui_folder}/x-ui setting -show true | grep 'port:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
+    local existing_webBasePath=$(${xui_folder}/x-ui setting -show true | grep -E 'webBasePath:|访问路径:' | awk -F': ' '{print $2}' | tr -d '[:space:]' | sed 's#^/##')
+    local existing_port=$(${xui_folder}/x-ui setting -show true | grep -E 'port:|端口:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
     
     # check for acme.sh first
     if ! command -v ~/.acme.sh/acme.sh &>/dev/null; then

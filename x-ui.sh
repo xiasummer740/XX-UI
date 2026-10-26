@@ -19,6 +19,10 @@ function LOGI() {
     echo -e "${green}[INF] $* ${plain}"
 }
 
+function LOGW() {
+    echo -e "${yellow}[WRN] $* ${plain}"
+}
+
 # Port helpers: detect listener and owning process (best effort)
 is_port_in_use() {
     local port="$1"
@@ -145,17 +149,17 @@ update_menu() {
         return 0
     fi
 
-    curl -fLRo /usr/bin/x-ui https://raw.githubusercontent.com/xiasummer740/XX-UI/main/x-ui.sh
-    chmod +x ${xui_folder}/x-ui.sh
-    chmod +x /usr/bin/x-ui
-
-    if [[ $? == 0 ]]; then
-        echo -e "${green}更新成功，面板已自动重启。${plain}"
-        exit 0
-    else
+    local tmp_script="/usr/bin/x-ui.tmp.$$"
+    if ! curl -fLRo "$tmp_script" https://raw.githubusercontent.com/xiasummer740/XX-UI/main/x-ui.sh; then
+        rm -f "$tmp_script"
         echo -e "${red}菜单更新失败。${plain}"
         return 1
     fi
+    chmod +x "$tmp_script"
+    mv -f "$tmp_script" /usr/bin/x-ui
+    [[ -f "${xui_folder}/x-ui.sh" ]] && chmod +x "${xui_folder}/x-ui.sh"
+    echo -e "${green}菜单更新成功。${plain}"
+    exit 0
 }
 
 legacy_version() {
@@ -166,11 +170,14 @@ legacy_version() {
         echo "面板版本号不能为空，正在退出。"
         exit 1
     fi
-    # Use the entered panel version in the download link
-    install_command="bash <(curl -Ls "https://raw.githubusercontent.com/mhsanaei/3x-ui/v$tag_version/install.sh") v$tag_version"
+    # 校验版本号格式，避免用户输入被拼进 URL/命令后执行
+    if ! [[ "$tag_version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+        echo "版本号格式不正确（示例：2.14.68），正在退出。"
+        exit 1
+    fi
 
     echo "正在下载并安装面板版本 $tag_version..."
-    eval $install_command
+    bash <(curl -Ls "https://raw.githubusercontent.com/xiasummer740/XX-UI/v$tag_version/install.sh") "v$tag_version"
 }
 
 # Function to handle the deletion of the script file
@@ -206,7 +213,7 @@ uninstall() {
     echo ""
     echo -e "Uninstalled Successfully.\n"
     echo "If you need to install this panel again, you can use below command:"
-    echo -e "${green}bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh)${plain}"
+    echo -e "${green}bash <(curl -Ls https://raw.githubusercontent.com/xiasummer740/XX-UI/main/install.sh)${plain}"
     echo ""
     # Trap the SIGTERM signal
     trap delete_script SIGTERM
@@ -540,6 +547,7 @@ disable_bbr() {
     if [[ $(sysctl -n net.ipv4.tcp_congestion_control) != "bbr" ]] || [[ ! $(sysctl -n net.core.default_qdisc) =~ ^(fq|cake)$ ]]; then
         echo -e "${yellow}BBR is not currently enabled.${plain}"
         before_show_menu
+        return 0
     fi
 
     if [ -f "/etc/sysctl.d/99-bbr-x-ui.conf" ]; then
@@ -568,6 +576,7 @@ enable_bbr() {
     if [[ $(sysctl -n net.ipv4.tcp_congestion_control) == "bbr" ]] && [[ $(sysctl -n net.core.default_qdisc) =~ ^(fq|cake)$ ]]; then
         echo -e "${green}BBR is already enabled!${plain}"
         before_show_menu
+        return 0
     fi
 
     # Enable BBR
