@@ -62,6 +62,7 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/checkRemotePort", a.checkRemotePort)
 	g.POST("/health", a.checkHealth)
 	g.POST("/applyTrafficReset", a.applyTrafficReset)
+	g.GET("/trafficHistory", a.getTrafficHistory)
 	g.GET("/chainProxy/:id", a.getChainProxy)
 	g.POST("/chainProxy/testConnection", a.testChainProxy)
 	g.POST("/chainProxy/:id", a.updateChainProxy)
@@ -657,6 +658,16 @@ func (a *InboundController) applyTrafficReset(c *gin.Context) {
 		return
 	}
 	jsonObj(c, map[string]any{"updated": count}, nil)
+}
+
+// getTrafficHistory 查询流量重置的历史快照。
+// email 为空表示该入站的合计；传入 email 则查该客户端的逐月记录。
+func (a *InboundController) getTrafficHistory(c *gin.Context) {
+	inboundId, _ := strconv.Atoi(c.Query("inboundId"))
+	email := c.Query("email")
+	limit, _ := strconv.Atoi(c.Query("limit"))
+	rows, err := a.inboundService.GetTrafficHistory(inboundId, email, limit)
+	jsonObj(c, rows, err)
 }
 
 // lastOnline retrieves the last online timestamps for clients.

@@ -41,21 +41,29 @@ func (j *PeriodicTrafficResetJob) Run() {
 	logger.Infof("Running periodic traffic reset job for period: %s (%d matching inbounds)", j.period, len(inbounds))
 
 	resetCount := 0
+	skipped := 0
 
 	for _, inbound := range inbounds {
-		resetInboundErr := j.inboundService.ResetInboundTraffic(inbound.Id)
-		if resetInboundErr != nil {
-			logger.Warning("Failed to reset traffic for inbound", inbound.Id, ":", resetInboundErr)
+		// 当期完全没有流量时不必凭空写一条历史记录，只推进重置时间，
+		// 否则「漏跑补偿」会每天重复命中同一个入站。
+		if inbound.Up+inbound.Down == 0 {
+			if err := j.inboundService.MarkTrafficResetTime(inbound.Id); err != nil {
+				logger.Warning("Failed to mark traffic reset time for inbound", inbound.Id, ":", err)
+			}
+			skipped++
+			continue
 		}
 
-		resetClientErr := j.inboundService.ResetAllClientTraffics(inbound.Id)
-		if resetClientErr != nil {
-			logger.Warning("Failed to reset traffic for all users of inbound", inbound.Id, ":", resetClientErr)
+		// 先写快照再归零，否则「上期到底用了多少」就永远丢了
+		if err := j.inboundService.ResetInboundTrafficWithHistory(inbound.Id, string(j.period)); err != nil {
+			logger.Warning("Failed to reset traffic for inbound", inbound.Id, ":", err)
+			continue
 		}
+		resetCount++
+	}
 
-		if resetInboundErr == nil && resetClientErr == nil {
-			resetCount++
-		}
+	if skipped > 0 {
+		logger.Infof("Skipped %d inbounds with no traffic in current period", skipped)
 	}
 
 	if resetCount > 0 {
@@ -69,12 +77,14 @@ func (j *PeriodicTrafficResetJob) getInboundsForPeriod() ([]*model.Inbound, erro
 	db := database.GetDB()
 
 	if j.period == "custom_date" {
-		// custom_date runs daily: find all inbounds with traffic_reset = "custom_date"
-		// and check if today's day of month matches their resetDay
+		// custom_date 每天跑一次：先处理「今天正好是重置日」，
+		// 再做漏跑补偿——本月重置日已过但上次重置时间仍早于它，
+		// 说明那天面板没在运行，这里补一次，避免整整一个月不清零。
+		// 注意：不再限制 enable=true，已关闭的入站也应该归零，
+		// 否则重新启用时拿到的还是旧数据。
 		var allCustomInbounds []*model.Inbound
 		err := db.Model(model.Inbound{}).
 			Where("traffic_reset = ?", "custom_date").
-			Where("enable = ?", true).
 			Find(&allCustomInbounds).Error
 		if err != nil && err != gorm.ErrRecordNotFound {
 			return nil, err
@@ -98,7 +108,17 @@ func (j *PeriodicTrafficResetJob) getInboundsForPeriod() ([]*model.Inbound, erro
 			if resetDay > lastDayOfMonth {
 				resetDay = lastDayOfMonth
 			}
+
 			if today == resetDay {
+				matching = append(matching, inbound)
+				continue
+			}
+
+			// 漏跑补偿：本月重置日已过，且上次重置发生在它之前
+			thisMonthReset := time.Date(now.Year(), now.Month(), resetDay, 0, 0, 0, 0, now.Location())
+			if now.After(thisMonthReset) && inbound.LastTrafficResetTime < thisMonthReset.UnixMilli() {
+				logger.Infof("Traffic reset missed for inbound %d (last: %d, due: %d), catching up",
+					inbound.Id, inbound.LastTrafficResetTime, thisMonthReset.UnixMilli())
 				matching = append(matching, inbound)
 			}
 		}

@@ -107,6 +107,21 @@ type HistoryOfSeeders struct {
 	SeederName string `json:"seederName"`
 }
 
+// TrafficHistory 保存每次流量重置前的当期用量快照。
+// 重置本身会把 up/down 归零，不落快照就无法回答「某个月用了多少」。
+// Email 为空字符串的那条记录代表该入站的合计（客户端之和可能小于入站统计）。
+type TrafficHistory struct {
+	Id          int    `json:"id" gorm:"primaryKey;autoIncrement"`
+	InboundId   int    `json:"inboundId" gorm:"index:idx_th_inbound"`
+	Email       string `json:"email" gorm:"index:idx_th_email"`
+	PeriodStart int64  `json:"periodStart"` // 上期重置时间(ms)，0 表示首次
+	PeriodEnd   int64  `json:"periodEnd"`   // 本期重置时间(ms)
+	Up          int64  `json:"up"`
+	Down        int64  `json:"down"`
+	Reason      string `json:"reason"` // 触发原因: custom_date / monthly / manual ...
+	CreatedAt   int64  `json:"createdAt"`
+}
+
 // GenXrayInboundConfig generates an Xray inbound configuration from the Inbound model.
 func (i *Inbound) GenXrayInboundConfig() *xray.InboundConfig {
 	listen := i.Listen

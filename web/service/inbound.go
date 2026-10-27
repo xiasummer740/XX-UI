@@ -2343,6 +2343,92 @@ func (s *InboundService) ResetAllClientTraffics(id int) error {
 	})
 }
 
+// snapshotTrafficHistory 在重置前把当期用量写入历史表。
+// 入站合计写一条 email="" 的记录，各客户端各写一条。
+func (s *InboundService) snapshotTrafficHistory(id int, reason string, periodEnd int64) error {
+	db := database.GetDB()
+
+	var inbound model.Inbound
+	if err := db.Model(model.Inbound{}).Where("id = ?", id).First(&inbound).Error; err != nil {
+		return err
+	}
+
+	rows := make([]model.TrafficHistory, 0, 8)
+	if inbound.Up+inbound.Down > 0 {
+		rows = append(rows, model.TrafficHistory{
+			InboundId:   id,
+			Email:       "",
+			PeriodStart: inbound.LastTrafficResetTime,
+			PeriodEnd:   periodEnd,
+			Up:          inbound.Up,
+			Down:        inbound.Down,
+			Reason:      reason,
+			CreatedAt:   periodEnd,
+		})
+	}
+
+	var clients []xray.ClientTraffic
+	if err := db.Model(xray.ClientTraffic{}).Where("inbound_id = ?", id).Find(&clients).Error; err != nil {
+		return err
+	}
+	for _, c := range clients {
+		if c.Up == 0 && c.Down == 0 {
+			continue
+		}
+		rows = append(rows, model.TrafficHistory{
+			InboundId:   id,
+			Email:       c.Email,
+			PeriodStart: inbound.LastTrafficResetTime,
+			PeriodEnd:   periodEnd,
+			Up:          c.Up,
+			Down:        c.Down,
+			Reason:      reason,
+			CreatedAt:   periodEnd,
+		})
+	}
+
+	if len(rows) == 0 {
+		return nil
+	}
+	return db.Create(&rows).Error
+}
+
+// ResetInboundTrafficWithHistory 先记录当期用量快照，再重置入站及其所有客户端的流量。
+func (s *InboundService) ResetInboundTrafficWithHistory(id int, reason string) error {
+	now := time.Now().UnixMilli()
+	// 快照失败不阻塞重置：宁可少一条历史，也不能让流量不清零
+	if err := s.snapshotTrafficHistory(id, reason, now); err != nil {
+		logger.Warning("Failed to snapshot traffic history for inbound", id, ":", err)
+	}
+	if err := s.ResetInboundTraffic(id); err != nil {
+		return err
+	}
+	return s.ResetAllClientTraffics(id)
+}
+
+// MarkTrafficResetTime 只推进「上次重置时间」，不清零。
+// 当期本来就没有流量时用它，避免漏跑补偿逻辑每天重复命中同一个入站。
+func (s *InboundService) MarkTrafficResetTime(id int) error {
+	return database.GetDB().Model(model.Inbound{}).Where("id = ?", id).
+		Update("last_traffic_reset_time", time.Now().UnixMilli()).Error
+}
+
+// GetTrafficHistory 查询流量历史快照。
+// email 为空表示只看该入站的合计（email="" 的那条）。
+func (s *InboundService) GetTrafficHistory(inboundId int, email string, limit int) ([]model.TrafficHistory, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 200
+	}
+	q := database.GetDB().Model(model.TrafficHistory{}).Order("period_end DESC").Limit(limit)
+	if inboundId > 0 {
+		q = q.Where("inbound_id = ?", inboundId)
+	}
+	q = q.Where("email = ?", email)
+	rows := make([]model.TrafficHistory, 0)
+	err := q.Find(&rows).Error
+	return rows, err
+}
+
 func (s *InboundService) ResetAllTraffics() error {
 	db := database.GetDB()
 

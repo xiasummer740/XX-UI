@@ -186,6 +186,7 @@
                         <template v-if="allSetting && allSetting.vpsName">[[ allSetting.vpsName ]]</template>
                         <template v-else>VPS 配置</template>
                       </a-button>
+                      <a-button icon="history" @click="openTrafficHistory">流量历史</a-button>
                     </a-space>
                   </div>
                 </template>
@@ -978,6 +979,37 @@
       </a-form-item>
     </a-form>
   </a-modal>
+  <!-- 流量历史弹窗 -->
+  <a-modal :title="'流量历史（每月用量）'" :visible="trafficHistoryModal.visible"
+    @cancel="trafficHistoryModal.visible = false" :footer="null"
+    :class="themeSwitcher.currentTheme" width="760px">
+    <a-form layout="inline" style="margin-bottom: 12px;">
+      <a-form-item label="入站">
+        <a-select v-model="trafficHistoryModal.inboundId" style="width: 260px;"
+          @change="onTrafficHistoryInboundChange" placeholder="选择入站">
+          <a-select-option v-for="ib in dbInbounds" :key="ib.id" :value="ib.id">
+            [[ ib.remark ]]（端口 [[ ib.port ]]）
+          </a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item label="客户端">
+        <a-select v-model="trafficHistoryModal.email" style="width: 220px;" @change="loadTrafficHistory">
+          <a-select-option value="">入站合计</a-select-option>
+          <a-select-option v-for="e in trafficHistoryClients" :key="e" :value="e">[[ e ]]</a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item>
+        <a-button icon="reload" :loading="trafficHistoryModal.loading" @click="loadTrafficHistory">刷新</a-button>
+      </a-form-item>
+    </a-form>
+    <a-table :columns="trafficHistoryColumns" :data-source="trafficHistoryModal.rows"
+      :row-key="r => r.id" :pagination="false" :loading="trafficHistoryModal.loading"
+      size="small" :locale="{ emptyText: '暂无记录：下一次流量重置后才会生成' }">
+    </a-table>
+    <div style="margin-top: 10px; color: #999; font-size: 12px;">
+      每次自动重置前会先记录当期用量，所以只有发生过重置的周期才有数据。
+    </div>
+  </a-modal>
   </a-layout>
 {{template "page/body_scripts" .}}
 <script
@@ -1209,6 +1241,12 @@
         if (!this.copyClientsModal.targetInboundId) return [];
         return this.copyClientsModal.selectedEmails.map(email => `${email}_${this.copyClientsModal.targetInboundId}`);
       },
+      // 当前选中入站下的客户端邮箱，供流量历史的「客户端」下拉使用
+      trafficHistoryClients() {
+        const ib = (this.dbInbounds || []).find(x => x.id === this.trafficHistoryModal.inboundId);
+        if (!ib || !Array.isArray(ib.clientStats)) return [];
+        return ib.clientStats.map(c => c.email).filter(e => !!e);
+      },
     },
   });
 </script>
@@ -1413,6 +1451,19 @@
         vpsNotes: '',
       },
       vpsPurchaseDateMoment: null,
+      trafficHistoryModal: {
+        visible: false,
+        loading: false,
+        inboundId: null,
+        email: '',
+        rows: [],
+      },
+      trafficHistoryColumns: [
+        { title: '计费周期', dataIndex: 'periodText' },
+        { title: '上传', dataIndex: 'upText', align: 'right', width: 110 },
+        { title: '下载', dataIndex: 'downText', align: 'right', width: 110 },
+        { title: '合计', dataIndex: 'totalText', align: 'right', width: 110 },
+      ],
     },
     methods: {
       // 批量拉取入站健康状态；同时用同一请求的往返耗时估算「你到 VPS」的链路延迟。
@@ -2726,6 +2777,45 @@
           return p;
         }
         return false
+      },
+      openTrafficHistory() {
+        if (!this.dbInbounds || this.dbInbounds.length === 0) {
+          this.$message.info('还没有入站');
+          return;
+        }
+        this.trafficHistoryModal.inboundId = this.dbInbounds[0].id;
+        this.trafficHistoryModal.email = '';
+        this.trafficHistoryModal.rows = [];
+        this.trafficHistoryModal.visible = true;
+        this.loadTrafficHistory();
+      },
+      onTrafficHistoryInboundChange() {
+        this.trafficHistoryModal.email = '';
+        this.loadTrafficHistory();
+      },
+      async loadTrafficHistory() {
+        const m = this.trafficHistoryModal;
+        if (!m.inboundId) return;
+        m.loading = true;
+        try {
+          const q = '?inboundId=' + m.inboundId + '&email=' + encodeURIComponent(m.email || '');
+          const msg = await HttpUtil.get('/panel/api/inbounds/trafficHistory' + q);
+          if (msg.success) {
+            m.rows = (msg.obj || []).map(r => ({
+              ...r,
+              periodText: this.fmtDate(r.periodStart || 0) + ' → ' + this.fmtDate(r.periodEnd),
+              upText: SizeFormatter.sizeFormat(r.up),
+              downText: SizeFormatter.sizeFormat(r.down),
+              totalText: SizeFormatter.sizeFormat(r.up + r.down),
+            }));
+          } else {
+            this.$message.error('加载失败: ' + (msg.msg || '未知错误'));
+          }
+        } catch (e) {
+          this.$message.error('加载失败: ' + (e.message || '网络错误'));
+        } finally {
+          m.loading = false;
+        }
       },
       openVpsModal() {
         // Populate form from current settings
