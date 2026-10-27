@@ -1388,7 +1388,7 @@ func (s *ServerService) LoginToRemotePanel(server *model.RemoteServer) (string, 
 	}
 	jsonPayload, _ := json.Marshal(payload)
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := newSafeHTTPClient(10 * time.Second)
 	resp, err := client.Post(loginURL, "application/json", bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return "", fmt.Errorf("failed to connect to remote panel: %w", err)
@@ -1422,7 +1422,7 @@ func (s *ServerService) GetRemotePanelStatus(server *model.RemoteServer) (map[st
 	baseURL = strings.TrimSuffix(baseURL, "/panel")
 	statusURL := baseURL + "/panel/api/server/status"
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := newSafeHTTPClient(10 * time.Second)
 	req, _ := http.NewRequest("GET", statusURL, nil)
 	// The remote panel uses "XX-UI" as the session cookie name (set by sessions.Sessions("XX-UI", store))
 	req.Header.Set("Cookie", "XX-UI="+sessionCookie)
@@ -1453,7 +1453,7 @@ func (s *ServerService) GetRemoteInbounds(server *model.RemoteServer) ([]map[str
 	baseURL := strings.TrimRight(server.URL, "/")
 	baseURL = strings.TrimSuffix(baseURL, "/panel")
 	listURL := baseURL + "/panel/api/inbounds/list"
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := newSafeHTTPClient(10 * time.Second)
 	req, _ := http.NewRequest("GET", listURL, nil)
 	// The remote panel uses "XX-UI" as the session cookie name (set by sessions.Sessions("XX-UI", store))
 	req.Header.Set("Cookie", "XX-UI="+sessionCookie)

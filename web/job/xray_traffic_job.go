@@ -1,7 +1,9 @@
 package job
 
 import (
+	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/XiaSummer740/XX-UI/logger"
 	"github.com/XiaSummer740/XX-UI/web/service"
@@ -101,6 +103,17 @@ func (j *XrayTrafficJob) informTrafficToExternalAPI(inboundTraffics []*xray.Traf
 	if err != nil {
 		logger.Warning("get ExternalTrafficInformURI failed:", err)
 		return
+	}
+	if informURL != "" {
+		// 拒绝向 loopback / 内网 / 云元数据地址 POST：这个 URI 由管理员填写，
+		// 而面板以 root 运行，不做校验就是一个 SSRF 出口。
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ssrfErr := service.CheckOutboundURL(ctx, informURL)
+		cancel()
+		if ssrfErr != nil {
+			logger.Warning("refusing to send traffic to ExternalTrafficInformURI:", ssrfErr)
+			return
+		}
 	}
 	requestBody, err := json.Marshal(map[string]any{"clientTraffics": clientTraffics, "inboundTraffics": inboundTraffics})
 	if err != nil {

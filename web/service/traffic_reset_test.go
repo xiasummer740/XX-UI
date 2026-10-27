@@ -17,14 +17,10 @@ import (
 
 var trafficResetLoggerOnce sync.Once
 
-// setupTrafficResetDB wires a temporary sqlite database plus a log folder,
-// because the reset paths emit warnings and the package logger must not be nil.
-func setupTrafficResetDB(t *testing.T) {
+// initTestLogger makes sure the package logger is initialised: the logging
+// helpers dereference a package-level logger and panic when it is nil.
+func initTestLogger(t *testing.T) {
 	t.Helper()
-
-	dbDir := t.TempDir()
-	t.Setenv("XUI_DB_FOLDER", dbDir)
-
 	trafficResetLoggerOnce.Do(func() {
 		// The logger keeps the file open for the lifetime of the process, so it
 		// must not live inside t.TempDir(): Windows would refuse to remove it.
@@ -35,6 +31,17 @@ func setupTrafficResetDB(t *testing.T) {
 		t.Setenv("XUI_LOG_FOLDER", logDir)
 		logger.InitLogger(logging.ERROR)
 	})
+}
+
+// setupTrafficResetDB wires a temporary sqlite database plus a log folder,
+// because the reset paths emit warnings and the package logger must not be nil.
+func setupTrafficResetDB(t *testing.T) {
+	t.Helper()
+
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+
+	initTestLogger(t)
 
 	if err := database.InitDB(filepath.Join(dbDir, "XX-UI.db")); err != nil {
 		t.Fatalf("init test db: %v", err)

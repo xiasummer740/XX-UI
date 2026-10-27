@@ -35,6 +35,20 @@ func getRemoteIp(c *gin.Context) string {
 	return host
 }
 
+// getPeerIp returns the address of the TCP peer. Unlike the X-Real-IP and
+// X-Forwarded-For headers it cannot be chosen by the client, so it is the right
+// key for throttling: rotating a forged header must not hand out fresh attempts.
+func getPeerIp(c *gin.Context) string {
+	host := c.Request.RemoteAddr
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	if ip := parseHeaderIP(host); ip != "" {
+		return ip
+	}
+	return host
+}
+
 // parseHeaderIP returns the canonical form of a plain IP literal, or an empty
 // string when the value is not a valid IP address.
 func parseHeaderIP(value string) string {

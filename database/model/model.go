@@ -112,10 +112,10 @@ type HistoryOfSeeders struct {
 // Email 为空字符串的那条记录代表该入站的合计（客户端之和可能小于入站统计）。
 type TrafficHistory struct {
 	Id          int    `json:"id" gorm:"primaryKey;autoIncrement"`
-	InboundId   int    `json:"inboundId" gorm:"index:idx_th_inbound"`
-	Email       string `json:"email" gorm:"index:idx_th_email"`
-	PeriodStart int64  `json:"periodStart"` // 上期重置时间(ms)，0 表示首次
-	PeriodEnd   int64  `json:"periodEnd"`   // 本期重置时间(ms)
+	InboundId   int    `json:"inboundId" gorm:"index:idx_th_inbound;uniqueIndex:idx_th_unique,priority:1"`
+	Email       string `json:"email" gorm:"index:idx_th_email;uniqueIndex:idx_th_unique,priority:2"`
+	PeriodStart int64  `json:"periodStart"`                                                                   // 上期重置时间(ms)，0 表示首次
+	PeriodEnd   int64  `json:"periodEnd" gorm:"uniqueIndex:idx_th_unique,priority:3;index:idx_th_period_end"` // 本期重置时间(ms)
 	Up          int64  `json:"up"`
 	Down        int64  `json:"down"`
 	Reason      string `json:"reason"` // 触发原因: custom_date / monthly / manual ...

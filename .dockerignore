@@ -1,0 +1,42 @@
+# Build artifacts
+build/
+dist/
+bin/
+*.exe
+*.test
+*.out
+
+# VCS and editor noise
+.git/
+.gitignore
+.github/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local runtime state that must never be baked into an image
+*.db
+*.db-wal
+*.db-shm
+*.db.bak-*
+cookies.txt
+log/
+logs/
+tmp/
+temp/
+.env
+.env.*
+
+# Docs and screenshots are not needed to compile
+*.md
+docs/
+media/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.zip
+
+# Test fixtures kept out of the build context
+**/*_test.go

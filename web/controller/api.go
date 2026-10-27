@@ -44,6 +44,7 @@ func (a *APIController) checkAPIAuth(c *gin.Context) {
 func (a *APIController) initRouter(g *gin.RouterGroup, customGeo *service.CustomGeoService) {
 	// Main API group (session auth + rate limited)
 	api := g.Group("/panel/api")
+	api.Use(middleware.SameOrigin())
 	api.Use(a.checkAPIAuth)
 	api.Use(middleware.RateLimiter(500, time.Minute))
 
@@ -63,7 +64,10 @@ func (a *APIController) initRouter(g *gin.RouterGroup, customGeo *service.Custom
 	NewRemoteController(remote)
 
 	// Extra routes
-	api.GET("/backuptotgbot", a.BackuptoTgbot)
+	// POST (not GET): this has a visible side effect (it pushes the database to
+	// Telegram), so it must never be reachable from a link, image or top-level
+	// navigation that carries the session cookie.
+	api.POST("/backuptotgbot", a.BackuptoTgbot)
 }
 
 // BackuptoTgbot sends a backup of the panel data to Telegram bot admins.

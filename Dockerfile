@@ -1,20 +1,20 @@
 # ========================================================
 # Stage: Builder
 # ========================================================
-FROM golang:1.23-alpine AS builder
+FROM golang:1.26-alpine AS builder
 WORKDIR /app
 ARG TARGETARCH
 
 RUN apk --no-cache --update add \
-  build-base \
-  gcc \
   curl \
   unzip
 
 COPY . .
 
-ENV CGO_ENABLED=1
-ENV CGO_CFLAGS="-D_LARGEFILE64_SOURCE"
+# The SQLite driver (glebarez/sqlite -> modernc.org/sqlite) is pure Go, so no C
+# toolchain is required. A static build is smaller and avoids musl/CGO
+# surprises between the builder and the final image.
+ENV CGO_ENABLED=0
 RUN go build -ldflags "-w -s" -o build/x-ui main.go
 RUN ./DockerInit.sh "$TARGETARCH"
 

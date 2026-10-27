@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"github.com/XiaSummer740/XX-UI/web/middleware"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -22,6 +24,7 @@ func NewXUIController(g *gin.RouterGroup) *XUIController {
 // initRouter sets up the main panel routes and initializes sub-controllers.
 func (a *XUIController) initRouter(g *gin.RouterGroup) {
 	g = g.Group("/panel")
+	g.Use(middleware.SameOrigin())
 	g.Use(a.checkLogin)
 
 	g.GET("/", a.index)

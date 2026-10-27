@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"crypto/subtle"
 	"net/http"
 
 	"github.com/XiaSummer740/XX-UI/database"
@@ -33,7 +34,10 @@ func ApiKeyAuth() gin.HandlerFunc {
 			return
 		}
 
-		if setting.Value == "" || setting.Value != key {
+		// Constant-time comparison so the response time does not leak how many
+		// leading characters of the key were correct.
+		if setting.Value == "" ||
+			subtle.ConstantTimeCompare([]byte(setting.Value), []byte(key)) != 1 {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"success": false,
 				"msg":     "invalid API key",

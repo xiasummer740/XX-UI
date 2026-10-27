@@ -183,6 +183,13 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	}
 
 	engine := gin.Default()
+	// Gin trusts every proxy by default, which means any client can pick its own
+	// X-Forwarded-For value and therefore its own rate-limit bucket. The service
+	// only needs the direct peer address: the forwarded headers are read (and
+	// validated) explicitly where they are actually wanted.
+	if err := engine.SetTrustedProxies(nil); err != nil {
+		return nil, err
+	}
 
 	// Session-authenticated routes get rate-limited in api.go
 	// Remote API routes (API key auth) are excluded from rate limiting
@@ -349,6 +356,9 @@ func (s *Server) startTask() {
 
 	// Database auto backup scheduling - runs daily at midnight
 	s.cron.AddJob("@daily", job.NewDbBackupJob())
+
+	// Traffic history snapshots grow with every reset cycle; prune old rows daily.
+	s.cron.AddJob("@daily", job.NewTrafficHistoryCleanupJob())
 
 	// Xray periodic restart scheduling
 	if xrayRestartEnabled, _ := s.settingService.GetXrayRestartEnabled(); xrayRestartEnabled {

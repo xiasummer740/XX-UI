@@ -29,10 +29,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
           cache: true
@@ -50,7 +50,7 @@ jobs:
         run: go vet ./...
 
       - name: Run staticcheck
-        uses: dominikh/staticcheck-action@v1
+        uses: dominikh/staticcheck-action@9716614d4101e79b4340dd97b10e54d68234e431 # v1
         with:
           version: "latest"
           install-go: false
@@ -58,8 +58,18 @@ jobs:
       - name: Run tests
         run: go test -race -shuffle=on ./...
 
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          # Only report vulnerabilities that are reachable from this code base;
+          # unreachable ones are noise and would make the job permanently red.
+          govulncheck ./...
+
   build:
     needs: analyze
+    # 发布产物只在 push / tag / 手动触发时构建：PR 来自 fork 时不应拿到
+    # contents: write 的令牌，也不该产生可下载的发布产物。
+    if: github.event_name != 'pull_request'
     permissions:
       contents: write
     strategy:
@@ -75,10 +85,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
           check-latest: true
@@ -170,13 +180,13 @@ jobs:
         run: tar -zcvf x-ui-linux-${{ matrix.platform }}.tar.gz x-ui
 
       - name: Upload files to Artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: x-ui-linux-${{ matrix.platform }}
           path: ./x-ui-linux-${{ matrix.platform }}.tar.gz
 
       - name: Upload files to GH release
-        uses: svenstaro/upload-release-action@v2
+        uses: svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de # v2
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
@@ -192,6 +202,7 @@ jobs:
   build-windows:
     name: Build for Windows
     needs: analyze
+    if: github.event_name != 'pull_request'
     permissions:
       contents: write
     strategy:
@@ -201,16 +212,16 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
           check-latest: true
 
       - name: Install MSYS2
-        uses: msys2/setup-msys2@v2
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
         with:
           msystem: MINGW64
           update: true
@@ -265,13 +276,13 @@ jobs:
           Compress-Archive -Path .\x-ui -DestinationPath "x-ui-windows-amd64.zip"
 
       - name: Upload files to Artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: x-ui-windows-amd64
           path: ./x-ui-windows-amd64.zip
 
       - name: Upload files to GH release
-        uses: svenstaro/upload-release-action@v2
+        uses: svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de # v2
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}

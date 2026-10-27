@@ -84,9 +84,13 @@ func (a *IndexController) login(c *gin.Context) {
 	}
 
 	// Throttle repeated failures before touching the database or bcrypt.
+	// Logging uses the (forwarded, validated) client address; the throttle keys
+	// use the TCP peer address, which cannot be forged: otherwise rotating
+	// X-Real-IP would hand an attacker a fresh budget every request.
 	remoteIP := getRemoteIp(c)
-	userKey := remoteIP + "|" + strings.ToLower(form.Username)
-	ipKey := remoteIP + "|*"
+	throttleIP := getPeerIp(c)
+	userKey := throttleIP + "|" + strings.ToLower(form.Username)
+	ipKey := throttleIP + "|*"
 	if locked, retryAfter := loginGuardUser.Locked(userKey); locked {
 		logger.Warningf("login blocked for username %q from %s, retry after %s",
 			template.HTMLEscapeString(form.Username), remoteIP, retryAfter.Round(time.Second))

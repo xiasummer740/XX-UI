@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/XiaSummer740/XX-UI/database"
@@ -2524,6 +2525,16 @@ func (s *InboundService) MarkTrafficResetTime(id int) error {
 		Update("last_traffic_reset_time", time.Now().UnixMilli()).Error
 }
 
+// PruneTrafficHistory 删除 period_end 早于 cutoff（毫秒时间戳）的快照行。
+// 快照会随每个重置周期增长，需要定期裁剪；返回删除行数。
+func (s *InboundService) PruneTrafficHistory(cutoff int64) (int64, error) {
+	if cutoff <= 0 {
+		return 0, nil
+	}
+	res := database.GetDB().Where("period_end < ?", cutoff).Delete(&model.TrafficHistory{})
+	return res.RowsAffected, res.Error
+}
+
 // GetTrafficHistory 查询流量历史快照。
 // email 为空表示只看该入站的合计（email="" 的那条）。
 func (s *InboundService) GetTrafficHistory(inboundId int, email string, limit int) ([]model.TrafficHistory, error) {
@@ -4199,9 +4210,30 @@ func (s *InboundService) CheckInboundHealth(ids []int) ([]InboundHealth, error) 
 		}
 	}
 
+	// 端口探测并发执行并带短缓存：串行时 N 个入站最坏要 N×300ms，而前端每次
+	// 刷新会连发三次请求来测量链路 RTT，10 个入站就是接近 9 秒的阻塞探测。
+	// 并发之后总耗时约等于单次探测，缓存让同一轮刷新只真正探测一次。
+	// 已关闭的入站不可能在监听，直接跳过探测。
+	listening := make([]bool, len(inbounds))
+	var wg sync.WaitGroup
+	limit := make(chan struct{}, 8)
+	for i := range inbounds {
+		if !inbounds[i].Enable || inbounds[i].Port <= 0 {
+			continue
+		}
+		wg.Add(1)
+		go func(i, port int) {
+			defer wg.Done()
+			limit <- struct{}{}
+			defer func() { <-limit }()
+			listening[i] = s.isLocalPortListeningCached(port)
+		}(i, inbounds[i].Port)
+	}
+	wg.Wait()
+
 	now := time.Now().UnixMilli()
 	result := make([]InboundHealth, 0, len(inbounds))
-	for _, ib := range inbounds {
+	for i, ib := range inbounds {
 		h := InboundHealth{
 			Id:         ib.Id,
 			Port:       ib.Port,
@@ -4211,10 +4243,41 @@ func (s *InboundService) CheckInboundHealth(ids []int) ([]InboundHealth, error) 
 		}
 		h.Expired = ib.ExpiryTime > 0 && ib.ExpiryTime <= now
 		h.QuotaUsed = ib.Total > 0 && ib.Up+ib.Down >= ib.Total
-		h.Listening = s.isLocalPortListening(ib.Port)
+		h.Listening = listening[i]
 		result = append(result, h)
 	}
 	return result, nil
+}
+
+// portProbeTTL 是端口探测结果的缓存时间。面板一次页面刷新会连发多次 /health
+// 请求测量链路 RTT，缓存让这些请求复用同一轮探测结果。
+const portProbeTTL = 10 * time.Second
+
+var (
+	portProbeCacheMu sync.Mutex
+	portProbeCache   = make(map[int]portProbeState, 32)
+)
+
+type portProbeState struct {
+	listening bool
+	at        time.Time
+}
+
+// isLocalPortListeningCached 带短缓存地探测本机端口是否在监听。
+func (s *InboundService) isLocalPortListeningCached(port int) bool {
+	portProbeCacheMu.Lock()
+	if state, ok := portProbeCache[port]; ok && time.Since(state.at) < portProbeTTL {
+		portProbeCacheMu.Unlock()
+		return state.listening
+	}
+	portProbeCacheMu.Unlock()
+
+	listening := s.isLocalPortListening(port)
+
+	portProbeCacheMu.Lock()
+	portProbeCache[port] = portProbeState{listening: listening, at: time.Now()}
+	portProbeCacheMu.Unlock()
+	return listening
 }
 
 // isLocalPortListening 检测本机是否有进程在监听该端口。
@@ -4233,6 +4296,19 @@ func (s *InboundService) isLocalPortListening(port int) bool {
 // CheckRemotePort checks TCP connectivity to a remote host:port and returns status + latency in milliseconds.
 // This is used for latency detection from the server to a remote node.
 func (s *InboundService) CheckRemotePort(host string, port int) map[string]any {
+	// Loopback and private addresses are legitimate here (the panel tests its own
+	// inbounds, and REALITY dests may be on a LAN), but cloud metadata endpoints
+	// are not: 169.254.169.254 hands out credentials to anything that can reach it.
+	if ip := net.ParseIP(host); ip != nil && ip.IsLinkLocalUnicast() {
+		return map[string]any{
+			"host":      host,
+			"port":      port,
+			"reachable": false,
+			"latency":   0,
+			"error":     "link-local/metadata addresses are not allowed",
+		}
+	}
+
 	start := time.Now()
 	addr := net.JoinHostPort(host, strconv.Itoa(port))
 	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
