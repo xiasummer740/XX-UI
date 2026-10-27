@@ -60,6 +60,7 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/:id/delClientByEmail/:email", a.delInboundClientByEmail)
 	g.POST("/checkPort", a.checkPort)
 	g.POST("/checkRemotePort", a.checkRemotePort)
+	g.POST("/health", a.checkHealth)
 	g.GET("/chainProxy/:id", a.getChainProxy)
 	g.POST("/chainProxy/testConnection", a.testChainProxy)
 	g.POST("/chainProxy/:id", a.updateChainProxy)
@@ -627,6 +628,18 @@ func (a *InboundController) checkRemotePort(c *gin.Context) {
 	}
 	result := a.inboundService.CheckRemotePort(req.Host, req.Port)
 	jsonObj(c, result, nil)
+}
+
+// checkHealth 批量返回入站健康状态（是否载入、是否过期、是否超量、最近在线）。
+// 请求体可以为空，空即查询全部入站。
+func (a *InboundController) checkHealth(c *gin.Context) {
+	var req struct {
+		Ids []int `json:"ids" form:"ids"`
+	}
+	// 忽略绑定错误：不带参数时就是查全部
+	_ = c.ShouldBind(&req)
+	result, err := a.inboundService.CheckInboundHealth(req.Ids)
+	jsonObj(c, result, err)
 }
 
 // lastOnline retrieves the last online timestamps for clients.

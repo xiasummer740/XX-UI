@@ -3910,6 +3910,77 @@ func (s *InboundService) CheckPort(port int) map[string]any {
 	}
 }
 
+// InboundHealth 描述单个入站的运行状态，给面板「延迟/状态」列使用。
+// 注意：Listening 只表示本机端口在监听（即 xray 已载入该入站），
+// 并不代表外网可达；真实链路延迟由前端测量。
+type InboundHealth struct {
+	Id         int   `json:"id"`
+	Port       int   `json:"port"`
+	Enable     bool  `json:"enable"`
+	Listening  bool  `json:"listening"`
+	Expired    bool  `json:"expired"`
+	QuotaUsed  bool  `json:"quotaUsed"`
+	ExpiryTime int64 `json:"expiryTime"`
+	LastOnline int64 `json:"lastOnline"`
+}
+
+// CheckInboundHealth 批量返回入站健康状态，ids 为空表示全部。
+func (s *InboundService) CheckInboundHealth(ids []int) ([]InboundHealth, error) {
+	db := database.GetDB()
+
+	var inbounds []*model.Inbound
+	q := db.Model(model.Inbound{})
+	if len(ids) > 0 {
+		q = q.Where("id IN ?", ids)
+	}
+	if err := q.Find(&inbounds).Error; err != nil {
+		return nil, err
+	}
+
+	// 一次聚合查询取出每个入站最近一次有客户端在线的时间，避免 N+1
+	type lastOnlineRow struct {
+		InboundId  int   `gorm:"column:inbound_id"`
+		LastOnline int64 `gorm:"column:last_online"`
+	}
+	var rows []lastOnlineRow
+	lastOnline := make(map[int]int64, len(inbounds))
+	if err := db.Raw("SELECT inbound_id, MAX(last_online) AS last_online FROM client_traffics GROUP BY inbound_id").Scan(&rows).Error; err == nil {
+		for _, r := range rows {
+			lastOnline[r.InboundId] = r.LastOnline
+		}
+	}
+
+	now := time.Now().UnixMilli()
+	result := make([]InboundHealth, 0, len(inbounds))
+	for _, ib := range inbounds {
+		h := InboundHealth{
+			Id:         ib.Id,
+			Port:       ib.Port,
+			Enable:     ib.Enable,
+			ExpiryTime: ib.ExpiryTime,
+			LastOnline: lastOnline[ib.Id],
+		}
+		h.Expired = ib.ExpiryTime > 0 && ib.ExpiryTime <= now
+		h.QuotaUsed = ib.Total > 0 && ib.Up+ib.Down >= ib.Total
+		h.Listening = s.isLocalPortListening(ib.Port)
+		result = append(result, h)
+	}
+	return result, nil
+}
+
+// isLocalPortListening 检测本机是否有进程在监听该端口。
+func (s *InboundService) isLocalPortListening(port int) bool {
+	if port <= 0 {
+		return false
+	}
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 300*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
+}
+
 // CheckRemotePort checks TCP connectivity to a remote host:port and returns status + latency in milliseconds.
 // This is used for latency detection from the server to a remote node.
 func (s *InboundService) CheckRemotePort(host string, port int) map[string]any {

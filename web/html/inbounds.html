@@ -546,26 +546,29 @@
                       </template>
                     </template>
                     <template slot="ping" slot-scope="text, dbInbound">
-                      <a-tooltip>
+                      <a-tooltip placement="left">
                         <template slot="title">
-                          <span v-if="pingStatus[dbInbound.id] && pingStatus[dbInbound.id].testing">{{ i18n "pages.inbounds.pingTesting" }}</span>
-                          <span v-else-if="pingStatus[dbInbound.id] && pingStatus[dbInbound.id].reachable">{{ i18n "pages.inbounds.pingReachable" }}: [[ pingStatus[dbInbound.id].latency ]]ms</span>
-                          <span v-else-if="pingStatus[dbInbound.id] && !pingStatus[dbInbound.id].reachable">{{ i18n "pages.inbounds.pingUnreachable" }}</span>
-                          <span v-else>{{ i18n "pages.inbounds.pingClick" }}</span>
+                          <div style="line-height: 1.8; min-width: 190px;">
+                            <div><strong>[[ healthMeta(healthState(healthStatus[dbInbound.id])).label ]]</strong></div>
+                            <div>{{ i18n "pages.inbounds.healthLastOnline" }}: [[ relTime(healthStatus[dbInbound.id] ? healthStatus[dbInbound.id].lastOnline : 0) ]]</div>
+                            <div v-if="healthStatus[dbInbound.id] && healthStatus[dbInbound.id].expiryTime > 0">
+                              {{ i18n "pages.inbounds.expireDate" }}: [[ fmtDate(healthStatus[dbInbound.id].expiryTime) ]]
+                            </div>
+                            <div>{{ i18n "pages.inbounds.healthLinkRtt" }}: <strong>[[ linkRtt === null ? '-' : linkRtt + ' ms' ]]</strong></div>
+                            <div>{{ i18n "pages.inbounds.healthChecked" }}: [[ healthCheckedAt ? fmtDate(healthCheckedAt) : '-' ]]</div>
+                            <div style="opacity: .65; font-size: 12px; margin-top: 4px;">{{ i18n "pages.inbounds.healthRttHint" }}</div>
+                            <div style="opacity: .65; font-size: 12px;">{{ i18n "pages.inbounds.healthRefresh" }}</div>
+                          </div>
                         </template>
-                        <a-icon v-if="pingStatus[dbInbound.id] && pingStatus[dbInbound.id].testing"
-                          type="loading" :style="{ fontSize: '16px', color: '#1890ff' }"></a-icon>
-                        <a-icon v-else-if="pingStatus[dbInbound.id] && pingStatus[dbInbound.id].reachable"
-                          type="check-circle" theme="filled"
-                          :style="{ fontSize: '16px', color: '#52c41a' }"
-                          @click="checkPort(dbInbound.id, dbInbound.port, dbInbound.listen)"></a-icon>
-                        <a-icon v-else-if="pingStatus[dbInbound.id] && !pingStatus[dbInbound.id].reachable"
-                          type="close-circle" theme="filled"
-                          :style="{ fontSize: '16px', color: '#ff4d4f' }"
-                          @click="checkPort(dbInbound.id, dbInbound.port, dbInbound.listen)"></a-icon>
-                        <a-icon v-else
-                          type="api" :style="{ fontSize: '16px', color: '#8c8c8c', cursor: 'pointer' }"
-                          @click="checkPort(dbInbound.id, dbInbound.port, dbInbound.listen)"></a-icon>
+                        <span style="cursor: pointer; display: inline-flex; align-items: center; gap: 4px;"
+                          @click="loadHealth(true)">
+                          <a-icon
+                            :type="healthMeta(healthState(healthStatus[dbInbound.id])).type"
+                            :theme="healthMeta(healthState(healthStatus[dbInbound.id])).theme"
+                            :style="{ fontSize: '16px', color: healthMeta(healthState(healthStatus[dbInbound.id])).color }"></a-icon>
+                          <span v-if="linkRtt !== null" :style="{ fontSize: '12px', color: rttColor() }">[[ linkRtt ]]</span>
+                          <span v-else style="font-size: 12px; color: #bfbfbf;">--</span>
+                        </span>
                       </a-tooltip>
                     </template>
                     <template slot="info" slot-scope="text, dbInbound">
@@ -1263,7 +1266,7 @@
   }, {
     title: '{{ i18n "pages.inbounds.ping" }}',
     align: 'center',
-    width: 35,
+    width: 60,
     scopedSlots: { customRender: 'ping' },
   }];
 
@@ -1354,7 +1357,25 @@
       ipLimitEnable: false,
       webDomain: '',
       pageSize: 0,
-      pingStatus: {},
+      healthStatus: {},
+      healthLoading: false,
+      healthCheckedAt: 0,
+      linkRtt: null,
+      // 健康状态文案（服务端渲染进 JS，避免运行时再取一次）
+      hx: {
+        online: '{{ i18n "pages.inbounds.healthOnline" }}',
+        idle: '{{ i18n "pages.inbounds.healthIdle" }}',
+        disabled: '{{ i18n "pages.inbounds.healthDisabled" }}',
+        expired: '{{ i18n "pages.inbounds.healthExpired" }}',
+        quota: '{{ i18n "pages.inbounds.healthQuota" }}',
+        notLoaded: '{{ i18n "pages.inbounds.healthNotLoaded" }}',
+        unknown: '{{ i18n "pages.inbounds.healthUnknown" }}',
+        never: '{{ i18n "pages.inbounds.healthNever" }}',
+        justNow: '{{ i18n "pages.inbounds.healthJustNow" }}',
+        minAgo: '{{ i18n "pages.inbounds.healthMinAgo" }}',
+        hourAgo: '{{ i18n "pages.inbounds.healthHourAgo" }}',
+        dayAgo: '{{ i18n "pages.inbounds.healthDayAgo" }}',
+      },
       pingTimer: null,
       allSetting: {},
       chainProxyModal: {
@@ -1387,53 +1408,86 @@
       vpsPurchaseDateMoment: null,
     },
     methods: {
-      async checkPort(inboundId, port, host) {
-        if (!this.pingStatus[inboundId]) {
-          this.$set(this.pingStatus, inboundId, {});
-        }
-        this.pingStatus[inboundId].testing = true;
+      // 批量拉取入站健康状态；同时用同一请求的往返耗时估算「你到 VPS」的链路延迟。
+      // 连打 3 次取最小值，避免首次冷连接/抖动把数字拉高。
+      async loadHealth() {
+        if (!this.dbInbounds || this.dbInbounds.length === 0) return;
+        if (this.healthLoading) return;
+        this.healthLoading = true;
+        let best = Infinity;
         try {
-          let msg;
-          if (host) {
-            // Remote check: server connects to host:port
-            msg = await HttpUtil.post('/panel/api/inbounds/checkRemotePort', { host, port });
-          } else {
-            // Local check: check 127.0.0.1:port
-            msg = await HttpUtil.post('/panel/api/inbounds/checkPort', { port });
+          for (let i = 0; i < 3; i++) {
+            const t0 = performance.now();
+            let msg;
+            try {
+              msg = await HttpUtil.post('/panel/api/inbounds/health', {});
+            } catch (e) {
+              continue;
+            }
+            const dt = performance.now() - t0;
+            if (dt < best) best = dt;
+            if (msg && msg.success && Array.isArray(msg.obj)) {
+              const map = {};
+              msg.obj.forEach(h => { map[h.id] = h; });
+              this.healthStatus = map;
+            }
           }
-          if (msg.success && msg.obj) {
-            this.$set(this.pingStatus, inboundId, {
-              reachable: msg.obj.reachable,
-              latency: msg.obj.latency,
-              testing: false,
-              error: msg.obj.error || null,
-            });
-          } else {
-            this.$set(this.pingStatus, inboundId, {
-              reachable: false,
-              latency: 0,
-              testing: false,
-              error: msg.msg || 'Unknown error',
-            });
-          }
-        } catch (err) {
-          this.$set(this.pingStatus, inboundId, {
-            reachable: false,
-            latency: 0,
-            testing: false,
-            error: err.message || 'Request failed',
-          });
+          this.linkRtt = isFinite(best) ? Math.round(best) : null;
+          this.healthCheckedAt = Date.now();
+        } finally {
+          this.healthLoading = false;
         }
       },
-      autoCheckAllPorts() {
-        if (!this.dbInbounds || this.dbInbounds.length === 0) return;
-        const inbounds = this.dbInbounds;
-        // Check all inbounds concurrently
-        inbounds.forEach(dbInbound => {
-          if (dbInbound && dbInbound.id && dbInbound.port) {
-            this.checkPort(dbInbound.id, dbInbound.port, dbInbound.listen);
-          }
-        });
+      // 状态判定优先级：关闭 > 过期 > 超量 > 未载入 > 活跃 > 闲置
+      healthState(h) {
+        if (!h) return 'unknown';
+        if (!h.enable) return 'disabled';
+        if (h.expired) return 'expired';
+        if (h.quotaUsed) return 'quota';
+        if (!h.listening) return 'notloaded';
+        const last = h.lastOnline || 0;
+        if (last > 0 && Date.now() - last < 24 * 3600 * 1000) return 'online';
+        return 'idle';
+      },
+      healthMeta(state) {
+        switch (state) {
+          case 'online':
+            return { type: 'check-circle', theme: 'filled', color: '#52c41a', label: this.hx.online };
+          case 'idle':
+            return { type: 'clock-circle', theme: 'filled', color: '#1890ff', label: this.hx.idle };
+          case 'disabled':
+            return { type: 'pause-circle', theme: 'filled', color: '#bfbfbf', label: this.hx.disabled };
+          case 'expired':
+            return { type: 'warning', theme: 'filled', color: '#fa8c16', label: this.hx.expired };
+          case 'quota':
+            return { type: 'warning', theme: 'filled', color: '#fa8c16', label: this.hx.quota };
+          case 'notloaded':
+            return { type: 'exclamation-circle', theme: 'filled', color: '#ff4d4f', label: this.hx.notLoaded };
+          default:
+            return { type: 'api', theme: 'outlined', color: '#8c8c8c', label: this.hx.unknown };
+        }
+      },
+      relTime(ts) {
+        if (!ts || ts <= 0) return this.hx.never;
+        const mins = Math.floor((Date.now() - ts) / 60000);
+        if (mins < 1) return this.hx.justNow;
+        if (mins < 60) return mins + ' ' + this.hx.minAgo;
+        const hours = Math.floor(mins / 60);
+        if (hours < 24) return hours + ' ' + this.hx.hourAgo;
+        return Math.floor(hours / 24) + ' ' + this.hx.dayAgo;
+      },
+      fmtDate(ms) {
+        if (!ms || ms <= 0) return '-';
+        const d = new Date(ms);
+        const p = n => (n < 10 ? '0' + n : '' + n);
+        return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+          ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+      },
+      rttColor() {
+        if (this.linkRtt === null) return '#8c8c8c';
+        if (this.linkRtt < 100) return '#52c41a';
+        if (this.linkRtt < 250) return '#1890ff';
+        return '#fa8c16';
       },
       loading(spinning = true) {
         this.loadingStates.spinning = spinning;
@@ -2940,16 +2994,16 @@
       // Initial data fetch
       this.getDBInbounds().then(() => {
         this.loading(false);
-        // Auto-check port connectivity for all inbounds after data is loaded
+        // 数据就绪后拉一次入站健康状态
         this.$nextTick(() => {
-          this.autoCheckAllPorts();
+          this.loadHealth();
         });
       });
 
-      // Auto-refresh ping status every 60 seconds
+      // 每 60 秒刷新一次入站健康状态
       this.pingTimer = setInterval(() => {
         if (this.dbInbounds && this.dbInbounds.length > 0) {
-          this.autoCheckAllPorts();
+          this.loadHealth();
         }
       }, 60000);
 
