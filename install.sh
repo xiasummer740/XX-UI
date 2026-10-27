@@ -66,6 +66,90 @@ _curl() {
 xui_folder="${XUI_MAIN_FOLDER:=/usr/local/x-ui}"
 xui_service="${XUI_SERVICE:=/etc/systemd/system}"
 
+# 计算文件的 SHA256。不同发行版可用的工具不一样，按顺序退让。
+_sha256_file() {
+    if command -v sha256sum &>/dev/null; then
+        sha256sum "$1" | awk '{print $1}'
+    elif command -v shasum &>/dev/null; then
+        shasum -a 256 "$1" | awk '{print $1}'
+    elif command -v openssl &>/dev/null; then
+        openssl dgst -sha256 "$1" | awk '{print $NF}'
+    else
+        echo ""
+    fi
+}
+
+# 解包前校验发布包。这里挡住的是真实发生过的故障：镜像或 CDN 返回一页
+# HTML 错误页、下载被截断、拉到了别的架构的包——任何一种都会以 root 身份
+# 把垃圾解到 /usr/local/x-ui，而旧版本已经被删掉了。
+# 发布流程会为每个安装包附带 <包名>.sha256；取不到时（旧版本发布包）只告警。
+_verify_archive() {
+    local archive="$1"
+    local url="$2"
+
+    if [[ ! -s "$archive" ]]; then
+        echo -e "${red}安装包为空，已中止${plain}" >&2
+        return 1
+    fi
+
+    if ! gzip -t "$archive" 2>/dev/null; then
+        echo -e "${red}下载的文件不是有效的 gzip 压缩包（可能是镜像返回了错误页），已中止${plain}" >&2
+        rm -f "$archive"
+        return 1
+    fi
+
+    # 压缩包内必须真的有主程序，避免把结构不符的包解到系统里
+    if ! tar tzf "$archive" 2>/dev/null | grep -qx "x-ui/x-ui"; then
+        echo -e "${red}安装包结构异常：其中找不到 x-ui/x-ui，已中止${plain}" >&2
+        rm -f "$archive"
+        return 1
+    fi
+
+    local sumfile="${archive}.sha256"
+    # 校验文件是可选的：直接 curl 并快速失败，避免 _curl 的重试拖慢正常安装
+    if command -v curl &>/dev/null && curl -fsSL --connect-timeout 10 --max-time 30 \
+        -o "$sumfile" "${url}.sha256" 2>/dev/null && [[ -s "$sumfile" ]]; then
+        local expected actual
+        expected=$(awk 'NF{print $1; exit}' "$sumfile")
+        actual=$(_sha256_file "$archive")
+        if [[ -z "$actual" || -z "$expected" ]]; then
+            echo -e "${yellow}无法计算或解析 SHA256，已跳过校验${plain}"
+        elif [[ "${expected,,}" != "${actual,,}" ]]; then
+            echo -e "${red}安装包 SHA256 校验失败，已中止安装！${plain}" >&2
+            echo -e "  期望: ${expected}" >&2
+            echo -e "  实际: ${actual}" >&2
+            rm -f "$archive" "$sumfile"
+            return 1
+        else
+            echo -e "${green}安装包 SHA256 校验通过${plain}"
+        fi
+    else
+        echo -e "${yellow}该版本未提供 .sha256 校验文件，已跳过校验${plain}"
+    fi
+
+    rm -f "$sumfile"
+    return 0
+}
+
+# 下载下来的 shell 脚本做一次基本检查：镜像返回 HTML 错误页时，脚本会被
+# 直接安装到 /usr/bin/x-ui，之后每次执行都是语法错误甚至更糟。
+_verify_script() {
+    local file="$1"
+    local marker="$2"
+
+    if [[ ! -s "$file" ]]; then
+        return 1
+    fi
+    if [[ "$(head -c 2 "$file" 2>/dev/null)" != "#!" ]]; then
+        return 1
+    fi
+    if [[ -n "$marker" ]] && ! grep -q "$marker" "$file" 2>/dev/null; then
+        return 1
+    fi
+    return 0
+}
+
+
 # check root
 [[ $EUID -ne 0 ]] && echo -e "${red}严重错误: ${plain} 请使用 root 权限运行此脚本 \n " && exit 1
 
@@ -1254,10 +1338,17 @@ install_x-ui() {
         echo -e "${yellow}  export XUI_RAW_BASE=https://ghproxy.net/https://raw.githubusercontent.com${plain}"
         exit 1
     fi
-    
+
+    # 先校验再动系统：校验失败时磁盘上什么都没变
+    if ! _verify_archive "${xui_folder}-linux-$(arch).tar.gz" "${download_url}"; then
+        echo -e "${red}安装包校验未通过，已中止（系统未做任何改动）${plain}"
+        exit 1
+    fi
+
     _curl -fLRo /usr/bin/x-ui-temp "${RAW_BASE}/xiasummer740/XX-UI/main/x-ui.sh"
-    if [[ $? -ne 0 ]]; then
-        echo -e "${red}下载 x-ui.sh 失败${plain}"
+    if [[ $? -ne 0 ]] || ! _verify_script /usr/bin/x-ui-temp "show_menu"; then
+        rm -f /usr/bin/x-ui-temp
+        echo -e "${red}下载 x-ui.sh 失败或内容异常${plain}"
         exit 1
     fi
     

@@ -43,6 +43,69 @@ _curl() {
     return 1
 }
 
+# 计算文件的 SHA256。不同发行版可用的工具不一样，按顺序退让。
+_sha256_file() {
+    if command -v sha256sum &>/dev/null; then
+        sha256sum "$1" | awk '{print $1}'
+    elif command -v shasum &>/dev/null; then
+        shasum -a 256 "$1" | awk '{print $1}'
+    elif command -v openssl &>/dev/null; then
+        openssl dgst -sha256 "$1" | awk '{print $NF}'
+    else
+        echo ""
+    fi
+}
+
+# 解包前校验发布包。这里挡住的是真实发生过的故障：镜像或 CDN 返回一页
+# HTML 错误页、下载被截断、拉到了别的架构的包。更新流程会先删掉旧版本
+# 再解包，所以校验失败必须发生在删除之前。
+# 发布流程会为每个安装包附带 <包名>.sha256；取不到时（旧版本发布包）只告警。
+_verify_archive() {
+    local archive="$1"
+    local url="$2"
+
+    if [[ ! -s "$archive" ]]; then
+        echo -e "${red}安装包为空，已中止${plain}" >&2
+        return 1
+    fi
+
+    if ! gzip -t "$archive" 2>/dev/null; then
+        echo -e "${red}下载的文件不是有效的 gzip 压缩包（可能是镜像返回了错误页），已中止${plain}" >&2
+        rm -f "$archive"
+        return 1
+    fi
+
+    if ! tar tzf "$archive" 2>/dev/null | grep -qx "x-ui/x-ui"; then
+        echo -e "${red}安装包结构异常：其中找不到 x-ui/x-ui，已中止${plain}" >&2
+        rm -f "$archive"
+        return 1
+    fi
+
+    local sumfile="${archive}.sha256"
+    if command -v curl &>/dev/null && curl -fsSL --connect-timeout 10 --max-time 30 \
+        -o "$sumfile" "${url}.sha256" 2>/dev/null && [[ -s "$sumfile" ]]; then
+        local expected actual
+        expected=$(awk 'NF{print $1; exit}' "$sumfile")
+        actual=$(_sha256_file "$archive")
+        if [[ -z "$actual" || -z "$expected" ]]; then
+            echo -e "${yellow}无法计算或解析 SHA256，已跳过校验${plain}"
+        elif [[ "${expected,,}" != "${actual,,}" ]]; then
+            echo -e "${red}安装包 SHA256 校验失败，已中止更新！${plain}" >&2
+            echo -e "  期望: ${expected}" >&2
+            echo -e "  实际: ${actual}" >&2
+            rm -f "$archive" "$sumfile"
+            return 1
+        else
+            echo -e "${green}安装包 SHA256 校验通过${plain}"
+        fi
+    else
+        echo -e "${yellow}该版本未提供 .sha256 校验文件，已跳过校验${plain}"
+    fi
+
+    rm -f "$sumfile"
+    return 0
+}
+
 # Don't edit this config
 b_source="${BASH_SOURCE[0]}"
 while [ -h "$b_source" ]; do
@@ -760,6 +823,12 @@ update_x-ui() {
         echo -e "${yellow}您可以尝试设置镜像源后重试:${plain}"
         echo -e "${yellow}  export XUI_DOWNLOAD_BASE=https://ghproxy.net/https://github.com${plain}"
         echo -e "${yellow}  export XUI_RAW_BASE=https://ghproxy.net/https://raw.githubusercontent.com${plain}"
+        exit 1
+    fi
+
+    # 必须在删除旧版本之前校验：后面的步骤会先清空 /usr/local/x-ui
+    if ! _verify_archive "${xui_folder}-linux-$(arch).tar.gz" "${download_url}"; then
+        echo -e "${red}安装包校验未通过，已中止（旧版本保持原样）${plain}"
         exit 1
     fi
     

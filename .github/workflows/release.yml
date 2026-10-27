@@ -137,35 +137,33 @@ jobs:
 
           # Download dependencies
           Xray_URL="https://github.com/XTLS/Xray-core/releases/download/v26.4.17/"
-          if [ "${{ matrix.platform }}" == "amd64" ]; then
-            wget -q ${Xray_URL}Xray-linux-64.zip
-            unzip Xray-linux-64.zip
-            rm -f Xray-linux-64.zip
-          elif [ "${{ matrix.platform }}" == "arm64" ]; then
-            wget -q ${Xray_URL}Xray-linux-arm64-v8a.zip
-            unzip Xray-linux-arm64-v8a.zip
-            rm -f Xray-linux-arm64-v8a.zip
-          elif [ "${{ matrix.platform }}" == "armv7" ]; then
-            wget -q ${Xray_URL}Xray-linux-arm32-v7a.zip
-            unzip Xray-linux-arm32-v7a.zip
-            rm -f Xray-linux-arm32-v7a.zip
-          elif [ "${{ matrix.platform }}" == "armv6" ]; then
-            wget -q ${Xray_URL}Xray-linux-arm32-v6.zip
-            unzip Xray-linux-arm32-v6.zip
-            rm -f Xray-linux-arm32-v6.zip
-          elif [ "${{ matrix.platform }}" == "386" ]; then
-            wget -q ${Xray_URL}Xray-linux-32.zip
-            unzip Xray-linux-32.zip
-            rm -f Xray-linux-32.zip
-          elif [ "${{ matrix.platform }}" == "armv5" ]; then
-            wget -q ${Xray_URL}Xray-linux-arm32-v5.zip
-            unzip Xray-linux-arm32-v5.zip
-            rm -f Xray-linux-arm32-v5.zip
-          elif [ "${{ matrix.platform }}" == "s390x" ]; then
-            wget -q ${Xray_URL}Xray-linux-s390x.zip
-            unzip Xray-linux-s390x.zip
-            rm -f Xray-linux-s390x.zip
+          case "${{ matrix.platform }}" in
+            amd64) XRAY_ZIP="Xray-linux-64.zip" ;;
+            arm64) XRAY_ZIP="Xray-linux-arm64-v8a.zip" ;;
+            armv7) XRAY_ZIP="Xray-linux-arm32-v7a.zip" ;;
+            armv6) XRAY_ZIP="Xray-linux-arm32-v6.zip" ;;
+            386)   XRAY_ZIP="Xray-linux-32.zip" ;;
+            armv5) XRAY_ZIP="Xray-linux-arm32-v5.zip" ;;
+            s390x) XRAY_ZIP="Xray-linux-s390x.zip" ;;
+            *) echo "Unsupported platform ${{ matrix.platform }}" >&2; exit 1 ;;
+          esac
+          wget -q "${Xray_URL}${XRAY_ZIP}"
+          wget -q "${Xray_URL}${XRAY_ZIP}.dgst"
+          # 上游为每个产物发布 .dgst（含 SHA2-256）。校验通过才继续，
+          # 避免被篡改或投毒的 Xray 二进制被打进我们的发布包。
+          EXPECTED=$(grep -oE 'SHA2-256= *[0-9a-f]+' "${XRAY_ZIP}.dgst" | awk -F'= *' '{print $2}')
+          ACTUAL=$(sha256sum "${XRAY_ZIP}" | awk '{print $1}')
+          if [ -z "$EXPECTED" ]; then
+            echo "No SHA2-256 entry in ${XRAY_ZIP}.dgst" >&2
+            exit 1
           fi
+          if [ "$EXPECTED" != "$ACTUAL" ]; then
+            echo "Xray checksum mismatch for ${XRAY_ZIP}: expected $EXPECTED got $ACTUAL" >&2
+            exit 1
+          fi
+          echo "Xray ${XRAY_ZIP} SHA256 verified"
+          unzip "${XRAY_ZIP}"
+          rm -f "${XRAY_ZIP}" "${XRAY_ZIP}.dgst"
           rm -f geoip.dat geosite.dat
           wget -q https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat
           wget -q https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat
@@ -173,11 +171,21 @@ jobs:
           wget -q -O geosite_IR.dat https://github.com/chocolate4u/Iran-v2ray-rules/releases/latest/download/geosite.dat
           wget -q -O geoip_RU.dat https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geoip.dat
           wget -q -O geosite_RU.dat https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geosite.dat
+          # 这些数据文件没有上游校验和，至少要挡住「404 页面被当成数据文件」
+          for dat in geoip.dat geosite.dat geoip_IR.dat geosite_IR.dat geoip_RU.dat geosite_RU.dat; do
+            if [ ! -s "$dat" ] || [ "$(stat -c%s "$dat")" -lt 100000 ]; then
+              echo "$dat is missing or implausibly small" >&2
+              exit 1
+            fi
+          done
           mv xray xray-linux-${{ matrix.platform }}
           cd ../..
 
       - name: Package
         run: tar -zcvf x-ui-linux-${{ matrix.platform }}.tar.gz x-ui
+
+      - name: Generate checksum
+        run: sha256sum x-ui-linux-${{ matrix.platform }}.tar.gz > x-ui-linux-${{ matrix.platform }}.tar.gz.sha256
 
       - name: Upload files to Artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -193,6 +201,18 @@ jobs:
           tag: ${{ github.ref_name }}
           file: x-ui-linux-${{ matrix.platform }}.tar.gz
           asset_name: x-ui-linux-${{ matrix.platform }}.tar.gz
+          overwrite: true
+          prerelease: false
+
+      # install.sh / update.sh 会下载同名 .sha256 并校验，缺失时只告警
+      - name: Upload checksum to GH release
+        uses: svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de # v2
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref_name }}
+          file: x-ui-linux-${{ matrix.platform }}.tar.gz.sha256
+          asset_name: x-ui-linux-${{ matrix.platform }}.tar.gz.sha256
           overwrite: true
           prerelease: false
 
@@ -275,6 +295,13 @@ jobs:
         run: |
           Compress-Archive -Path .\x-ui -DestinationPath "x-ui-windows-amd64.zip"
 
+      - name: Generate checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash "x-ui-windows-amd64.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  x-ui-windows-amd64.zip" | Out-File -Encoding ascii -NoNewline "x-ui-windows-amd64.zip.sha256"
+          Get-Content "x-ui-windows-amd64.zip.sha256"
+
       - name: Upload files to Artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
@@ -289,5 +316,16 @@ jobs:
           tag: ${{ github.ref_name }}
           file: x-ui-windows-amd64.zip
           asset_name: x-ui-windows-amd64.zip
+          overwrite: true
+          prerelease: false
+
+      - name: Upload checksum to GH release
+        uses: svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de # v2
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref_name }}
+          file: x-ui-windows-amd64.zip.sha256
+          asset_name: x-ui-windows-amd64.zip.sha256
           overwrite: true
           prerelease: false
