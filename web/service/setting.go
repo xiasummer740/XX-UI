@@ -24,6 +24,17 @@ import (
 //go:embed config.json
 var xrayTemplateConfig string
 
+// validResetMethods 合法的流量重置策略，供 UpdateAllSetting 做取值校验，
+// 避免空值/拼错的值落库后导致「新建入站自动带入默认」静默失效。
+var validResetMethods = map[string]bool{
+	"never":       true,
+	"hourly":      true,
+	"daily":       true,
+	"weekly":      true,
+	"monthly":     true,
+	"custom_date": true,
+}
+
 var defaultValueMap = map[string]string{
 	"xrayTemplateConfig":          xrayTemplateConfig,
 	"webListen":                   "",
@@ -818,6 +829,15 @@ func (s *SettingService) SetApiKey(key string) error {
 func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting) error {
 	if err := allSetting.CheckValid(); err != nil {
 		return err
+	}
+
+	// 防御：重置策略 / 重置日被前端写成空值或 0 时回落到合法值。
+	// 否则「新建入站自动带入默认」的逻辑会因为读到空值而静默失效。
+	if !validResetMethods[allSetting.DefaultResetMethod] {
+		allSetting.DefaultResetMethod = "never"
+	}
+	if allSetting.DefaultResetDay < 1 || allSetting.DefaultResetDay > 31 {
+		allSetting.DefaultResetDay = 1
 	}
 
 	v := reflect.ValueOf(allSetting).Elem()

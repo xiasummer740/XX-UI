@@ -61,6 +61,7 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/checkPort", a.checkPort)
 	g.POST("/checkRemotePort", a.checkRemotePort)
 	g.POST("/health", a.checkHealth)
+	g.POST("/applyTrafficReset", a.applyTrafficReset)
 	g.GET("/chainProxy/:id", a.getChainProxy)
 	g.POST("/chainProxy/testConnection", a.testChainProxy)
 	g.POST("/chainProxy/:id", a.updateChainProxy)
@@ -640,6 +641,22 @@ func (a *InboundController) checkHealth(c *gin.Context) {
 	_ = c.ShouldBind(&req)
 	result, err := a.inboundService.CheckInboundHealth(req.Ids)
 	jsonObj(c, result, err)
+}
+
+// applyTrafficReset 把流量重置策略批量套用到所有入站。
+// 改了 VPS 重置日之后，用它一次性纠正历史入站，不必逐个点。
+func (a *InboundController) applyTrafficReset(c *gin.Context) {
+	var req struct {
+		Method   string `json:"method" form:"method"`
+		ResetDay int    `json:"resetDay" form:"resetDay"`
+	}
+	_ = c.ShouldBind(&req)
+	count, err := a.inboundService.ApplyTrafficResetToAll(req.Method, req.ResetDay)
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	jsonObj(c, map[string]any{"updated": count}, nil)
 }
 
 // lastOnline retrieves the last online timestamps for clients.

@@ -966,6 +966,12 @@
         <a-select v-model="vpsForm.vpsResetDay" style="width: 100%;">
           <a-select-option v-for="d in 31" :key="d" :value="d">每月 [[ d ]] 日</a-select-option>
         </a-select>
+        <div style="margin-top: 8px;">
+          <a-button size="small" icon="sync" :loading="applyingReset" @click="applyResetToAll">
+            套用到现有全部入站
+          </a-button>
+          <span style="margin-left: 8px; color: #999; font-size: 12px;">新入站会自动继承此日期</span>
+        </div>
       </a-form-item>
       <a-form-item label="备注">
         <a-textarea v-model="vpsForm.vpsNotes" :rows="3" placeholder="备注信息" />
@@ -1395,6 +1401,7 @@
       },
       vpsModalVisible: false,
       vpsSaving: false,
+      applyingReset: false,
       vpsForm: {
         vpsName: '',
         vpsIP: '',
@@ -2757,6 +2764,36 @@
           this.vpsPurchaseDateMoment = null;
         }
         this.vpsModalVisible = true;
+      },
+      // 把当前重置日套用到全部现有入站（改了 VPS 重置日后一次性纠正历史数据）
+      applyResetToAll() {
+        const day = this.vpsForm.vpsResetDay;
+        if (!day) return;
+        this.$confirm({
+          title: '把流量重置日套用到全部入站？',
+          content: '所有入站（含已禁用的）将改为每月 ' + day + ' 日重置流量统计。',
+          okText: '确定',
+          cancelText: '取消',
+          onOk: async () => {
+            this.applyingReset = true;
+            try {
+              const msg = await HttpUtil.post('/panel/api/inbounds/applyTrafficReset', {
+                method: 'custom_date',
+                resetDay: day,
+              });
+              if (msg.success) {
+                this.$message.success('已更新 ' + msg.obj.updated + ' 个入站');
+                this.getDBInbounds();
+              } else {
+                this.$message.error('套用失败: ' + (msg.msg || '未知错误'));
+              }
+            } catch (e) {
+              this.$message.error('套用失败: ' + (e.message || '网络错误'));
+            } finally {
+              this.applyingReset = false;
+            }
+          },
+        });
       },
       async saveVpsConfig() {
         this.vpsSaving = true;

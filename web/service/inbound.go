@@ -255,7 +255,53 @@ func (s *InboundService) checkEmailExistForInbound(inbound *model.Inbound) (stri
 // It validates port uniqueness, client email uniqueness, and required fields,
 // then saves the inbound to the database and optionally adds it to the running Xray instance.
 // Returns the created inbound, whether Xray needs restart, and any error.
+// defaultTrafficReset 读取「新建入站时默认使用的流量重置策略」。
+// 这是全局配置（面板「VPS 配置」里的「流量重置日」），换 VPS 时改一次即可，
+// 新建入站会自动继承，不必每个入站单独设定。
+func defaultTrafficReset() (string, int) {
+	method := "never"
+	day := 1
+	db := database.GetDB()
+
+	var methodSetting model.Setting
+	if err := db.Model(model.Setting{}).Where("`key` = ?", "defaultResetMethod").First(&methodSetting).Error; err == nil && methodSetting.Value != "" {
+		method = methodSetting.Value
+	}
+	var daySetting model.Setting
+	if err := db.Model(model.Setting{}).Where("`key` = ?", "defaultResetDay").First(&daySetting).Error; err == nil && daySetting.Value != "" {
+		if d, err := strconv.Atoi(daySetting.Value); err == nil && d >= 1 && d <= 31 {
+			day = d
+		}
+	}
+	return method, day
+}
+
+// ApplyTrafficResetToAll 把指定的流量重置策略批量套用到所有入站，
+// 返回实际更新的行数。用于改了 VPS 重置日之后一次性纠正历史入站。
+func (s *InboundService) ApplyTrafficResetToAll(method string, day int) (int64, error) {
+	if method == "" {
+		method, day = defaultTrafficReset()
+	}
+	if method == "custom_date" && (day < 1 || day > 31) {
+		day = 1
+	}
+	res := database.GetDB().Model(model.Inbound{}).Where("1 = 1").Updates(map[string]any{
+		"traffic_reset": method,
+		"reset_day":     day,
+	})
+	return res.RowsAffected, res.Error
+}
+
 func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, bool, error) {
+	// 入站没指定重置策略时回落到全局默认，
+	// 这样批量脚本 / API 创建的入站也能自动继承，不再依赖前端预填
+	if inbound.TrafficReset == "" {
+		inbound.TrafficReset, inbound.ResetDay = defaultTrafficReset()
+	}
+	if inbound.TrafficReset == "custom_date" && (inbound.ResetDay < 1 || inbound.ResetDay > 31) {
+		inbound.ResetDay = 1
+	}
+
 	exist, err := s.checkPortExist(inbound.Listen, inbound.Port, 0)
 	if err != nil {
 		return inbound, false, err
@@ -3119,6 +3165,9 @@ func (s *InboundService) BuildClientConnectUrl(inbound *model.Inbound, client *m
 func (s *InboundService) BatchGenerateInbounds(userId int) ([]*model.Inbound, error) {
 	var created []*model.Inbound
 
+	// 继承全局默认流量重置策略（之前这里硬编码 never，导致批量生成的入站不受默认设置影响）
+	trafficReset, resetDay := defaultTrafficReset()
+
 	// Reality target (host:port format - NO scheme prefix like https://, xray validates this)
 	targets := []string{
 		"addons.mozilla.org:443",
@@ -3221,8 +3270,8 @@ func (s *InboundService) BatchGenerateInbounds(userId int) ([]*model.Inbound, er
 			Remark:         fmt.Sprintf("Batch-%d-VLESS+TCP+Reality+Vision", port),
 			Enable:         true,
 			ExpiryTime:     0,
-			TrafficReset:   "never",
-			ResetDay:       1,
+			TrafficReset:   trafficReset,
+			ResetDay:       resetDay,
 			Listen:         "",
 			Port:           port,
 			Protocol:       "vless",

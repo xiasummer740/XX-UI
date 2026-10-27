@@ -80,7 +80,12 @@ func (j *PeriodicTrafficResetJob) getInboundsForPeriod() ([]*model.Inbound, erro
 			return nil, err
 		}
 
-		today := time.Now().Day()
+		now := time.Now()
+		today := now.Day()
+		// 本月最后一天：重置日设为 29/30/31 时短月没有那一天，
+		// 直接比较 today == 31 会导致该月永远不重置，故按「本月最后一天」兜底。
+		lastDayOfMonth := time.Date(now.Year(), now.Month()+1, 0, 0, 0, 0, 0, now.Location()).Day()
+
 		var matching []*model.Inbound
 		for _, inbound := range allCustomInbounds {
 			resetDay := inbound.ResetDay
@@ -89,6 +94,9 @@ func (j *PeriodicTrafficResetJob) getInboundsForPeriod() ([]*model.Inbound, erro
 			}
 			if resetDay > 31 {
 				resetDay = 31
+			}
+			if resetDay > lastDayOfMonth {
+				resetDay = lastDayOfMonth
 			}
 			if today == resetDay {
 				matching = append(matching, inbound)
