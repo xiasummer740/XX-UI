@@ -111,6 +111,7 @@
 "emptyUsername" = "اسم المستخدم مطلوب"
 "emptyPassword" = "الباسورد مطلوب"
 "wrongUsernameOrPassword" = "اسم المستخدم أو كلمة المرور أو كود المصادقة الثنائية غير صحيح."
+"tooManyAttempts" = "محاولات فاشلة كثيرة جداً. يرجى المحاولة لاحقاً."
 "successLogin" = "لقد تم تسجيل الدخول إلى حسابك بنجاح."
 
 [pages.index]

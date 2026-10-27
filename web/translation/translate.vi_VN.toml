@@ -111,6 +111,7 @@
 "emptyUsername" = "Vui lòng nhập tên người dùng."
 "emptyPassword" = "Vui lòng nhập mật khẩu."
 "wrongUsernameOrPassword" = "Tên người dùng, mật khẩu hoặc mã xác thực hai yếu tố không hợp lệ."
+"tooManyAttempts" = "Quá nhiều lần thử thất bại. Vui lòng thử lại sau."
 "successLogin" = "Bạn đã đăng nhập vào tài khoản thành công."
 
 [pages.index]

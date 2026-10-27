@@ -30,12 +30,13 @@ func NewAPIController(g *gin.RouterGroup, customGeo *service.CustomGeoService) *
 // checkAPIAuth is a middleware that returns 404 for unauthenticated API requests
 // to hide the existence of API endpoints from unauthorized users
 func (a *APIController) checkAPIAuth(c *gin.Context) {
+	// Log the path only: the query string is fully attacker controlled.
 	if !session.IsLogin(c) {
-		logger.Warning("[checkAPIAuth] Session not logged in, returning 404 for: " + c.Request.Method + " " + c.Request.RequestURI)
+		logger.Warning("[checkAPIAuth] Session not logged in, returning 404 for: " + c.Request.Method + " " + c.Request.URL.Path)
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
-	logger.Debug("[checkAPIAuth] Session valid for: " + c.Request.Method + " " + c.Request.RequestURI)
+	logger.Debug("[checkAPIAuth] Session valid for: " + c.Request.Method + " " + c.Request.URL.Path)
 	c.Next()
 }
 

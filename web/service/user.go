@@ -1,6 +1,7 @@
 package service
 
 import (
+	"crypto/subtle"
 	"errors"
 
 	"github.com/XiaSummer740/XX-UI/database"
@@ -94,7 +95,9 @@ func (s *UserService) CheckUser(username string, password string, twoFactorCode 
 			return nil, err
 		}
 
-		if gotp.NewDefaultTOTP(twoFactorToken).Now() != twoFactorCode {
+		// Compare in constant time and require an exact match of the current code.
+		expectedCode := gotp.NewDefaultTOTP(twoFactorToken).Now()
+		if subtle.ConstantTimeCompare([]byte(expectedCode), []byte(twoFactorCode)) != 1 {
 			return nil, errors.New("invalid 2fa code")
 		}
 	}

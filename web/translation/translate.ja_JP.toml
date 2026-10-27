@@ -111,6 +111,7 @@
 "emptyUsername" = "ユーザー名を入力してください"
 "emptyPassword" = "パスワードを入力してください"
 "wrongUsernameOrPassword" = "ユーザー名、パスワード、または二段階認証コードが無効です。"
+"tooManyAttempts" = "試行回数が多すぎます。しばらくしてから再試行してください。"
 "successLogin" = "アカウントに正常にログインしました。"
 
 [pages.index]

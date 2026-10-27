@@ -414,7 +414,16 @@ func (s *Server) Start() (err error) {
 	if err != nil {
 		return err
 	}
-	s.cron = cron.New(cron.WithLocation(loc), cron.WithSeconds())
+	// Recover keeps a panic inside a job from taking the whole panel down, and
+	// SkipIfStillRunning prevents a slow run (traffic/DB contention) from being
+	// overlapped by the next tick, which would corrupt the read-modify-write
+	// traffic accounting.
+	cronLogger := logger.CronLogger{}
+	s.cron = cron.New(
+		cron.WithLocation(loc),
+		cron.WithSeconds(),
+		cron.WithChain(cron.Recover(cronLogger), cron.SkipIfStillRunning(cronLogger)),
+	)
 	s.cron.Start()
 
 	s.customGeoService = service.NewCustomGeoService()

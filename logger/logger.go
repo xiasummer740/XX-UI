@@ -216,3 +216,17 @@ func GetLogs(c int, level string) []string {
 	}
 	return output
 }
+
+// CronLogger adapts this package to the robfig/cron Logger interface, so skipped
+// or panicking cron jobs are reported through the regular panel log.
+type CronLogger struct{}
+
+// Info logs routine messages emitted by the cron scheduler.
+func (CronLogger) Info(msg string, keysAndValues ...any) {
+	Info(append([]any{msg}, keysAndValues...)...)
+}
+
+// Error logs scheduling errors and recovered job panics.
+func (CronLogger) Error(err error, msg string, keysAndValues ...any) {
+	Errorf("%s: %v %v", msg, err, keysAndValues)
+}

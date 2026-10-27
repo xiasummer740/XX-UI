@@ -111,6 +111,7 @@
 "emptyUsername" = "Por favor ingresa el nombre de usuario."
 "emptyPassword" = "Por favor ingresa la contraseña."
 "wrongUsernameOrPassword" = "Nombre de usuario, contraseña o código de dos factores incorrecto."
+"tooManyAttempts" = "Demasiados intentos fallidos. Inténtalo de nuevo más tarde."
 "successLogin" = "Has iniciado sesión en tu cuenta correctamente."
 
 [pages.index]

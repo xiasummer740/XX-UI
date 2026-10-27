@@ -5,6 +5,7 @@ package database
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -146,10 +147,29 @@ func InitDB(dbPath string) error {
 	c := &gorm.Config{
 		Logger: gormLogger,
 	}
-	db, err = gorm.Open(sqlite.Open(dbPath), c)
+	// SQLite defaults (rollback journal, 5s busy timeout, unlimited connections)
+	// make concurrent writers fail with "database is locked". The traffic job has
+	// already reset xray's counters by the time it writes, so a failed write loses
+	// that batch of traffic permanently. WAL lets readers proceed while one writer
+	// holds the write lock, and the larger busy timeout absorbs short write bursts.
+	dsn := fmt.Sprintf(
+		"%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(10000)&_pragma=synchronous(NORMAL)",
+		dbPath,
+	)
+	db, err = gorm.Open(sqlite.Open(dsn), c)
 	if err != nil {
 		return err
 	}
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+	// A handful of connections is enough for a single-admin panel and keeps the
+	// writer contention bounded; connections are long lived.
+	sqlDB.SetMaxOpenConns(4)
+	sqlDB.SetMaxIdleConns(4)
+	sqlDB.SetConnMaxLifetime(0)
 
 	if err := initModels(); err != nil {
 		return err
@@ -199,13 +219,31 @@ func IsSQLiteDB(file io.ReaderAt) (bool, error) {
 }
 
 // Checkpoint performs a WAL checkpoint on the SQLite database to ensure data consistency.
+// TRUNCATE waits for readers to finish and empties the WAL, so the main database
+// file alone is complete afterwards (needed by callers that copy it directly).
 func Checkpoint() error {
-	// Update WAL
-	err := db.Exec("PRAGMA wal_checkpoint;").Error
-	if err != nil {
+	if db == nil {
+		return errors.New("database is not initialized")
+	}
+	return db.Exec("PRAGMA wal_checkpoint(TRUNCATE);").Error
+}
+
+// SnapshotTo writes a consistent copy of the live database to destPath.
+//
+// It uses SQLite's own "VACUUM INTO", which reads through a transaction, so the
+// copy stays consistent while the panel keeps writing and works regardless of
+// the journal mode. An existing file at destPath is replaced.
+func SnapshotTo(destPath string) error {
+	if db == nil {
+		return errors.New("database is not initialized")
+	}
+	// VACUUM INTO refuses to overwrite an existing file.
+	if err := os.Remove(destPath); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	return nil
+	// VACUUM INTO takes an expression, so the path is quoted as a string literal.
+	quoted := "'" + strings.ReplaceAll(destPath, "'", "''") + "'"
+	return db.Exec("VACUUM INTO " + quoted).Error
 }
 
 // ValidateSQLiteDB opens the provided sqlite DB path with a throw-away connection

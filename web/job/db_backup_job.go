@@ -2,13 +2,14 @@ package job
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/XiaSummer740/XX-UI/config"
+	"github.com/XiaSummer740/XX-UI/database"
 	"github.com/XiaSummer740/XX-UI/logger"
 	"github.com/XiaSummer740/XX-UI/web/service"
 )
@@ -23,8 +24,11 @@ func NewDbBackupJob() *DbBackupJob {
 	return &DbBackupJob{}
 }
 
-// Run executes the database backup, copying the current database file
-// to the configured backup directory with a timestamp filename.
+// Run executes the database backup into the configured backup directory.
+//
+// The snapshot is produced with SQLite's "VACUUM INTO", which reads through the
+// normal connection under a proper transaction, so the copy is consistent even
+// while the panel keeps writing (a plain file copy is not).
 func (j *DbBackupJob) Run() {
 	enabled, err := j.settingService.GetDbBackupEnabled()
 	if err != nil || !enabled {
@@ -33,7 +37,8 @@ func (j *DbBackupJob) Run() {
 
 	backupPath, err := j.settingService.GetDbBackupPath()
 	if err != nil || backupPath == "" {
-		backupPath = "/etc/x-ui/backups/"
+		// Keep the default next to the database, whatever folder it lives in.
+		backupPath = filepath.Join(config.GetDBFolderPath(), "backups")
 	}
 
 	retention, err := j.settingService.GetDbBackupRetention()
@@ -48,37 +53,12 @@ func (j *DbBackupJob) Run() {
 		return
 	}
 
-	// Source database path
-	dbPath := "/etc/x-ui/x-ui.db"
-
-	// Check if source database exists
-	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		logger.Warning("Database file not found at", dbPath)
-		return
-	}
-
 	// Generate backup filename with timestamp
 	timestamp := time.Now().Format("20060102_150405")
 	backupFile := filepath.Join(backupPath, fmt.Sprintf("x-ui_%s.db", timestamp))
 
-	// Copy the database file
-	sourceFile, err := os.Open(dbPath)
-	if err != nil {
-		logger.Warning("Failed to open database file:", err)
-		return
-	}
-	defer sourceFile.Close()
-
-	destFile, err := os.Create(backupFile)
-	if err != nil {
-		logger.Warning("Failed to create backup file:", err)
-		return
-	}
-	defer destFile.Close()
-
-	_, err = io.Copy(destFile, sourceFile)
-	if err != nil {
-		logger.Warning("Failed to copy database file:", err)
+	if execErr := database.SnapshotTo(backupFile); execErr != nil {
+		logger.Warning("Failed to create database backup:", execErr)
 		return
 	}
 

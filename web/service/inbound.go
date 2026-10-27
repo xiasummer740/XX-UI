@@ -1511,12 +1511,17 @@ func (s *InboundService) addClientTraffic(tx *gorm.DB, traffics []*xray.ClientTr
 		}
 	}
 
-	// Set onlineUsers
-	p.SetOnlineClients(onlineClients)
+	// Set onlineUsers (p is nil while xray is restarting)
+	if p != nil {
+		p.SetOnlineClients(onlineClients)
+	}
 
+	// Returning the error keeps the transaction from committing a partially
+	// updated traffic set when the save fails.
 	err = tx.Save(dbClientTraffics).Error
 	if err != nil {
 		logger.Warning("AddClientTraffic update data ", err)
+		return err
 	}
 
 	return nil
@@ -1543,10 +1548,16 @@ func (s *InboundService) adjustTraffics(tx *gorm.DB, dbClientTraffics []*xray.Cl
 			if ok {
 				var newClients []any
 				for client_index := range clients {
-					c := clients[client_index].(map[string]any)
+					c, ok := clients[client_index].(map[string]any)
+					if !ok {
+						continue
+					}
 					for traffic_index := range dbClientTraffics {
 						if dbClientTraffics[traffic_index].ExpiryTime < 0 && c["email"] == dbClientTraffics[traffic_index].Email {
-							oldExpiryTime := c["expiryTime"].(float64)
+							oldExpiryTime, ok := c["expiryTime"].(float64)
+							if !ok {
+								break
+							}
 							newExpiryTime := (time.Now().Unix() * 1000) - int64(oldExpiryTime)
 							c["expiryTime"] = newExpiryTime
 							c["updated_at"] = time.Now().Unix() * 1000
@@ -1614,11 +1625,22 @@ func (s *InboundService) autoRenewClients(tx *gorm.DB) (bool, int64, error) {
 	for inbound_index := range inbounds {
 		settings := map[string]any{}
 		json.Unmarshal([]byte(inbounds[inbound_index].Settings), &settings)
-		clients := settings["clients"].([]any)
+		clients, ok := settings["clients"].([]any)
+		if !ok {
+			// Inbounds without a client list (e.g. plain tunnels) have nothing to adjust.
+			continue
+		}
 		for client_index := range clients {
-			c := clients[client_index].(map[string]any)
+			c, ok := clients[client_index].(map[string]any)
+			if !ok {
+				continue
+			}
+			clientEmail, ok := c["email"].(string)
+			if !ok {
+				continue
+			}
 			for traffic_index, traffic := range traffics {
-				if traffic.Email == c["email"].(string) {
+				if traffic.Email == clientEmail {
 					newExpiryTime := traffic.ExpiryTime
 					for newExpiryTime < now {
 						newExpiryTime += (int64(traffic.Reset) * 86400000)

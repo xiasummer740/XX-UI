@@ -3,15 +3,26 @@ package controller
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"text/template"
 	"time"
 
 	"github.com/XiaSummer740/XX-UI/logger"
+	"github.com/XiaSummer740/XX-UI/web/middleware"
 	"github.com/XiaSummer740/XX-UI/web/service"
 	"github.com/XiaSummer740/XX-UI/web/session"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+)
+
+// Login throttling uses two guards: a strict per-(address, username) policy that
+// stops password guessing against a known account, and a looser per-address
+// policy that also covers username spraying from a single host. The limits leave
+// room for a few honest typos while keeping guessing far too slow to succeed.
+var (
+	loginGuardUser = middleware.NewLoginGuard(10, 15*time.Minute)
+	loginGuardIP   = middleware.NewLoginGuard(30, 15*time.Minute)
 )
 
 // LoginForm represents the login request structure.
@@ -72,28 +83,50 @@ func (a *IndexController) login(c *gin.Context) {
 		return
 	}
 
+	// Throttle repeated failures before touching the database or bcrypt.
+	remoteIP := getRemoteIp(c)
+	userKey := remoteIP + "|" + strings.ToLower(form.Username)
+	ipKey := remoteIP + "|*"
+	if locked, retryAfter := loginGuardUser.Locked(userKey); locked {
+		logger.Warningf("login blocked for username %q from %s, retry after %s",
+			template.HTMLEscapeString(form.Username), remoteIP, retryAfter.Round(time.Second))
+		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.login.toasts.tooManyAttempts"))
+		return
+	}
+	if locked, retryAfter := loginGuardIP.Locked(ipKey); locked {
+		logger.Warningf("login blocked for address %s, retry after %s", remoteIP, retryAfter.Round(time.Second))
+		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.login.toasts.tooManyAttempts"))
+		return
+	}
+
 	user, checkErr := a.userService.CheckUser(form.Username, form.Password, form.TwoFactorCode)
 	timeStr := time.Now().Format("2006-01-02 15:04:05")
 	safeUser := template.HTMLEscapeString(form.Username)
-	safePass := template.HTMLEscapeString(form.Password)
 
 	if user == nil {
-		logger.Warningf("wrong username: \"%s\", password: \"%s\", IP: \"%s\"", safeUser, safePass, getRemoteIp(c))
+		loginGuardUser.Fail(userKey)
+		loginGuardIP.Fail(ipKey)
 
-		notifyPass := safePass
+		// Never log or forward the attempted password: users frequently mistype a
+		// real credential by one character, which would leak it permanently.
+		logger.Warningf("login failed for username %q from %s", safeUser, remoteIP)
 
+		notifyPass := ""
 		if checkErr != nil && checkErr.Error() == "invalid 2fa code" {
 			translatedError := a.tgbot.I18nBot("tgbot.messages.2faFailed")
 			notifyPass = fmt.Sprintf("*** (%s)", translatedError)
 		}
 
-		a.tgbot.UserLoginNotify(safeUser, notifyPass, getRemoteIp(c), timeStr, 0)
+		a.tgbot.UserLoginNotify(safeUser, notifyPass, remoteIP, timeStr, 0)
 		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.login.toasts.wrongUsernameOrPassword"))
 		return
 	}
 
-	logger.Infof("%s logged in successfully, Ip Address: %s\n", safeUser, getRemoteIp(c))
-	a.tgbot.UserLoginNotify(safeUser, ``, getRemoteIp(c), timeStr, 1)
+	loginGuardUser.Reset(userKey)
+	loginGuardIP.Reset(ipKey)
+
+	logger.Infof("%s logged in successfully, Ip Address: %s\n", safeUser, remoteIP)
+	a.tgbot.UserLoginNotify(safeUser, ``, remoteIP, timeStr, 1)
 
 	session.SetLoginUser(c, user)
 	if err := sessions.Default(c).Save(); err != nil {

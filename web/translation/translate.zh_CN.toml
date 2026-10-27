@@ -116,6 +116,7 @@
 "emptyUsername" = "请输入用户名"
 "emptyPassword" = "请输入密码"
 "wrongUsernameOrPassword" = "用户名、密码或双重验证码无效。"
+"tooManyAttempts" = "尝试次数过多，请稍后再试。"
 "successLogin" = "您已成功登录您的账户。"
 
 [pages.index]

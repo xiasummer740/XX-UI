@@ -2790,7 +2790,11 @@ func (t *Tgbot) UserLoginNotify(username string, password string, ip string, tim
 	case LoginFail:
 		msg += t.I18nBot("tgbot.messages.loginFailed")
 		msg += t.I18nBot("tgbot.messages.hostname", "Hostname=="+hostname)
-		msg += t.I18nBot("tgbot.messages.password", "Password=="+password)
+		// Only include the password field when the caller provides a placeholder;
+		// the real attempted password must never be forwarded.
+		if password != "" {
+			msg += t.I18nBot("tgbot.messages.password", "Password=="+password)
+		}
 	}
 	msg += t.I18nBot("tgbot.messages.username", "Username=="+username)
 	msg += t.I18nBot("tgbot.messages.ip", "IP=="+ip)

@@ -111,6 +111,7 @@
 "emptyUsername" = "Nama Pengguna diperlukan"
 "emptyPassword" = "Kata Sandi diperlukan"
 "wrongUsernameOrPassword" = "Username, kata sandi, atau kode dua faktor tidak valid."
+"tooManyAttempts" = "Terlalu banyak percobaan gagal. Silakan coba lagi nanti."
 "successLogin" = "Anda telah berhasil masuk ke akun Anda."
 
 [pages.index]

@@ -116,6 +116,7 @@
 "emptyUsername" = "Username is required"
 "emptyPassword" = "Password is required"
 "wrongUsernameOrPassword" = "Invalid username or password or two-factor code."
+"tooManyAttempts" = "Too many failed attempts. Please try again later."
 "successLogin" = " You have successfully logged into your account."
 
 [pages.index]

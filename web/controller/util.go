@@ -13,19 +13,41 @@ import (
 )
 
 // getRemoteIp extracts the real IP address from the request headers or remote address.
+// Header values are validated first, so a remote client cannot inject arbitrary text
+// (and therefore HTML or log noise) through X-Real-IP or X-Forwarded-For.
 func getRemoteIp(c *gin.Context) string {
-	value := c.GetHeader("X-Real-IP")
-	if value != "" {
-		return value
+	if ip := parseHeaderIP(c.GetHeader("X-Real-IP")); ip != "" {
+		return ip
 	}
-	value = c.GetHeader("X-Forwarded-For")
-	if value != "" {
-		ips := strings.Split(value, ",")
-		return ips[0]
+	if value := c.GetHeader("X-Forwarded-For"); value != "" {
+		// X-Forwarded-For may carry a proxy chain; the first entry is the client.
+		if ip := parseHeaderIP(strings.Split(value, ",")[0]); ip != "" {
+			return ip
+		}
 	}
-	addr := c.Request.RemoteAddr
-	ip, _, _ := net.SplitHostPort(addr)
-	return ip
+	host := c.Request.RemoteAddr
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	if ip := parseHeaderIP(host); ip != "" {
+		return ip
+	}
+	return host
+}
+
+// parseHeaderIP returns the canonical form of a plain IP literal, or an empty
+// string when the value is not a valid IP address.
+func parseHeaderIP(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	// IPv6 literals may be wrapped in brackets.
+	value = strings.TrimSuffix(strings.TrimPrefix(value, "["), "]")
+	if ip := net.ParseIP(value); ip != nil {
+		return ip.String()
+	}
+	return ""
 }
 
 // jsonMsg sends a JSON response with a message and error status.

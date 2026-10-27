@@ -893,20 +893,20 @@ func (s *ServerService) GetConfigJson() (any, error) {
 }
 
 func (s *ServerService) GetDb() ([]byte, error) {
-	// Update by manually trigger a checkpoint operation
-	err := database.Checkpoint()
-	if err != nil {
-		return nil, err
-	}
-	// Open the file for reading
-	file, err := os.Open(config.GetDBPath())
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
+	// Produce a consistent snapshot through SQLite instead of copying the file:
+	// with WAL enabled the freshest writes may still live in the -wal sidecar.
+	tempPath := fmt.Sprintf("%s.export", config.GetDBPath())
+	defer func() {
+		if err := os.Remove(tempPath); err != nil && !os.IsNotExist(err) {
+			logger.Warningf("Warning: failed to remove export file: %v", err)
+		}
+	}()
 
-	// Read the file contents
-	fileContents, err := io.ReadAll(file)
+	if err := database.SnapshotTo(tempPath); err != nil {
+		return nil, err
+	}
+
+	fileContents, err := os.ReadFile(tempPath)
 	if err != nil {
 		return nil, err
 	}
@@ -984,6 +984,14 @@ func (s *ServerService) ImportDB(file multipart.File) error {
 	// Close existing DB to release file locks (especially on Windows)
 	if errClose := database.CloseDB(); errClose != nil {
 		logger.Warningf("Failed to close existing DB before replacement: %v", errClose)
+	}
+
+	// WAL sidecars belong to the database being replaced. Leaving them behind
+	// would let SQLite replay the old WAL into the newly imported file.
+	for _, suffix := range []string{"-wal", "-shm"} {
+		if removeErr := os.Remove(config.GetDBPath() + suffix); removeErr != nil && !os.IsNotExist(removeErr) {
+			logger.Warningf("Failed to remove stale %s file: %v", suffix, removeErr)
+		}
 	}
 
 	// Backup the current database for fallback

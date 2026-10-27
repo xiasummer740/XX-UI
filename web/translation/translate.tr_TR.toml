@@ -111,6 +111,7 @@
 "emptyUsername" = "Kullanıcı adı gerekli"
 "emptyPassword" = "Şifre gerekli"
 "wrongUsernameOrPassword" = "Geçersiz kullanıcı adı, şifre veya iki adımlı doğrulama kodu."
+"tooManyAttempts" = "Çok fazla başarısız deneme. Lütfen daha sonra tekrar deneyin."
 "successLogin" = "Hesabınıza başarıyla giriş yaptınız."
 
 [pages.index]

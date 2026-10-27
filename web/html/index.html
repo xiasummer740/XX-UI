@@ -641,6 +641,21 @@
 {{template "component/aCustomStatistic" .}}
 {{template "modals/textModal"}}
 <script>
+  // Escapes untrusted text before it is injected through v-html.
+  // Log lines can be influenced by remote clients (X-Real-IP header, request URI), so
+  // they must never be concatenated into HTML without escaping.
+  function escapeHtmlText(value) {
+    if (value === undefined || value === null) {
+      return '';
+    }
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   // Tiny Sparkline component using an inline SVG polyline
   Vue.component('sparkline', {
     props: {
@@ -965,13 +980,15 @@
 
       logs.forEach((log, index) => {
         let [data, message] = log.split(" - ", 2);
+        // Escape first: the raw log line is attacker-influenced.
+        data = escapeHtmlText(data);
         const parts = data.split(" ")
         if (index > 0) formattedLogs += '<br>';
 
         if (parts.length === 3) {
-          const d = parts[0];
-          const t = parts[1];
-          const level = parts[2];
+          const d = escapeHtmlText(parts[0]);
+          const t = escapeHtmlText(parts[1]);
+          const level = escapeHtmlText(parts[2]);
           const levelIndex = levels.indexOf(level, levels) || 5;
 
           //formattedLogs += `<span style="color: gray;">${index + 1}.</span>`;
@@ -984,9 +1001,9 @@
 
         if (message) {
           if (message.startsWith("XRAY:"))
-            message = "<b>XRAY: </b>" + message.substring(5);
+            message = "<b>XRAY: </b>" + escapeHtmlText(message.substring(5));
           else
-            message = "<b>XX-UI: </b>" + message;
+            message = "<b>XX-UI: </b>" + escapeHtmlText(message);
         }
 
         formattedLogs += message ? ' - ' + message : '';
@@ -1047,16 +1064,16 @@
 
           let text = ``;
           if (log.Email !== "") {
-            text = `<td>${log.Email}</td>`;
+            text = `<td>${escapeHtmlText(log.Email)}</td>`;
           }
 
           formattedLogs += `
 <tr ${outboundColor}>
-    <td><b>${IntlUtil.formatDate(log.DateTime)}</b></td>
-    <td>${log.FromAddress}</td>
-    <td>${log.ToAddress}</td>
-    <td>${log.Inbound}</td>
-    <td>${log.Outbound}</td>
+    <td><b>${escapeHtmlText(IntlUtil.formatDate(log.DateTime))}</b></td>
+    <td>${escapeHtmlText(log.FromAddress)}</td>
+    <td>${escapeHtmlText(log.ToAddress)}</td>
+    <td>${escapeHtmlText(log.Inbound)}</td>
+    <td>${escapeHtmlText(log.Outbound)}</td>
     ${text}
 </tr>
 `;

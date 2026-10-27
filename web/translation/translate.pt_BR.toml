@@ -111,6 +111,7 @@
 "emptyUsername" = "Nome de usuário é obrigatório"
 "emptyPassword" = "Senha é obrigatória"
 "wrongUsernameOrPassword" = "Nome de usuário, senha ou código de dois fatores inválido."
+"tooManyAttempts" = "Muitas tentativas falharam. Tente novamente mais tarde."
 "successLogin" = "Você entrou na sua conta com sucesso."
 
 [pages.index]
