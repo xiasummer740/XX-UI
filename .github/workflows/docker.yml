@@ -19,18 +19,6 @@ jobs:
         with:
           submodules: true
 
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
-        with:
-          images: |
-            ghcr.io/xiasummer740/xx-ui
-            summer740/xx-ui
-          tags: |
-            type=ref,event=branch
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
 
@@ -46,11 +34,40 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Docker Hub 的凭据是可选的：缺省或过期时不该让整个发布失败，
+      # 否则镜像根本不会被构建，也就没有人会知道 Dockerfile 已经坏了。
       - name: Login to Docker Hub
+        id: hub
+        continue-on-error: true
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Compose image targets
+        id: targets
+        run: |
+          IMAGES="ghcr.io/xiasummer740/xx-ui"
+          if [ "${{ steps.hub.outcome }}" = "success" ]; then
+            IMAGES="${IMAGES}"$'\n'"summer740/xx-ui"
+          else
+            echo "::warning::Docker Hub login unavailable; publishing to GHCR only"
+          fi
+          {
+            echo "images<<EOF"
+            echo "$IMAGES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ${{ steps.targets.outputs.images }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{version}}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7

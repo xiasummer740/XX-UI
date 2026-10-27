@@ -1,5 +1,9 @@
 #!/bin/sh
-case $1 in
+# 任何一步失败都要让 docker build 失败：以前 unzip 缺失时脚本仍然返回 0，
+# 结果构建出一个没有 xray 二进制的镜像，只有运行时才发现。
+set -e
+
+case ${1:-} in
     amd64)
         ARCH="64"
         FNAME="amd64"
@@ -46,4 +50,11 @@ curl -sfLRo geosite_RU.dat https://github.com/runetfreedom/russia-v2ray-rules-da
 curl_pid6=$!
 # Wait for all parallel downloads to complete
 wait $curl_pid1 $curl_pid2 $curl_pid3 $curl_pid4 $curl_pid5 $curl_pid6
+
+# 收尾检查：xray 与地理数据文件必须真的存在，否则镜像不可用
+[ -x "xray-linux-${FNAME}" ] || { echo "xray-linux-${FNAME} missing after download" >&2; exit 1; }
+for f in geoip.dat geosite.dat; do
+    [ -s "$f" ] || { echo "$f missing after download" >&2; exit 1; }
+done
+
 cd ../../
