@@ -267,6 +267,11 @@ func defaultTrafficReset() (string, int) {
 	if err := db.Model(model.Setting{}).Where("`key` = ?", "defaultResetMethod").First(&methodSetting).Error; err == nil && methodSetting.Value != "" {
 		method = methodSetting.Value
 	}
+	if !validResetMethods[method] {
+		// 配置被写坏时宁可回落到 never 并留下告警，也不要把非法值继续传播给新入站
+		logger.Warning("Invalid defaultResetMethod in settings, falling back to \"never\":", method)
+		method = "never"
+	}
 	var daySetting model.Setting
 	if err := db.Model(model.Setting{}).Where("`key` = ?", "defaultResetDay").First(&daySetting).Error; err == nil && daySetting.Value != "" {
 		if d, err := strconv.Atoi(daySetting.Value); err == nil && d >= 1 && d <= 31 {
@@ -276,18 +281,63 @@ func defaultTrafficReset() (string, int) {
 	return method, day
 }
 
+// normalizeTrafficReset 校验一组重置策略取值。
+// 非法 method 必须拒绝而不是落库：数据库里存一个 cron 任务永远匹配不到的值，
+// 会让该入站从此再也不重置，而且面板上看起来一切正常。
+func normalizeTrafficReset(method string, day int) (string, int, error) {
+	method = strings.TrimSpace(method)
+	if !validResetMethods[method] {
+		return "", 0, common.NewError("Invalid traffic reset method:", method)
+	}
+	if method == "custom_date" && (day < 1 || day > 31) {
+		day = 1
+	}
+	return method, day, nil
+}
+
+// mergeTrafficResetPolicy 计算更新入站时最终落库的重置策略。
+// 前端可能不回传这两个字段：空字符串不会命中任何 cron 任务，一旦落库
+// 该入站就再也不重置了，所以字段缺失时必须保留旧值。
+// changed 表示策略确实变了，调用方据此重新锚定「上次重置时间」。
+func mergeTrafficResetPolicy(incoming, old *model.Inbound) (method string, day int, changed bool) {
+	method = incoming.TrafficReset
+	if method == "" {
+		method = old.TrafficReset
+	}
+	day = incoming.ResetDay
+	if day < 1 || day > 31 {
+		if old.ResetDay >= 1 && old.ResetDay <= 31 {
+			day = old.ResetDay
+		} else {
+			day = 1
+		}
+	}
+	normalizedMethod, normalizedDay, err := normalizeTrafficReset(method, day)
+	if err != nil {
+		// 历史数据里可能残留空值/非法值，回落到全局默认而不是让编辑直接失败
+		logger.Warning("Invalid traffic reset policy, falling back to defaults:", err)
+		normalizedMethod, normalizedDay = defaultTrafficReset()
+	}
+	changed = normalizedMethod != old.TrafficReset || normalizedDay != old.ResetDay
+	return normalizedMethod, normalizedDay, changed
+}
+
 // ApplyTrafficResetToAll 把指定的流量重置策略批量套用到所有入站，
 // 返回实际更新的行数。用于改了 VPS 重置日之后一次性纠正历史入站。
 func (s *InboundService) ApplyTrafficResetToAll(method string, day int) (int64, error) {
 	if method == "" {
 		method, day = defaultTrafficReset()
 	}
-	if method == "custom_date" && (day < 1 || day > 31) {
-		day = 1
+	method, day, err := normalizeTrafficReset(method, day)
+	if err != nil {
+		return 0, err
 	}
+	// 策略刚被人工改动，同时把「上次重置时间」锚到现在：
+	// 否则漏跑补偿会按新日期判断本月已过，立刻把当期流量清掉一次。
 	res := database.GetDB().Model(model.Inbound{}).Where("1 = 1").Updates(map[string]any{
-		"traffic_reset": method,
-		"reset_day":     day,
+		"traffic_reset":           method,
+		"reset_day":               day,
+		"last_traffic_reset_time": time.Now().UnixMilli(),
 	})
 	return res.RowsAffected, res.Error
 }
@@ -298,8 +348,15 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 	if inbound.TrafficReset == "" {
 		inbound.TrafficReset, inbound.ResetDay = defaultTrafficReset()
 	}
-	if inbound.TrafficReset == "custom_date" && (inbound.ResetDay < 1 || inbound.ResetDay > 31) {
-		inbound.ResetDay = 1
+	method, resetDay, normErr := normalizeTrafficReset(inbound.TrafficReset, inbound.ResetDay)
+	if normErr != nil {
+		return inbound, false, normErr
+	}
+	inbound.TrafficReset, inbound.ResetDay = method, resetDay
+	// 新建入站把「上次重置时间」锚到现在。留 0 会被「漏跑补偿」当成
+	// 本月漏跑，从而在当天夜里把刚建的入站（或导入时自带用量的入站）清零。
+	if inbound.LastTrafficResetTime <= 0 {
+		inbound.LastTrafficResetTime = time.Now().UnixMilli()
 	}
 
 	exist, err := s.checkPortExist(inbound.Listen, inbound.Port, 0)
@@ -576,6 +633,14 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	}
 
 	logger.Infof("[DEVICE_LIMIT_DEBUG] UpdateInbound BEFORE copy: inbound.DeviceLimit=%d, oldInbound.DeviceLimit=%d", inbound.DeviceLimit, oldInbound.DeviceLimit)
+	updatedMethod, updatedDay, policyChanged := mergeTrafficResetPolicy(inbound, oldInbound)
+	inbound.TrafficReset, inbound.ResetDay = updatedMethod, updatedDay
+	// 重置策略被改动时把「上次重置时间」锚到现在，避免补偿逻辑按新日期
+	// 立刻把当期流量清一次。
+	if policyChanged {
+		oldInbound.LastTrafficResetTime = time.Now().UnixMilli()
+	}
+
 	oldInbound.Up = inbound.Up
 	oldInbound.Down = inbound.Down
 	oldInbound.Total = inbound.Total
@@ -583,6 +648,7 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	oldInbound.Enable = inbound.Enable
 	oldInbound.ExpiryTime = inbound.ExpiryTime
 	oldInbound.TrafficReset = inbound.TrafficReset
+	oldInbound.ResetDay = inbound.ResetDay
 	oldInbound.Listen = inbound.Listen
 	oldInbound.Port = inbound.Port
 	oldInbound.Protocol = inbound.Protocol
@@ -630,7 +696,12 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	}
 
 	logger.Infof("[DEBUG] UpdateInbound SAVING: id=%d allowRemote=%v", oldInbound.Id, oldInbound.AllowRemote)
-	return inbound, needRestart, tx.Save(oldInbound).Error
+	// 必须把保存结果写回 defer 监视的 err，否则保存失败时仍会 Commit
+	err = tx.Save(oldInbound).Error
+	if err != nil {
+		return inbound, needRestart, err
+	}
+	return inbound, needRestart, nil
 }
 
 // UpdateInboundChainProxy updates the chain proxy configuration for an inbound.
@@ -921,7 +992,12 @@ func (s *InboundService) AddInboundClient(data *model.Inbound) (bool, error) {
 	}
 	s.xrayApi.Close()
 
-	return needRestart, tx.Save(oldInbound).Error
+	// 必须把保存结果写回 defer 监视的 err，否则保存失败时仍会 Commit
+	err = tx.Save(oldInbound).Error
+	if err != nil {
+		return needRestart, err
+	}
+	return needRestart, nil
 }
 
 func (s *InboundService) getClientPrimaryKey(protocol model.Protocol, client model.Client) string {
@@ -1393,30 +1469,31 @@ func (s *InboundService) UpdateInboundClient(data *model.Inbound, clientId strin
 		logger.Debug("Client old email not found")
 		needRestart = true
 	}
-	return needRestart, tx.Save(oldInbound).Error
+	// 必须把保存结果写回 defer 监视的 err，否则保存失败时仍会 Commit
+	err = tx.Save(oldInbound).Error
+	if err != nil {
+		return needRestart, err
+	}
+	return needRestart, nil
 }
 
 func (s *InboundService) AddTraffic(inboundTraffics []*xray.Traffic, clientTraffics []*xray.ClientTraffic) (error, bool) {
-	var err error
 	db := database.GetDB()
 	tx := db.Begin()
 
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		} else {
-			tx.Commit()
-		}
-	}()
-	err = s.addInboundTraffic(tx, inboundTraffics)
-	if err != nil {
+	// 只有「累加流量」本身失败才回滚。调用方已经把 xray 侧的计数器清零了，
+	// 一旦回滚，这批流量就永久消失。
+	if err := s.addInboundTraffic(tx, inboundTraffics); err != nil {
+		tx.Rollback()
 		return err, false
 	}
-	err = s.addClientTraffic(tx, clientTraffics)
-	if err != nil {
+	if err := s.addClientTraffic(tx, clientTraffics); err != nil {
+		tx.Rollback()
 		return err, false
 	}
 
+	// 下面三步只决定「要不要重启 xray」。它们失败的后果是这次不重启，
+	// 不能把已经累加成功的流量一起回滚，否则会在报告成功的同时丢量。
 	needRestart0, count, err := s.autoRenewClients(tx)
 	if err != nil {
 		logger.Warning("Error in renew clients:", err)
@@ -1436,6 +1513,10 @@ func (s *InboundService) AddTraffic(inboundTraffics []*xray.Traffic, clientTraff
 		logger.Warning("Error in disabling invalid inbounds:", err)
 	} else if count > 0 {
 		logger.Debugf("%v inbounds disabled", count)
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return err, false
 	}
 	return nil, (needRestart0 || needRestart1 || needRestart2)
 }
@@ -2329,49 +2410,53 @@ func (s *InboundService) ResetClientTraffic(id int, clientEmail string) (bool, e
 }
 
 func (s *InboundService) ResetAllClientTraffics(id int) error {
-	db := database.GetDB()
-	now := time.Now().Unix() * 1000
-
-	return db.Transaction(func(tx *gorm.DB) error {
-		whereText := "inbound_id "
-		if id == -1 {
-			whereText += " > ?"
-		} else {
-			whereText += " = ?"
-		}
-
-		// Reset client traffics
-		result := tx.Model(xray.ClientTraffic{}).
-			Where(whereText, id).
-			Updates(map[string]any{"enable": true, "up": 0, "down": 0})
-
-		if result.Error != nil {
-			return result.Error
-		}
-
-		// Update lastTrafficResetTime for the inbound(s)
-		inboundWhereText := "id "
-		if id == -1 {
-			inboundWhereText += " > ?"
-		} else {
-			inboundWhereText += " = ?"
-		}
-
-		result = tx.Model(model.Inbound{}).
-			Where(inboundWhereText, id).
-			Update("last_traffic_reset_time", now)
-
-		return result.Error
+	return database.GetDB().Transaction(func(tx *gorm.DB) error {
+		return s.resetAllClientTrafficsTx(tx, id)
 	})
 }
 
-// snapshotTrafficHistory 在重置前把当期用量写入历史表。
-// 入站合计写一条 email="" 的记录，各客户端各写一条。
-func (s *InboundService) snapshotTrafficHistory(id int, reason string, periodEnd int64) error {
-	db := database.GetDB()
+// resetAllClientTrafficsTx 在已有事务内把客户端流量清零，并推进入站的重置时间。
+// 特意不碰 enable：周期重置不应该把管理员特意禁用的客户端（欠费、滥用）
+// 静默重新启用。
+func (s *InboundService) resetAllClientTrafficsTx(tx *gorm.DB, id int) error {
+	now := time.Now().Unix() * 1000
 
+	whereText := "inbound_id "
+	if id == -1 {
+		whereText += " > ?"
+	} else {
+		whereText += " = ?"
+	}
+
+	// Reset client traffics
+	result := tx.Model(xray.ClientTraffic{}).
+		Where(whereText, id).
+		Updates(map[string]any{"up": 0, "down": 0})
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	// Update lastTrafficResetTime for the inbound(s)
+	inboundWhereText := "id "
+	if id == -1 {
+		inboundWhereText += " > ?"
+	} else {
+		inboundWhereText += " = ?"
+	}
+
+	result = tx.Model(model.Inbound{}).
+		Where(inboundWhereText, id).
+		Update("last_traffic_reset_time", now)
+
+	return result.Error
+}
+
+// snapshotTrafficHistoryTx 在重置前把当期用量写入历史表。
+// 入站合计写一条 email="" 的记录，各客户端各写一条。
+func (s *InboundService) snapshotTrafficHistoryTx(tx *gorm.DB, id int, reason string, periodEnd int64) error {
 	var inbound model.Inbound
-	if err := db.Model(model.Inbound{}).Where("id = ?", id).First(&inbound).Error; err != nil {
+	if err := tx.Model(model.Inbound{}).Where("id = ?", id).First(&inbound).Error; err != nil {
 		return err
 	}
 
@@ -2390,7 +2475,7 @@ func (s *InboundService) snapshotTrafficHistory(id int, reason string, periodEnd
 	}
 
 	var clients []xray.ClientTraffic
-	if err := db.Model(xray.ClientTraffic{}).Where("inbound_id = ?", id).Find(&clients).Error; err != nil {
+	if err := tx.Model(xray.ClientTraffic{}).Where("inbound_id = ?", id).Find(&clients).Error; err != nil {
 		return err
 	}
 	for _, c := range clients {
@@ -2412,20 +2497,24 @@ func (s *InboundService) snapshotTrafficHistory(id int, reason string, periodEnd
 	if len(rows) == 0 {
 		return nil
 	}
-	return db.Create(&rows).Error
+	return tx.Create(&rows).Error
 }
 
 // ResetInboundTrafficWithHistory 先记录当期用量快照，再重置入站及其所有客户端的流量。
+//
+// 三步放在同一个事务里：只要有一部落库失败就整体回滚，否则会出现
+// 「入站已归零、客户端没归零」或「快照写了两遍」的脏数据。
 func (s *InboundService) ResetInboundTrafficWithHistory(id int, reason string) error {
-	now := time.Now().UnixMilli()
-	// 快照失败不阻塞重置：宁可少一条历史，也不能让流量不清零
-	if err := s.snapshotTrafficHistory(id, reason, now); err != nil {
-		logger.Warning("Failed to snapshot traffic history for inbound", id, ":", err)
-	}
-	if err := s.ResetInboundTraffic(id); err != nil {
-		return err
-	}
-	return s.ResetAllClientTraffics(id)
+	periodEnd := time.Now().UnixMilli()
+	return database.GetDB().Transaction(func(tx *gorm.DB) error {
+		if err := s.snapshotTrafficHistoryTx(tx, id, reason, periodEnd); err != nil {
+			return err
+		}
+		if err := s.resetInboundTrafficTx(tx, id); err != nil {
+			return err
+		}
+		return s.resetAllClientTrafficsTx(tx, id)
+	})
 }
 
 // MarkTrafficResetTime 只推进「上次重置时间」，不清零。
@@ -2463,9 +2552,12 @@ func (s *InboundService) ResetAllTraffics() error {
 }
 
 func (s *InboundService) ResetInboundTraffic(id int) error {
-	db := database.GetDB()
+	return s.resetInboundTrafficTx(database.GetDB(), id)
+}
 
-	result := db.Model(model.Inbound{}).
+// resetInboundTrafficTx 在调用方的事务里把入站合计流量清零。
+func (s *InboundService) resetInboundTrafficTx(tx *gorm.DB, id int) error {
+	result := tx.Model(model.Inbound{}).
 		Where("id = ?", id).
 		Updates(map[string]any{"up": 0, "down": 0})
 

@@ -18,6 +18,9 @@ type Period string
 type PeriodicTrafficResetJob struct {
 	inboundService service.InboundService
 	period         Period
+	// loc is the panel time zone, matching the scheduler. Without it the job
+	// would compute "today" in the host time zone and shift day boundaries.
+	loc *time.Location
 }
 
 // NewPeriodicTrafficResetJob creates a new periodic traffic reset job for the specified period.
@@ -25,6 +28,22 @@ func NewPeriodicTrafficResetJob(period Period) *PeriodicTrafficResetJob {
 	return &PeriodicTrafficResetJob{
 		period: period,
 	}
+}
+
+// WithLocation binds the panel time zone so reset boundaries match the scheduler.
+func (j *PeriodicTrafficResetJob) WithLocation(loc *time.Location) *PeriodicTrafficResetJob {
+	if loc != nil {
+		j.loc = loc
+	}
+	return j
+}
+
+// now returns the current time in the panel time zone.
+func (j *PeriodicTrafficResetJob) now() time.Time {
+	if j.loc != nil {
+		return time.Now().In(j.loc)
+	}
+	return time.Now()
 }
 
 // Run resets traffic statistics for all inbounds that match the configured reset period.
@@ -90,7 +109,7 @@ func (j *PeriodicTrafficResetJob) getInboundsForPeriod() ([]*model.Inbound, erro
 			return nil, err
 		}
 
-		now := time.Now()
+		now := j.now()
 		today := now.Day()
 		// 本月最后一天：重置日设为 29/30/31 时短月没有那一天，
 		// 直接比较 today == 31 会导致该月永远不重置，故按「本月最后一天」兜底。
@@ -114,9 +133,13 @@ func (j *PeriodicTrafficResetJob) getInboundsForPeriod() ([]*model.Inbound, erro
 				continue
 			}
 
-			// 漏跑补偿：本月重置日已过，且上次重置发生在它之前
+			// 漏跑补偿：本月重置日已过，且上次重置发生在它之前。
+			// LastTrafficResetTime 为 0 表示这个入站从未重置过（新建/导入），
+			// 不能当成「漏跑」，否则刚建好的入站在当晚就会被清零。
 			thisMonthReset := time.Date(now.Year(), now.Month(), resetDay, 0, 0, 0, 0, now.Location())
-			if now.After(thisMonthReset) && inbound.LastTrafficResetTime < thisMonthReset.UnixMilli() {
+			if inbound.LastTrafficResetTime > 0 &&
+				now.After(thisMonthReset) &&
+				inbound.LastTrafficResetTime < thisMonthReset.UnixMilli() {
 				logger.Infof("Traffic reset missed for inbound %d (last: %d, due: %d), catching up",
 					inbound.Id, inbound.LastTrafficResetTime, thisMonthReset.UnixMilli())
 				matching = append(matching, inbound)

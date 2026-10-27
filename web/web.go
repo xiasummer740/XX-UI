@@ -332,16 +332,20 @@ func (s *Server) startTask() {
 	s.cron.AddJob("@daily", job.NewClearLogsJob())
 
 	// Inbound traffic reset jobs
+	// The job computes "today" itself, so it must use the same time zone as the
+	// scheduler; otherwise a panel configured for a different zone than the host
+	// shifts every reset boundary by a day.
+	resetLoc, _ := s.settingService.GetTimeLocation()
 	// Run every hour
-	s.cron.AddJob("@hourly", job.NewPeriodicTrafficResetJob("hourly"))
+	s.cron.AddJob("@hourly", job.NewPeriodicTrafficResetJob("hourly").WithLocation(resetLoc))
 	// Run once a day, midnight
-	s.cron.AddJob("@daily", job.NewPeriodicTrafficResetJob("daily"))
+	s.cron.AddJob("@daily", job.NewPeriodicTrafficResetJob("daily").WithLocation(resetLoc))
 	// Run once a week, midnight between Sat/Sun
-	s.cron.AddJob("@weekly", job.NewPeriodicTrafficResetJob("weekly"))
+	s.cron.AddJob("@weekly", job.NewPeriodicTrafficResetJob("weekly").WithLocation(resetLoc))
 	// Run once a month, midnight, first of month
-	s.cron.AddJob("@monthly", job.NewPeriodicTrafficResetJob("monthly"))
+	s.cron.AddJob("@monthly", job.NewPeriodicTrafficResetJob("monthly").WithLocation(resetLoc))
 	// Run once a day for custom_date inbounds (check if today matches resetDay)
-	s.cron.AddJob("@daily", job.NewPeriodicTrafficResetJob("custom_date"))
+	s.cron.AddJob("@daily", job.NewPeriodicTrafficResetJob("custom_date").WithLocation(resetLoc))
 
 	// Database auto backup scheduling - runs daily at midnight
 	s.cron.AddJob("@daily", job.NewDbBackupJob())
