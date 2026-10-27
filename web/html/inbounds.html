@@ -2812,41 +2812,22 @@
         }
       },
       openVpsModal() {
-        // Populate form from current settings
-        if (this.allSetting && this.allSetting.vpsName) {
-          this.vpsForm.vpsName = this.allSetting.vpsName || '';
-          this.vpsForm.vpsIP = this.allSetting.vpsIP || '';
-          this.vpsForm.vpsLocation = this.allSetting.vpsLocation || '';
-          this.vpsForm.vpsSpecs = this.allSetting.vpsSpecs || '';
-          this.vpsForm.vpsPurchaseDate = this.allSetting.vpsPurchaseDate || '';
-          this.vpsForm.vpsResetDay = this.allSetting.vpsResetDay || 1;
-          this.vpsForm.vpsNodeInfo = this.allSetting.vpsNodeInfo || '';
-          this.vpsForm.vpsNotes = this.allSetting.vpsNotes || '';
-          // Convert purchase date timestamp to moment object for date picker
-          if (this.allSetting.vpsPurchaseDate) {
-            const ts = Number(this.allSetting.vpsPurchaseDate);
-            if (ts > 0) {
-              this.vpsPurchaseDateMoment = moment(ts * 1000);
-            } else {
-              this.vpsPurchaseDateMoment = null;
-            }
-          } else {
-            this.vpsPurchaseDateMoment = null;
-          }
-        } else {
-          // Reset form
-          this.vpsForm = {
-            vpsName: '',
-            vpsIP: '',
-            vpsLocation: '',
-            vpsSpecs: '',
-            vpsPurchaseDate: '',
-            vpsResetDay: 1,
-            vpsNodeInfo: '',
-            vpsNotes: '',
-          };
-          this.vpsPurchaseDateMoment = null;
-        }
+        // 回填必须无条件执行：之前整段被 `if (vpsName)` 包住，
+        // 没填 VPS 名称时会走 else 分支把表单重置成「每月 1 日」，
+        // 用户一保存就把 22 号覆盖成 1 号。
+        const s = this.allSetting || {};
+        this.vpsForm.vpsName = s.vpsName || '';
+        this.vpsForm.vpsIP = s.vpsIP || '';
+        this.vpsForm.vpsLocation = s.vpsLocation || '';
+        this.vpsForm.vpsSpecs = s.vpsSpecs || '';
+        this.vpsForm.vpsPurchaseDate = s.vpsPurchaseDate || '';
+        // 优先用 VPS 配置里存的重置日，其次回落到全局默认，都没有才用 1
+        this.vpsForm.vpsResetDay = Number(s.vpsResetDay) || Number(s.defaultResetDay) || 1;
+        this.vpsForm.vpsNodeInfo = s.vpsNodeInfo || '';
+        this.vpsForm.vpsNotes = s.vpsNotes || '';
+        // Convert purchase date timestamp to moment object for date picker
+        const ts = Number(s.vpsPurchaseDate);
+        this.vpsPurchaseDateMoment = ts > 0 ? moment(ts * 1000) : null;
         this.vpsModalVisible = true;
       },
       // 把当前重置日套用到全部现有入站（改了 VPS 重置日后一次性纠正历史数据）
