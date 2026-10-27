@@ -1241,12 +1241,6 @@
         if (!this.copyClientsModal.targetInboundId) return [];
         return this.copyClientsModal.selectedEmails.map(email => `${email}_${this.copyClientsModal.targetInboundId}`);
       },
-      // 当前选中入站下的客户端邮箱，供流量历史的「客户端」下拉使用
-      trafficHistoryClients() {
-        const ib = (this.dbInbounds || []).find(x => x.id === this.trafficHistoryModal.inboundId);
-        if (!ib || !Array.isArray(ib.clientStats)) return [];
-        return ib.clientStats.map(c => c.email).filter(e => !!e);
-      },
     },
   });
 </script>
@@ -3236,6 +3230,12 @@
       }
     },
     computed: {
+      // 当前选中入站下的客户端邮箱，供流量历史的「客户端」下拉使用
+      trafficHistoryClients() {
+        const ib = (this.dbInbounds || []).find(x => x.id === this.trafficHistoryModal.inboundId);
+        if (!ib || !Array.isArray(ib.clientStats)) return [];
+        return ib.clientStats.map(c => c.email).filter(e => !!e);
+      },
       total() {
         let down = 0, up = 0, allTime = 0;
         let clients = 0, deactive = [], depleted = [], expiring = [];
