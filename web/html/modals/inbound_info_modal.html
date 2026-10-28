@@ -492,6 +492,25 @@
           </td>
         </tr>
       </table>
+      <!-- SOCKS / HTTP 入站可直接生成一条代理链接，粘到别处的「快速粘贴识别」即可填入链式代理 -->
+      <template v-if="proxyLinks.length">
+        <table class="tr-info-table">
+          <tr>
+            <th colspan="2">代理链接（复制后粘到「快速粘贴识别」可直接解析）</th>
+          </tr>
+          <tr v-for="(link, i) in proxyLinks" :key="i">
+            <td style="word-break: break-all;">
+              <a-tag color="purple" class="info-large-tag">[[ link ]]</a-tag>
+            </td>
+            <td style="width: 1%; white-space: nowrap;">
+              <a-tooltip title='{{ i18n "copy" }}'>
+                <a-button :style="{ minWidth: '24px' }" size="small" icon="snippets"
+                  @click="copy(link)"></a-button>
+              </a-tooltip>
+            </td>
+          </tr>
+        </table>
+      </template>
       <table v-if="dbInbound.isWireguard" class="tr-info-table">
         <tr class="client-table-odd-row">
           <td>{{ i18n "pages.xray.wireguard.secretKey" }}</td>
@@ -754,6 +773,47 @@
         const expired = hasExpiry && now >= expiryTime;
 
         return expired || exhausted;
+      },
+    },
+    computed: {
+      // 生成形如 socks5://user:pass@host:port 的代理链接：
+      // 复制后粘到链式代理弹窗的「快速粘贴识别」，点解析就能自动填好协议/地址/端口/账号密码。
+      // 解析器按原样读，不做 URL 解码，所以这里也不能做百分号编码。
+      proxyLinks() {
+        const inbound = this.infoModal.inbound;
+        const dbInbound = this.infoModal.dbInbound;
+        if (!inbound || !dbInbound) {
+          return [];
+        }
+        let scheme = '';
+        if (dbInbound.isSocks) {
+          scheme = 'socks5';
+        } else if (dbInbound.isHTTP) {
+          scheme = 'http';
+        } else {
+          return [];
+        }
+        const host = dbInbound.address || '';
+        const port = dbInbound.port || '';
+        if (!host || !port) {
+          return [];
+        }
+        const accounts = (inbound.settings && inbound.settings.accounts) || [];
+        const links = [];
+        if (Array.isArray(accounts) && accounts.length > 0) {
+          for (const account of accounts) {
+            const user = account && account.user ? String(account.user) : '';
+            const pass = account && account.pass ? String(account.pass) : '';
+            if (!user) {
+              links.push(`${scheme}://${host}:${port}`);
+            } else {
+              links.push(`${scheme}://${user}${pass ? ':' + pass : ''}@${host}:${port}`);
+            }
+          }
+        } else {
+          links.push(`${scheme}://${host}:${port}`);
+        }
+        return links;
       },
     },
     methods: {
