@@ -1,6 +1,11 @@
 {{define "modals/inboundInfoModal"}}
 <a-modal id="inbound-info-modal" v-model="infoModal.visible" title='{{ i18n "pages.inbounds.details"}}' :closable="true"
   :mask-closable="true" :footer="null" width="600px" :class="themeSwitcher.currentTheme">
+  <div class="info-copy-zone" @click="onTagCopyClick">
+    <div class="info-copy-hint">
+      <a-icon type="copy"></a-icon>
+      <span>点击任意标签即可复制</span>
+    </div>
   <a-row>
     <a-col :xs="24" :md="12">
       <table>
@@ -553,7 +558,26 @@
       </table>
     </template>
     </template>
+  </div>
 </a-modal>
+<style>
+  #inbound-info-modal .ant-tag {
+    cursor: pointer;
+    transition: opacity .15s ease, filter .15s ease;
+  }
+  #inbound-info-modal .ant-tag:hover {
+    opacity: .72;
+    filter: brightness(1.15);
+  }
+  #inbound-info-modal .ant-tag:active {
+    opacity: .5;
+  }
+  .info-copy-hint {
+    font-size: 12px;
+    color: #999;
+    margin-bottom: 8px;
+  }
+</style>
 <script>
   function refreshIPs(email) {
     return HttpUtil.post(`/panel/api/inbounds/clientIps/${email}`).then((msg) => {
@@ -768,6 +792,14 @@
           .then(() => {
             app.$message.success('{{ i18n "copied" }}')
           })
+      },
+      // 详情弹窗里所有值都是 a-tag，点一下就复制：这里做委托，避免给每个标签加事件
+      onTagCopyClick(e) {
+        const el = e.target && e.target.closest ? e.target.closest('.ant-tag') : null;
+        if (!el) return;
+        const text = (el.innerText || el.textContent || '').trim();
+        if (!text) return;
+        this.copy(text);
       },
       statsColor(stats) {
         return ColorUtils.usageColor(stats.up + stats.down, app.trafficDiff, stats.total);
