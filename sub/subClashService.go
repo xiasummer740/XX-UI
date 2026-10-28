@@ -19,6 +19,10 @@ type SubClashService struct {
 }
 
 type ClashConfig struct {
+	// IPv6 默认是 false，Clash/mihomo 会直接忽略 AAAA 记录，双栈用户也只能走 IPv4；
+	// 打开后客户端才能按 happy-eyeballs 优选 IPv6，纯 IPv4 用户仍会自动回落。
+	IPv6        bool             `yaml:"ipv6"`
+	DNS         map[string]any   `yaml:"dns,omitempty"`
 	Proxies     []map[string]any `yaml:"proxies"`
 	ProxyGroups []map[string]any `yaml:"proxy-groups"`
 	Rules       []string         `yaml:"rules"`
@@ -99,6 +103,8 @@ func (s *SubClashService) GetClash(subId string, host string) (string, string, e
 	proxyNames = append(proxyNames, "DIRECT")
 
 	config := ClashConfig{
+		IPv6:    true,
+		DNS:     map[string]any{"ipv6": true},
 		Proxies: proxies,
 		ProxyGroups: []map[string]any{{
 			"name":    "PROXY",
