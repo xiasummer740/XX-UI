@@ -114,9 +114,14 @@
                     </a-form-item>
                     <a-form-item>
                       <a-input-password autocomplete="current-password" name="password" v-model.trim="user.password"
-                        placeholder='{{ i18n "password" }}' required>
+                        placeholder='{{ i18n "password" }}' required
+                        @keydown.native="checkCapsLock" @keyup.native="checkCapsLock" @blur.native="capsLockOn = false">
                         <a-icon slot="prefix" type="lock" class="fs-1rem"></a-icon>
                       </a-input-password>
+                      <div v-if="capsLockOn" class="caps-lock-hint">
+                        <a-icon type="exclamation-circle"></a-icon>
+                        <span>大写锁定已开启，密码区分大小写</span>
+                      </div>
                     </a-form-item>
                     <a-form-item v-if="twoFactorEnable">
                       <a-input autocomplete="one-time-code" name="twoFactorCode" v-model.trim="user.twoFactorCode"
@@ -156,6 +161,7 @@
       loadingStates: { fetched: false, spinning: false },
       user: { username: "", password: "", twoFactorCode: "" },
       twoFactorEnable: false,
+      capsLockOn: false,
       lang: "",
       animationStarted: false
     },
@@ -164,6 +170,12 @@
       this.twoFactorEnable = await this.getTwoFactorEnable();
     },
     methods: {
+      // 大写锁定时给出提示：登录失败最常见的原因之一就是密码首字母被大写。
+      checkCapsLock(e) {
+        if (e && typeof e.getModifierState === "function") {
+          this.capsLockOn = e.getModifierState("CapsLock");
+        }
+      },
       async login() {
         this.loadingStates.spinning = true;
         const msg = await HttpUtil.post('/login', this.user);
@@ -287,4 +299,13 @@
     pm_init();
   }
 </script>
+<style>
+  /* 大写锁定提示 */
+  .caps-lock-hint {
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.3;
+    color: #faad14;
+  }
+</style>
 {{ template "page/body_end" .}}

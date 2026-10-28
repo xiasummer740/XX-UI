@@ -602,7 +602,10 @@
                               </tr>
                               <tr>
                                 <td>{{ i18n "pages.inbounds.port" }}</td>
-                                <td><a-tag>[[ dbInbound.port ]]</a-tag></td>
+                                <td>
+                                  <a-tag class="copy-val" title="点击复制端口"
+                                    @click="copyVal(dbInbound.port)">[[ dbInbound.port ]]</a-tag>
+                                </td>
                               </tr>
                               <tr v-if="clientCount[dbInbound.id]">
                                 <td>{{ i18n "clients" }}</td>
@@ -812,7 +815,8 @@
                                       <a-icon type="share-alt"></a-icon>
                                       [[ dbInbound.enableChainProxy ? '已启用' : '已禁用' ]]
                                     </a-tag>
-                                    <div style="font-size: 11px; color: #888; margin-top: 2px; word-break: break-all;">
+                                    <div class="copy-val" title="点击复制链式代理配置" style="font-size: 11px; color: #888; margin-top: 2px; word-break: break-all;"
+                                      @click="copyVal(getChainProxySummary(dbInbound.chainProxy))">
                                       [[ getChainProxySummary(dbInbound.chainProxy) ]]
                                     </div>
                                   </template>
@@ -829,13 +833,16 @@
                               </tr>
                               <tr>
                                 <td style="padding: 2px 8px;">
-                                  <a-tag color="green">[[ dbInbound.toInbound().settings.auth ]]</a-tag>
+                                  <a-tag color="green" class="copy-val" title="点击复制"
+                                    @click="copyVal(dbInbound.toInbound().settings.auth)">[[ dbInbound.toInbound().settings.auth ]]</a-tag>
                                 </td>
                                 <td style="padding: 2px 8px;">
-                                  <a-tag color="green">[[ dbInbound.toInbound().settings.udp ]]</a-tag>
+                                  <a-tag color="green" class="copy-val" title="点击复制"
+                                    @click="copyVal(dbInbound.toInbound().settings.udp)">[[ dbInbound.toInbound().settings.udp ]]</a-tag>
                                 </td>
                                 <td style="padding: 2px 8px;">
-                                  <a-tag color="green">[[ dbInbound.toInbound().settings.ip ]]</a-tag>
+                                  <a-tag color="green" class="copy-val" title="点击复制"
+                                    @click="copyVal(dbInbound.toInbound().settings.ip)">[[ dbInbound.toInbound().settings.ip ]]</a-tag>
                                 </td>
                               </tr>
                               <template v-if="dbInbound.toInbound().settings.auth == 'password'">
@@ -847,10 +854,12 @@
                                 <tr v-for="(account, index) in dbInbound.toInbound().settings.accounts">
                                   <td style="padding: 2px 8px;">[[ index ]]</td>
                                   <td style="padding: 2px 8px;">
-                                    <a-tag color="green">[[ account.user ]]</a-tag>
+                                    <a-tag color="green" class="copy-val" title="点击复制用户名"
+                                      @click="copyVal(account.user)">[[ account.user ]]</a-tag>
                                   </td>
                                   <td style="padding: 2px 8px;">
-                                    <a-tag color="green">[[ account.pass ]]</a-tag>
+                                    <a-tag color="green" class="copy-val" title="点击复制密码"
+                                      @click="copyVal(account.pass)">[[ account.pass ]]</a-tag>
                                   </td>
                                 </tr>
                               </template>
@@ -926,14 +935,19 @@
           <a-button type="dashed" icon="api" :loading="chainProxyModal.testing" @click="testChainProxy" :disabled="!chainProxyModal.address || !chainProxyModal.port">
             测试连接
           </a-button>
-          <span v-if="chainProxyModal.testResult !== null" :style="{ color: chainProxyModal.testResult.reachable ? '#52c41a' : '#ff4d4f', fontSize: '13px' }">
-            <a-icon :type="chainProxyModal.testResult.reachable ? 'check-circle' : 'close-circle'" />
-            <template v-if="chainProxyModal.testResult.reachable">
-              连接成功 - 延迟: [[ chainProxyModal.testResult.latency ]]ms
-            </template>
-            <template v-else>
-              连接失败: [[ chainProxyModal.testResult.error || '超时或无响应' ]]
-            </template>
+          <span v-if="chainProxyModal.testResult !== null" :style="{ color: chainProxyModal.testResult.ok ? '#52c41a' : (chainProxyModal.testResult.reachable ? '#faad14' : '#ff4d4f'), fontSize: '13px' }">
+            <a-icon :type="chainProxyModal.testResult.ok ? (chainProxyModal.testResult.targetOk ? 'check-circle' : 'exclamation-circle') : (chainProxyModal.testResult.reachable ? 'exclamation-circle' : 'close-circle')"></a-icon>
+            <span v-if="chainProxyModal.testResult.ok && chainProxyModal.testResult.targetOk">
+              握手与认证通过，代理出口可用 - 延迟 [[ chainProxyModal.testResult.latency ]]ms
+              <template v-if="chainProxyModal.testResult.auth === 'password'">（已认证）</template>
+              <template v-else-if="chainProxyModal.testResult.auth === 'none'">（免认证）</template>
+            </span>
+            <span v-else-if="chainProxyModal.testResult.ok">
+              握手/认证通过，但代理无法连通测试目标 [[ chainProxyModal.testResult.target ]]：[[ chainProxyModal.testResult.error ]]
+            </span>
+            <span v-else>
+              测试失败: [[ chainProxyModal.testResult.error || '超时或无响应' ]]
+            </span>
           </span>
         </a-space>
       </a-form-item>
@@ -1894,6 +1908,37 @@
           modal.saving = false;
         }
       },
+      // 详情里的值点一下就能复制。面板跑在 https 下时用 clipboard API，
+      // 用 http 访问（或老浏览器）时退回 execCommand。
+      copyVal(text) {
+        const t = (text === null || text === undefined) ? '' : String(text);
+        if (!t) return;
+        const hint = t.length > 28 ? t.slice(0, 28) + '…' : t;
+        const done = () => this.$message.success('已复制: ' + hint);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(t).then(done).catch(() => this.copyValFallback(t, done));
+        } else {
+          this.copyValFallback(t, done);
+        }
+      },
+      copyValFallback(text, done) {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'fixed';
+          ta.style.top = '-1000px';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          ta.setSelectionRange(0, text.length);
+          const ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          if (ok) done(); else this.$message.error('复制失败，请手动选中');
+        } catch (e) {
+          this.$message.error('复制失败: ' + (e.message || e));
+        }
+      },
       async testChainProxy() {
         const modal = this.chainProxyModal;
         if (!modal.address || !modal.port) {
@@ -1904,18 +1949,21 @@
         modal.testResult = null;
         try {
           const payload = {
+            protocol: modal.protocol || 'socks',
             address: modal.address,
             port: modal.port,
+            user: modal.user || '',
+            password: modal.password || '',
           };
           const msg = await HttpUtil.post('/panel/api/inbounds/chainProxy/testConnection', payload);
           if (msg.success && msg.obj) {
             modal.testResult = msg.obj;
           } else {
-            modal.testResult = { reachable: false, error: msg.msg || '测试请求失败' };
+            modal.testResult = { reachable: false, ok: false, error: msg.msg || '测试请求失败' };
           }
         } catch(e) {
           console.error('[ChainProxy] testConnection failed:', e);
-          modal.testResult = { reachable: false, error: e.message || '网络错误' };
+          modal.testResult = { reachable: false, ok: false, error: e.message || '网络错误' };
         } finally {
           modal.testing = false;
         }
@@ -3268,6 +3316,18 @@
     #content-layout > .ant-layout-content > .ant-spin-nested-loading > div > .ant-spin {
       left: 50vw !important;
     }
+  }
+  /* 详情里可点击复制的值：悬停轻微高亮并显示手型 */
+  .copy-val {
+    cursor: pointer;
+    transition: opacity .15s ease, filter .15s ease;
+  }
+  .copy-val:hover {
+    opacity: .72;
+    filter: brightness(1.15);
+  }
+  .copy-val:active {
+    opacity: .5;
   }
 </style>
 {{ template "page/body_end" .}}

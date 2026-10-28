@@ -768,7 +768,9 @@ func (a *InboundController) updateChainProxy(c *gin.Context) {
 	}
 }
 
-// testChainProxy tests TCP connectivity to a chain proxy server.
+// testChainProxy tests a chain proxy at the protocol level (see
+// InboundService.TestChainProxy): a plain port check cannot tell a wrong
+// password or a non-proxy service apart from a working proxy.
 func (a *InboundController) testChainProxy(c *gin.Context) {
 	var req struct {
 		Protocol string `json:"protocol" form:"protocol"`
@@ -785,7 +787,7 @@ func (a *InboundController) testChainProxy(c *gin.Context) {
 		jsonMsg(c, "Address and port are required", nil)
 		return
 	}
-	result := a.inboundService.CheckRemotePort(req.Address, req.Port)
+	result := a.inboundService.TestChainProxy(req.Protocol, req.Address, req.Port, req.User, req.Password)
 	jsonObj(c, result, nil)
 }
 
