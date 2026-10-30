@@ -63,6 +63,8 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/health", a.checkHealth)
 	// 自动配置：生成一套当前环境最优的 VLESS+REALITY 配置供前端预填
 	g.POST("/suggestReality", a.suggestReality)
+	// 同步防火墙：把启用入站的端口在 ufw 里补齐放行
+	g.POST("/syncFirewall", a.syncFirewall)
 	g.POST("/applyTrafficReset", a.applyTrafficReset)
 	g.GET("/trafficHistory", a.getTrafficHistory)
 	g.GET("/chainProxy/:id", a.getChainProxy)
@@ -659,6 +661,14 @@ func (a *InboundController) suggestReality(c *gin.Context) {
 		"dbInbound":  dbInbound,
 		"suggestion": suggestion,
 	}, nil)
+}
+
+// syncFirewall 把所有启用入站的端口在系统防火墙（ufw）里补齐放行。
+// x-ui 不会自动改防火墙，漏放行时表现为“入站在跑、客户端连不上”，
+// 这个方法给面板一个一键纠正的入口。
+func (a *InboundController) syncFirewall(c *gin.Context) {
+	result, err := a.inboundService.SyncFirewallPorts()
+	jsonObj(c, result, err)
 }
 
 // applyTrafficReset 把流量重置策略批量套用到所有入站。

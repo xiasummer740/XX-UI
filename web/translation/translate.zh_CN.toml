@@ -349,6 +349,7 @@
 "connFamily" = "连接协议"
 "connFamilyHint" = "该入站当前已建立连接所用的 IP 协议族，来自内核连接表；无连接时显示 --"
 "autoReality" = "VLESS 自动配置"
+"syncFirewall" = "同步防火墙端口"
 "oneClickSubscribe" = "一键订阅"
 "oneClickSubscribeDesc" = "生成所有入站的分享链接和订阅链接"
 "subscribeBase64" = "Base64 订阅"

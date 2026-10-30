@@ -349,6 +349,7 @@
 "connFamily" = "Connection"
 "connFamilyHint" = "IP family of the established connections on this inbound (from the kernel connection table); shows -- when idle"
 "autoReality" = "VLESS Auto Config"
+"syncFirewall" = "Sync Firewall Ports"
 "oneClickSubscribe" = "One-Click Subscribe"
 "oneClickSubscribeDesc" = "Generate share links and subscription links for all inbounds"
 "subscribeBase64" = "Base64 Subscribe"

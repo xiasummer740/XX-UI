@@ -175,6 +175,10 @@
                             <a-icon type="reload"></a-icon>
                             {{ i18n "pages.inbounds.resetAllTraffic" }}
                           </a-menu-item>
+                          <a-menu-item key="syncFirewall">
+                            <a-icon type="safety-certificate"></a-icon>
+                            {{ i18n "pages.inbounds.syncFirewall" }}
+                          </a-menu-item>
                           <a-menu-item key="resetClients">
                             <a-icon type="file-done"></a-icon>
                             {{ i18n "pages.inbounds.resetAllClientTraffics" }}
@@ -1778,6 +1782,32 @@
           this.searchedInbounds = this.dbInbounds.slice();
         }
       },
+      // 同步防火墙：把启用的入站端口在系统防火墙（ufw）里补齐放行。
+      // 面板只管生成 xray 配置，不会动防火墙，漏放行时客户端会连不上且无任何提示。
+      async syncFirewall() {
+        const hide = this.$message.loading('正在同步防火墙端口...', 0);
+        let msg;
+        try {
+          msg = await HttpUtil.post('/panel/api/inbounds/syncFirewall', {});
+        } catch (e) {
+          hide();
+          this.$message.error('同步失败: ' + (e.message || e));
+          return;
+        }
+        hide();
+        if (!msg || !msg.success || !msg.obj) {
+          this.$message.error('同步失败' + (msg && msg.msg ? ': ' + msg.msg : ''));
+          return;
+        }
+        const r = msg.obj;
+        this.$message.info(r.message || '同步完成');
+        if (r.opened && r.opened.length) {
+          this.$notification.success({ message: '已放行端口', description: r.opened.join(', ') });
+        }
+        if (r.failed && r.failed.length) {
+          this.$notification.warning({ message: '放行失败', description: r.failed.join(', ') });
+        }
+      },
       generalActions(action) {
         switch (action.key) {
           case "import":
@@ -1794,6 +1824,9 @@
             break;
           case "resetInbounds":
             this.resetAllTraffic();
+            break;
+          case "syncFirewall":
+            this.syncFirewall();
             break;
           case "resetClients":
             this.resetAllClientTraffics(-1);

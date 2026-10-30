@@ -480,6 +480,10 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 		s.xrayApi.Close()
 	}
 
+	// 顺手在系统防火墙放行端口：x-ui 不会自动改防火墙，漏放行时表现为
+	// “入站在跑、客户端却连不上”。失败不影响入站创建。
+	s.openFirewallForInboundPort(inbound)
+
 	return inbound, needRestart, err
 }
 
