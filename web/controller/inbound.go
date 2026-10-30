@@ -65,6 +65,8 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/suggestReality", a.suggestReality)
 	// 同步防火墙：把启用入站的端口在 ufw 里补齐放行
 	g.POST("/syncFirewall", a.syncFirewall)
+	// 整机流量用量：套餐额度 / 本周期已用 / 阈值 / 剩余天数
+	g.POST("/vpsUsage", a.vpsUsage)
 	g.POST("/applyTrafficReset", a.applyTrafficReset)
 	g.GET("/trafficHistory", a.getTrafficHistory)
 	g.GET("/chainProxy/:id", a.getChainProxy)

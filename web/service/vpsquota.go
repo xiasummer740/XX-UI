@@ -16,11 +16,8 @@ import (
 // 这里把「套餐总流量 + 重置日」做成可配置项，并据此算出当前计费周期的用量百分比，
 // 到阈值时通过 Telegram 提醒。流量清零仍由现有的「流量重置」任务负责。
 
-const (
-	vpsQuotaNotifiedKey = "vpsQuotaNotified"
-	// 默认提醒阈值：80% 和 95%
-	defaultVPSQuotaNotify = "80,95"
-)
+// 默认提醒阈值：80% 和 95%
+const defaultVPSQuotaNotify = "80,95"
 
 // VPSUsageInbound 是单个入站在当前周期的用量，方便看谁在吃流量。
 type VPSUsageInbound struct {
