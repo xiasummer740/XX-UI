@@ -40,9 +40,9 @@ var realityTargetPool = []string{
 // overusedTargets 是各类教程/脚本里出现频率极高的目标，
 // 单独被拿来当 SNI 时"太常见"，排序时降权（只在延迟明显更优时才选它）。
 var overusedTargets = map[string]bool{
-	"www.microsoft.com": true,
-	"www.apple.com":     true,
-	"www.amazon.com":    true,
+	"www.microsoft.com":  true,
+	"www.apple.com":      true,
+	"www.amazon.com":     true,
 	"www.cloudflare.com": true,
 	"addons.mozilla.org": true,
 }
@@ -63,17 +63,17 @@ type RealityCandidate struct {
 
 // RealitySuggestion 是自动建站的选参结论，同时回传给前端做展示。
 type RealitySuggestion struct {
-	Port            int                `json:"port"`
-	PortReason      string             `json:"portReason"`
-	ServerName      string             `json:"serverName"`
-	Dest            string             `json:"dest"`
-	LatencyMs       int64              `json:"latencyMs"`
-	Candidates      []RealityCandidate `json:"candidates"`
-	ClientEmail     string             `json:"clientEmail"`
-	UUID            string             `json:"uuid"`
-	PublicKey       string             `json:"publicKey"`
-	ShortID         string             `json:"shortId"`
-	OverusedChosen  bool               `json:"overusedChosen"`
+	Port           int                `json:"port"`
+	PortReason     string             `json:"portReason"`
+	ServerName     string             `json:"serverName"`
+	Dest           string             `json:"dest"`
+	LatencyMs      int64              `json:"latencyMs"`
+	Candidates     []RealityCandidate `json:"candidates"`
+	ClientEmail    string             `json:"clientEmail"`
+	UUID           string             `json:"uuid"`
+	PublicKey      string             `json:"publicKey"`
+	ShortID        string             `json:"shortId"`
+	OverusedChosen bool               `json:"overusedChosen"`
 }
 
 // probeRealityTarget 对候选目标做一次真实 TLS 握手，验证它是否适合当 REALITY 的偷站目标。
