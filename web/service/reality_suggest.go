@@ -256,6 +256,15 @@ func (s *InboundService) SuggestRealityInbound(userID int) (map[string]any, *Rea
 			"show":        false,
 			"xver":        0,
 			"maxTimediff": 0,
+			// 面板生成分享链接/二维码时读的是 settings.publicKey（见 inbound.js 的 pbk 参数），
+			// 缺了它链接里就不会带 pbk，客户端无法完成 REALITY 握手。
+			"settings": map[string]any{
+				"publicKey":     keyPair["publicKey"],
+				"fingerprint":   "chrome",
+				"serverName":    "",
+				"spiderX":       "/",
+				"mldsa65Verify": "",
+			},
 		},
 		"tcpSettings": map[string]any{
 			"header": map[string]any{"type": "none"},

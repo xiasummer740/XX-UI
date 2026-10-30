@@ -3634,6 +3634,14 @@ func (s *InboundService) buildVlessReality(userId, port, index int, subId string
 			"show":          false,
 			"xver":          0,
 			"maxTimediff":   0,
+			// 面板生成分享链接时读这里（inbound.js 的 pbk 参数），缺了链接就没有公钥
+			"settings": map[string]any{
+				"publicKey":     keyPair["publicKey"],
+				"fingerprint":   "chrome",
+				"serverName":    "",
+				"spiderX":       "",
+				"mldsa65Verify": "",
+			},
 		},
 		"tcpSettings": map[string]any{
 			"header": map[string]any{"type": "none"},
