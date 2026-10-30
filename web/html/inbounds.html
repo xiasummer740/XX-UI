@@ -1147,6 +1147,16 @@
   </a-space>
 </a-modal>
 <script>
+// 订阅 ID 允许自定义成中文，但 URL 路径必须全程 ASCII：
+// 否则小火箭(Shadowrocket)等客户端会直接报「错误的 URL」。
+// 非 ASCII 的 ID 统一编码成 b64-<base64url> 令牌，服务端会还原。
+function subLinkToken(subId) {
+  if (subId && /^[A-Za-z0-9._~-]+$/.test(subId)) return subId;
+  const bytes = new TextEncoder().encode(subId || '');
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return 'b64-' + btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
   const copyClientsColumns = [
     { title: '{{ i18n "pages.inbounds.email" }}', width: 300, scopedSlots: { customRender: 'emailCheckbox' } },
     { title: '{{ i18n "pages.inbounds.traffic" }}', width: 160, dataIndex: 'trafficLabel' },
@@ -2699,7 +2709,7 @@
         if (clients != null) {
           clients.forEach(c => {
             if (c.subId && c.subId.length > 0) {
-              subLinks.push(this.subSettings.subURI + encodeURIComponent(c.subId))
+              subLinks.push(this.subSettings.subURI + subLinkToken(c.subId))
             }
           })
         }
@@ -2739,7 +2749,7 @@
           if (clients != null) {
             clients.forEach(c => {
               if (c.subId && c.subId.length > 0) {
-                subLinks.push(this.subSettings.subURI + encodeURIComponent(c.subId))
+                subLinks.push(this.subSettings.subURI + subLinkToken(c.subId))
               }
             })
           }
@@ -2792,7 +2802,7 @@
             if (clients != null) {
               clients.forEach(c => {
                 if (c.subId && c.subId.length > 0) {
-                  subLinks.push(this.subSettings.subURI + encodeURIComponent(c.subId));
+                  subLinks.push(this.subSettings.subURI + subLinkToken(c.subId));
                 }
               });
             }

@@ -611,6 +611,16 @@
   }
 </style>
 <script>
+// 订阅 ID 允许自定义成中文，但 URL 路径必须全程 ASCII：
+// 否则小火箭(Shadowrocket)等客户端会直接报「错误的 URL」。
+// 非 ASCII 的 ID 统一编码成 b64-<base64url> 令牌，服务端会还原。
+function subLinkToken(subId) {
+  if (subId && /^[A-Za-z0-9._~-]+$/.test(subId)) return subId;
+  const bytes = new TextEncoder().encode(subId || '');
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return 'b64-' + btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
   function refreshIPs(email) {
     return HttpUtil.post(`/panel/api/inbounds/clientIps/${email}`).then((msg) => {
       if (!msg.success) {
@@ -740,10 +750,10 @@
     },
     genSubLink(subID) {
       // 自定义 subID 可能含中文/空格，必须编码才能扫码
-      return app.subSettings.subURI + encodeURIComponent(subID);
+      return app.subSettings.subURI + subLinkToken(subID);
     },
     genSubJsonLink(subID) {
-      return app.subSettings.subJsonURI + encodeURIComponent(subID);
+      return app.subSettings.subJsonURI + subLinkToken(subID);
     }
   };
   const infoModalApp = new Vue({

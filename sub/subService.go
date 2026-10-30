@@ -138,6 +138,21 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.C
 }
 
 func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) {
+	// 订阅 ID 允许自定义成中文，URL 里用 b64- ASCII 别名承载；
+	// 这里把别名还原成真实 ID，并对每个候选依次查库。
+	for _, candidate := range service.SubIDCandidates(subId) {
+		inbounds, err := s.queryInboundsBySubId(candidate)
+		if err != nil {
+			return nil, err
+		}
+		if len(inbounds) > 0 {
+			return inbounds, nil
+		}
+	}
+	return nil, nil
+}
+
+func (s *SubService) queryInboundsBySubId(subId string) ([]*model.Inbound, error) {
 	db := database.GetDB()
 	var inbounds []*model.Inbound
 	err := db.Model(model.Inbound{}).Preload("ClientStats").Where(`id in (
@@ -1305,6 +1320,8 @@ func (s *SubService) BuildURLs(scheme, hostWithPort, subPath, subJsonPath, subCl
 	if subId == "" {
 		return "", "", ""
 	}
+	// 自定义订阅 ID 可能含中文，URL 里统一换成 ASCII 别名，避免客户端解析失败
+	subId = service.EncodeSubIDToken(subId)
 
 	configuredSubURI, _ := s.settingService.GetSubURI()
 	configuredSubJsonURI, _ := s.settingService.GetSubJsonURI()

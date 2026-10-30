@@ -98,6 +98,16 @@
 </style>
 
 <script>
+// 订阅 ID 允许自定义成中文，但 URL 路径必须全程 ASCII：
+// 否则小火箭(Shadowrocket)等客户端会直接报「错误的 URL」。
+// 非 ASCII 的 ID 统一编码成 b64-<base64url> 令牌，服务端会还原。
+function subLinkToken(subId) {
+  if (subId && /^[A-Za-z0-9._~-]+$/.test(subId)) return subId;
+  const bytes = new TextEncoder().encode(subId || '');
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return 'b64-' + btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
   const qrModal = {
     title: '',
     dbInbound: new DBInbound(),
@@ -233,10 +243,10 @@
       genSubLink(subID) {
         // subID 允许自定义（可能含中文/空格），拼进 URL 必须编码，
         // 否则二维码里的链接对客户端就是非法 URL，扫码直接「识别失败」。
-        return app.subSettings.subURI + encodeURIComponent(subID);
+        return app.subSettings.subURI + subLinkToken(subID);
       },
       genSubJsonLink(subID) {
-        return app.subSettings.subJsonURI + encodeURIComponent(subID);
+        return app.subSettings.subJsonURI + subLinkToken(subID);
       },
       revertOverflow() {
         const elements = document.querySelectorAll(".qr-tag");
