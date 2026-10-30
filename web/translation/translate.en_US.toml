@@ -346,6 +346,8 @@
 "healthChecked" = "Last checked"
 "healthRttHint" = "TCP round-trip from you to the VPS; identical for all inbounds on this host"
 "healthRefresh" = "Click the icon to refresh"
+"connFamily" = "Connection"
+"connFamilyHint" = "IP family of the established connections on this inbound (from the kernel connection table); shows -- when idle"
 "oneClickSubscribe" = "One-Click Subscribe"
 "oneClickSubscribeDesc" = "Generate share links and subscription links for all inbounds"
 "subscribeBase64" = "Base64 Subscribe"

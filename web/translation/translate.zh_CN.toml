@@ -346,6 +346,8 @@
 "healthChecked" = "上次检测"
 "healthRttHint" = "你到 VPS 的 TCP 往返延迟，同机所有入站相同"
 "healthRefresh" = "点击图标立即刷新"
+"connFamily" = "连接协议"
+"connFamilyHint" = "该入站当前已建立连接所用的 IP 协议族，来自内核连接表；无连接时显示 --"
 "oneClickSubscribe" = "一键订阅"
 "oneClickSubscribeDesc" = "生成所有入站的分享链接和订阅链接"
 "subscribeBase64" = "Base64 订阅"

@@ -572,6 +572,28 @@
                         </span>
                       </a-tooltip>
                     </template>
+                    <template slot="connFamily" slot-scope="text, dbInbound">
+                      <a-tooltip placement="left">
+                        <template slot="title">
+                          <div style="line-height: 1.8; min-width: 200px;">
+                            <div><strong>{{ i18n "pages.inbounds.connFamily" }}</strong></div>
+                            <div>IPv6: <strong>[[ connCount(dbInbound.id, 'v6') ]]</strong></div>
+                            <div>IPv4: <strong>[[ connCount(dbInbound.id, 'v4') ]]</strong></div>
+                            <div style="opacity: .65; font-size: 12px; margin-top: 4px;">{{ i18n "pages.inbounds.connFamilyHint" }}</div>
+                          </div>
+                        </template>
+                        <span style="display: inline-flex; align-items: center; gap: 2px;">
+                          <a-tag v-if="connCount(dbInbound.id, 'v6') > 0"
+                            color="#1890ff"
+                            :style="{ margin: '0', fontSize: '10px', lineHeight: '14px', padding: '0 4px' }">v6</a-tag>
+                          <a-tag v-if="connCount(dbInbound.id, 'v4') > 0"
+                            color="#fa8c16"
+                            :style="{ margin: '0', fontSize: '10px', lineHeight: '14px', padding: '0 4px' }">v4</a-tag>
+                          <span v-if="connCount(dbInbound.id, 'v6') === 0 && connCount(dbInbound.id, 'v4') === 0"
+                            style="font-size: 12px; color: #bfbfbf;">--</span>
+                        </span>
+                      </a-tooltip>
+                    </template>
                     <template slot="info" slot-scope="text, dbInbound">
                       <a-popover placement="bottomRight"
                         :overlay-class-name="themeSwitcher.currentTheme"
@@ -1320,6 +1342,11 @@
     align: 'center',
     width: 60,
     scopedSlots: { customRender: 'ping' },
+  }, {
+    title: '{{ i18n "pages.inbounds.connFamily" }}',
+    align: 'center',
+    width: 60,
+    scopedSlots: { customRender: 'connFamily' },
   }];
 
   const mobileColumns = [{
@@ -1533,7 +1560,13 @@
             return { type: 'api', theme: 'outlined', color: '#8c8c8c', label: this.hx.unknown };
         }
       },
-      relTime(ts) {
+      // 当前客户端连进来所用的 IP 协议族数量（后端读内核连接表统计，随健康状态一起返回）
+  connCount(id, family) {
+    const h = this.healthStatus[id];
+    if (!h) return 0;
+    return family === 'v6' ? (h.connV6 || 0) : (h.connV4 || 0);
+  },
+  relTime(ts) {
         if (!ts || ts <= 0) return this.hx.never;
         const mins = Math.floor((Date.now() - ts) / 60000);
         if (mins < 1) return this.hx.justNow;

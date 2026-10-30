@@ -4182,6 +4182,10 @@ type InboundHealth struct {
 	QuotaUsed  bool  `json:"quotaUsed"`
 	ExpiryTime int64 `json:"expiryTime"`
 	LastOnline int64 `json:"lastOnline"`
+	// 当前客户端连进来所用的 IP 协议族数量（取内核连接表的 ESTABLISHED 连接，
+	// 已排除监听套接字；v4-mapped 地址计入 ConnV4）
+	ConnV4 int `json:"connV4"`
+	ConnV6 int `json:"connV6"`
 }
 
 // CheckInboundHealth 批量返回入站健康状态，ids 为空表示全部。
@@ -4231,6 +4235,9 @@ func (s *InboundService) CheckInboundHealth(ids []int) ([]InboundHealth, error) 
 	}
 	wg.Wait()
 
+	// 内核连接表只需读一次，按端口把协议族套到对应入站上
+	connFamilies := s.establishedConnFamilies()
+
 	now := time.Now().UnixMilli()
 	result := make([]InboundHealth, 0, len(inbounds))
 	for i, ib := range inbounds {
@@ -4244,6 +4251,10 @@ func (s *InboundService) CheckInboundHealth(ids []int) ([]InboundHealth, error) 
 		h.Expired = ib.ExpiryTime > 0 && ib.ExpiryTime <= now
 		h.QuotaUsed = ib.Total > 0 && ib.Up+ib.Down >= ib.Total
 		h.Listening = listening[i]
+		if st := connFamilies[ib.Port]; st != nil {
+			h.ConnV4 = st.V4
+			h.ConnV6 = st.V6
+		}
 		result = append(result, h)
 	}
 	return result, nil
