@@ -61,6 +61,8 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/checkPort", a.checkPort)
 	g.POST("/checkRemotePort", a.checkRemotePort)
 	g.POST("/health", a.checkHealth)
+	// 自动配置：生成一套当前环境最优的 VLESS+REALITY 配置供前端预填
+	g.POST("/suggestReality", a.suggestReality)
 	g.POST("/applyTrafficReset", a.applyTrafficReset)
 	g.GET("/trafficHistory", a.getTrafficHistory)
 	g.GET("/chainProxy/:id", a.getChainProxy)
@@ -642,6 +644,21 @@ func (a *InboundController) checkHealth(c *gin.Context) {
 	_ = c.ShouldBind(&req)
 	result, err := a.inboundService.CheckInboundHealth(req.Ids)
 	jsonObj(c, result, err)
+}
+
+// suggestReality 自动生成一套当前环境最优的 VLESS+REALITY+Vision 配置。
+// 只返回建议值（端口/偷站目标/密钥/UUID/备注），由前端预填添加入站弹窗，
+// 用户只需改备注、流量、到期、用户名、设备限制。
+func (a *InboundController) suggestReality(c *gin.Context) {
+	dbInbound, suggestion, err := a.inboundService.SuggestRealityInbound(0)
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	jsonObj(c, map[string]any{
+		"dbInbound":  dbInbound,
+		"suggestion": suggestion,
+	}, nil)
 }
 
 // applyTrafficReset 把流量重置策略批量套用到所有入站。

@@ -133,6 +133,11 @@
                         <template v-if="!isMobile">{{ i18n
                           "pages.inbounds.addInbound" }}</template>
                       </a-button>
+                      <a-button type="primary" icon="thunderbolt"
+                        @click="autoReality()">
+                        <template v-if="!isMobile">{{ i18n
+                          "pages.inbounds.autoReality" }}</template>
+                      </a-button>
                       <a-button type="primary" icon="export"
                         @click="oneClickSubscribe()">
                         <template v-if="!isMobile">{{ i18n
@@ -2084,6 +2089,41 @@
           sniffing: baseInbound.sniffing.toString(),
         };
         await this.submit('/panel/api/inbounds/add', data, inModal);
+      },
+      // 自动配置：后端探测「最优端口 + REALITY 偷站目标」并生成密钥/UUID，
+      // 这里把结果预填进「添加入站」弹窗，用户只需改备注、流量、到期、用户名、设备限制。
+      async autoReality() {
+        const hide = this.$message.loading('正在探测最优端口与 REALITY 目标...', 0);
+        let msg;
+        try {
+          msg = await HttpUtil.post('/panel/api/inbounds/suggestReality', {});
+        } catch (e) {
+          hide();
+          this.$message.error('自动配置失败: ' + (e.message || e));
+          return;
+        }
+        hide();
+        if (!msg || !msg.success || !msg.obj || !msg.obj.dbInbound) {
+          this.$message.error('自动配置失败' + (msg && msg.msg ? ': ' + msg.msg : ''));
+          return;
+        }
+        const s = msg.obj.suggestion || {};
+        const dbInbound = new DBInbound(msg.obj.dbInbound);
+        const inbound = dbInbound.toInbound();
+        const detail = '端口 ' + s.port + '（' + (s.portReason || '') + '）'
+          + '，SNI ' + s.serverName + ' ' + (s.latencyMs || 0) + 'ms';
+        this.$message.success('已选定：' + detail);
+        inModal.show({
+          title: '{{ i18n "pages.inbounds.autoReality" }}',
+          okText: '{{ i18n "create"}}',
+          cancelText: '{{ i18n "close" }}',
+          inbound: inbound,
+          dbInbound: dbInbound,
+          isEdit: false,
+          confirm: async (inb, dbinb) => {
+            await this.addInbound(inb, dbinb, inModal);
+          },
+        });
       },
       openAddInbound() {
         const self = this;
