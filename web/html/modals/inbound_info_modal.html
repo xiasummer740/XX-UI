@@ -739,10 +739,11 @@
       infoModal.visible = false;
     },
     genSubLink(subID) {
-      return app.subSettings.subURI + subID;
+      // 自定义 subID 可能含中文/空格，必须编码才能扫码
+      return app.subSettings.subURI + encodeURIComponent(subID);
     },
     genSubJsonLink(subID) {
-      return app.subSettings.subJsonURI + subID;
+      return app.subSettings.subJsonURI + encodeURIComponent(subID);
     }
   };
   const infoModalApp = new Vue({

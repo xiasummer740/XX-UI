@@ -2401,19 +2401,19 @@ func (t *Tgbot) buildSubscriptionURLs(email string) (string, string, error) {
 		if !strings.HasSuffix(subURI, "/") {
 			subURI = subURI + "/"
 		}
-		subURL = fmt.Sprintf("%s%s", subURI, client.SubID)
+		subURL = fmt.Sprintf("%s%s", subURI, url.PathEscape(client.SubID))
 	} else {
-		subURL = fmt.Sprintf("%s://%s%s%s", scheme, host, subPath, client.SubID)
+		subURL = fmt.Sprintf("%s://%s%s%s", scheme, host, subPath, url.PathEscape(client.SubID))
 	}
 
 	if subJsonURI != "" {
 		if !strings.HasSuffix(subJsonURI, "/") {
 			subJsonURI = subJsonURI + "/"
 		}
-		subJsonURL = fmt.Sprintf("%s%s", subJsonURI, client.SubID)
+		subJsonURL = fmt.Sprintf("%s%s", subJsonURI, url.PathEscape(client.SubID))
 	} else {
 
-		subJsonURL = fmt.Sprintf("%s://%s%s%s", scheme, host, subJsonPath, client.SubID)
+		subJsonURL = fmt.Sprintf("%s://%s%s%s", scheme, host, subJsonPath, url.PathEscape(client.SubID))
 	}
 
 	if !subJsonEnable {

@@ -2699,7 +2699,7 @@
         if (clients != null) {
           clients.forEach(c => {
             if (c.subId && c.subId.length > 0) {
-              subLinks.push(this.subSettings.subURI + c.subId)
+              subLinks.push(this.subSettings.subURI + encodeURIComponent(c.subId))
             }
           })
         }
@@ -2739,7 +2739,7 @@
           if (clients != null) {
             clients.forEach(c => {
               if (c.subId && c.subId.length > 0) {
-                subLinks.push(this.subSettings.subURI + c.subId)
+                subLinks.push(this.subSettings.subURI + encodeURIComponent(c.subId))
               }
             })
           }
@@ -2792,7 +2792,7 @@
             if (clients != null) {
               clients.forEach(c => {
                 if (c.subId && c.subId.length > 0) {
-                  subLinks.push(this.subSettings.subURI + c.subId);
+                  subLinks.push(this.subSettings.subURI + encodeURIComponent(c.subId));
                 }
               });
             }

@@ -231,10 +231,12 @@
         });
       },
       genSubLink(subID) {
-        return app.subSettings.subURI + subID;
+        // subID 允许自定义（可能含中文/空格），拼进 URL 必须编码，
+        // 否则二维码里的链接对客户端就是非法 URL，扫码直接「识别失败」。
+        return app.subSettings.subURI + encodeURIComponent(subID);
       },
       genSubJsonLink(subID) {
-        return app.subSettings.subJsonURI + subID;
+        return app.subSettings.subJsonURI + encodeURIComponent(subID);
       },
       revertOverflow() {
         const elements = document.querySelectorAll(".qr-tag");
