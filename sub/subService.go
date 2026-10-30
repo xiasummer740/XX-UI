@@ -42,6 +42,9 @@ func NewSubService(showInfo bool, remarkModel string, inboundService service.Inb
 // GetSubs retrieves subscription links for a given subscription ID and host.
 // Returns links, lastOnline time, aggregated traffic, traffic reset method, reset day, and error.
 func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.ClientTraffic, string, int, error) {
+	// URL 里可能是 b64- ASCII 别名，先还原成真实订阅 ID，
+	// 否则下面按 client.SubID 过滤客户端会一条都匹配不上。
+	subId = s.resolveSubId(subId)
 	s.address = host
 	var result []string
 	var traffic xray.ClientTraffic
@@ -150,6 +153,23 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 		}
 	}
 	return nil, nil
+}
+
+// resolveSubId 返回真正命中数据库的订阅 ID。
+// URL 里可能是 b64- ASCII 别名，后续按 client.SubID 过滤客户端时必须用还原后的值。
+func (s *SubService) resolveSubId(subId string) string {
+	if inbounds, err := s.queryInboundsBySubId(subId); err == nil && len(inbounds) > 0 {
+		return subId
+	}
+	for _, candidate := range service.SubIDCandidates(subId) {
+		if candidate == subId {
+			continue
+		}
+		if inbounds, err := s.queryInboundsBySubId(candidate); err == nil && len(inbounds) > 0 {
+			return candidate
+		}
+	}
+	return subId
 }
 
 func (s *SubService) queryInboundsBySubId(subId string) ([]*model.Inbound, error) {

@@ -33,6 +33,8 @@ func NewSubClashService(subService *SubService, inboundService service.InboundSe
 }
 
 func (s *SubClashService) GetClash(subId string, host string) (string, string, error) {
+	// URL 里可能是 b64- ASCII 别名，先还原成真实订阅 ID
+	subId = s.SubService.resolveSubId(subId)
 	inbounds, err := s.SubService.getInboundsBySubId(subId)
 	if err != nil || len(inbounds) == 0 {
 		return "", "", err
