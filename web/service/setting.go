@@ -115,13 +115,19 @@ var defaultValueMap = map[string]string{
 	"ldapAutoCreate":   "false",
 
 	// VPS info defaults
-	"vpsName":               "",
-	"vpsIP":                 "",
-	"vpsLocation":           "",
-	"vpsSpecs":              "",
-	"vpsPurchaseDate":       "",
-	"vpsNodeInfo":           "",
-	"vpsNotes":              "",
+	"vpsName":         "",
+	"vpsIP":           "",
+	"vpsLocation":     "",
+	"vpsSpecs":        "",
+	"vpsPurchaseDate": "",
+	"vpsNodeInfo":     "",
+	"vpsNotes":        "",
+
+	"vpsQuotaGB": "0",
+
+	"vpsQuotaNotify": "80,95",
+
+	"vpsQuotaNotified":      "",
 	"ldapAutoDelete":        "false",
 	"ldapDefaultTotalGB":    "0",
 	"ldapDefaultExpiryDays": "0",
@@ -518,6 +524,37 @@ func (s *SettingService) GetSubJsonEnable() (bool, error) {
 	return s.getBool("subJsonEnable")
 }
 
+// GetVPSQuotaGB 返回套餐总流量（GB），0 表示未配置。
+func (s *SettingService) GetVPSQuotaGB() (int, error) {
+	v, err := s.getInt("vpsQuotaGB")
+	if err != nil {
+		return 0, nil
+	}
+	return v, nil
+}
+
+// GetVPSQuotaNotify 返回流量提醒阈值配置（如 "80,95"）。
+func (s *SettingService) GetVPSQuotaNotify() (string, error) {
+	return s.getString("vpsQuotaNotify")
+}
+
+// GetVPSQuotaNotified 返回本周期已提醒过的阈值状态（JSON）。
+func (s *SettingService) GetVPSQuotaNotified() (string, error) {
+	return s.getString("vpsQuotaNotified")
+}
+
+// SetVPSQuotaNotified 保存本周期已提醒状态，避免重复通知。
+func (s *SettingService) SetVPSQuotaNotified(v string) error {
+	return s.setString("vpsQuotaNotified", v)
+}
+
+// GetVPSResetDay 返回 VPS 流量重置日；没单独配置时回落到全局默认。
+func (s *SettingService) GetVPSResetDay() (int, error) {
+	if v, err := s.getInt("vpsResetDay"); err == nil && v >= 1 && v <= 31 {
+		return v, nil
+	}
+	return s.getInt("defaultResetDay")
+}
 func (s *SettingService) GetSubTitle() (string, error) {
 	return s.getString("subTitle")
 }

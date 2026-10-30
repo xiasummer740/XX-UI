@@ -127,14 +127,17 @@ type AllSetting struct {
 	ApiKey string `json:"apiKey" form:"apiKey"`
 
 	// VPS information settings
-	VpsName         string `json:"vpsName" form:"vpsName"`                 // VPS name/label
-	VpsIP           string `json:"vpsIP" form:"vpsIP"`                     // VPS IP address
-	VpsLocation     string `json:"vpsLocation" form:"vpsLocation"`         // VPS location/datacenter
-	VpsSpecs        string `json:"vpsSpecs" form:"vpsSpecs"`               // VPS specifications (CPU/RAM/disk)
-	VpsPurchaseDate string `json:"vpsPurchaseDate" form:"vpsPurchaseDate"` // VPS purchase date (Unix timestamp)
-	VpsNodeInfo     string `json:"vpsNodeInfo" form:"vpsNodeInfo"`         // VPS node info for inbound auto-fill
-	VpsNotes        string `json:"vpsNotes" form:"vpsNotes"`               // VPS notes
-	VpsResetDay     int    `json:"vpsResetDay" form:"vpsResetDay"`         // VPS traffic reset day of month (1-31)
+	VpsName          string `json:"vpsName" form:"vpsName"`                   // VPS name/label
+	VpsIP            string `json:"vpsIP" form:"vpsIP"`                       // VPS IP address
+	VpsLocation      string `json:"vpsLocation" form:"vpsLocation"`           // VPS location/datacenter
+	VpsSpecs         string `json:"vpsSpecs" form:"vpsSpecs"`                 // VPS specifications (CPU/RAM/disk)
+	VpsPurchaseDate  string `json:"vpsPurchaseDate" form:"vpsPurchaseDate"`   // VPS purchase date (Unix timestamp)
+	VpsNodeInfo      string `json:"vpsNodeInfo" form:"vpsNodeInfo"`           // VPS node info for inbound auto-fill
+	VpsNotes         string `json:"vpsNotes" form:"vpsNotes"`                 // VPS notes
+	VpsResetDay      int    `json:"vpsResetDay" form:"vpsResetDay"`           // VPS traffic reset day of month (1-31)
+	VpsQuotaGB       int    `json:"vpsQuotaGB" form:"vpsQuotaGB"`             // VPS 套餐总流量（GB），0 表示未配置
+	VpsQuotaNotify   string `json:"vpsQuotaNotify" form:"vpsQuotaNotify"`     // 流量提醒阈值，如 "80,95"
+	VpsQuotaNotified string `json:"vpsQuotaNotified" form:"vpsQuotaNotified"` // 本周期已提醒过的阈值（内部状态）
 }
 
 // CheckValid validates all settings in the AllSetting struct, checking IP addresses, ports, SSL certificates, and other configuration values.

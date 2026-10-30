@@ -663,6 +663,12 @@ func (a *InboundController) suggestReality(c *gin.Context) {
 	}, nil)
 }
 
+// vpsUsage 返回整台 VPS 在当前计费周期的流量用量（套餐额度、已用、阈值、剩余天数）。
+func (a *InboundController) vpsUsage(c *gin.Context) {
+	usage, err := a.inboundService.GetVPSUsage()
+	jsonObj(c, usage, err)
+}
+
 // syncFirewall 把所有启用入站的端口在系统防火墙（ufw）里补齐放行。
 // x-ui 不会自动改防火墙，漏放行时表现为“入站在跑、客户端连不上”，
 // 这个方法给面板一个一键纠正的入口。

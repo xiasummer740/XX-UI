@@ -1019,6 +1019,23 @@
           <span style="margin-left: 8px; color: #999; font-size: 12px;">新入站会自动继承此日期</span>
         </div>
       </a-form-item>
+      <a-form-item label="套餐总流量（GB，0 = 不限制/不统计）">
+        <a-input-number v-model="vpsForm.vpsQuotaGB" :min="0" :step="50" style="width: 100%;" placeholder="例如 500" />
+      </a-form-item>
+      <a-form-item label="流量提醒阈值（%，逗号分隔）">
+        <a-input v-model="vpsForm.vpsQuotaNotify" placeholder="例如 80,95" />
+        <div style="margin-top: 6px; color: #999; font-size: 12px;">
+          越过阈值时通过 Telegram 机器人通知（需已配置 TG Bot）；同一周期同一阈值只提醒一次。
+        </div>
+      </a-form-item>
+      <a-form-item v-if="vpsUsage && vpsUsage.quotaBytes > 0" label="本周期用量">
+        <a-progress :percent="Math.min(100, Number(vpsUsage.percent.toFixed(1)))"
+          :status="vpsUsage.percent >= 95 ? 'exception' : (vpsUsage.percent >= 80 ? 'active' : 'normal')" />
+        <div style="color: #666; font-size: 12px;">
+          已用 [[ (vpsUsage.usedBytes/1073741824).toFixed(2) ]] GB / [[ vpsUsage.quotaGB ]] GB，
+          周期 [[ fmtDate(vpsUsage.cycleStart * 1000) ]] → [[ fmtDate(vpsUsage.cycleEnd * 1000) ]]，剩余 [[ vpsUsage.daysLeft ]] 天
+        </div>
+      </a-form-item>
       <a-form-item label="备注">
         <a-textarea v-model="vpsForm.vpsNotes" :rows="3" placeholder="备注信息" />
       </a-form-item>
@@ -1503,7 +1520,10 @@ function subLinkToken(subId) {
         vpsResetDay: 1,
         vpsNodeInfo: '',
         vpsNotes: '',
+        vpsQuotaGB: 0,
+        vpsQuotaNotify: '80,95',
       },
+      vpsUsage: null,
       vpsPurchaseDateMoment: null,
       trafficHistoryModal: {
         visible: false,
@@ -2974,6 +2994,14 @@ function subLinkToken(subId) {
         } finally {
           m.loading = false;
         }
+      },      // 拉取整机流量用量（套餐额度 / 本周期已用 / 阈值 / 剩余天数）
+      async loadVpsUsage() {
+        try {
+          const msg = await HttpUtil.post('/panel/api/inbounds/vpsUsage', {});
+          this.vpsUsage = msg && msg.success ? msg.obj : null;
+        } catch (e) {
+          this.vpsUsage = null;
+        }
       },
       openVpsModal() {
         // 回填必须无条件执行：之前整段被 `if (vpsName)` 包住，
@@ -2987,8 +3015,10 @@ function subLinkToken(subId) {
         this.vpsForm.vpsPurchaseDate = s.vpsPurchaseDate || '';
         // 优先用 VPS 配置里存的重置日，其次回落到全局默认，都没有才用 1
         this.vpsForm.vpsResetDay = Number(s.vpsResetDay) || Number(s.defaultResetDay) || 1;
-        this.vpsForm.vpsNodeInfo = s.vpsNodeInfo || '';
-        this.vpsForm.vpsNotes = s.vpsNotes || '';
+        this.vpsForm.vpsNodeInfo = s.vpsNodeInfo || '';        this.vpsForm.vpsNotes = s.vpsNotes || '';
+        this.vpsForm.vpsQuotaGB = Number(s.vpsQuotaGB) || 0;
+        this.vpsForm.vpsQuotaNotify = s.vpsQuotaNotify || '80,95';
+        this.loadVpsUsage();
         // Convert purchase date timestamp to moment object for date picker
         const ts = Number(s.vpsPurchaseDate);
         this.vpsPurchaseDateMoment = ts > 0 ? moment(ts * 1000) : null;
@@ -3042,6 +3072,8 @@ function subLinkToken(subId) {
           this.allSetting.vpsResetDay = this.vpsForm.vpsResetDay;
           this.allSetting.vpsNodeInfo = this.vpsForm.vpsNodeInfo;
           this.allSetting.vpsNotes = this.vpsForm.vpsNotes;
+          this.allSetting.vpsQuotaGB = Number(this.vpsForm.vpsQuotaGB) || 0;
+          this.allSetting.vpsQuotaNotify = this.vpsForm.vpsQuotaNotify || '80,95';
 
           // 同步流量重置日期到默认订阅设置
           if (this.vpsForm.vpsResetDay > 0) {

@@ -360,6 +360,9 @@ func (s *Server) startTask() {
 	// Traffic history snapshots grow with every reset cycle; prune old rows daily.
 	s.cron.AddJob("@daily", job.NewTrafficHistoryCleanupJob())
 
+	// VPS 套餐流量阈值提醒：每小时检查一次，越过 80%/95% 发 Telegram。
+	s.cron.AddJob("@hourly", job.NewVPSQuotaJob())
+
 	// Xray periodic restart scheduling
 	if xrayRestartEnabled, _ := s.settingService.GetXrayRestartEnabled(); xrayRestartEnabled {
 		xrayRestartCron, err := s.settingService.GetXrayRestartCron()
