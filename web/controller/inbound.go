@@ -70,6 +70,7 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	// 入站体检：一次性查出「为什么连不上」，并支持按项修复
 	g.POST("/audit", a.auditInbounds)
 	g.POST("/probeState", a.probeState)
+	g.GET("/healthReport", a.healthReport)
 	g.POST("/auditFix", a.auditFix)
 	g.POST("/applyTrafficReset", a.applyTrafficReset)
 	g.GET("/trafficHistory", a.getTrafficHistory)
@@ -679,6 +680,11 @@ func (a *InboundController) vpsUsage(c *gin.Context) {
 // probeState 返回各节点最近一次「真实可用」实测结果 + 外部多点实测延迟。
 func (a *InboundController) probeState(c *gin.Context) {
 	jsonObj(c, a.inboundService.ProbeState(), nil)
+}
+
+// healthReport 返回最近一次「自动体检」的结果（每天跑一次）。
+func (a *InboundController) healthReport(c *gin.Context) {
+	jsonObj(c, a.inboundService.HealthReportSnapshot(), nil)
 }
 
 func (a *InboundController) auditInbounds(c *gin.Context) {

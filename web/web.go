@@ -365,6 +365,10 @@ func (s *Server) startTask() {
 
 	// 节点在线监控：每 5 分钟真实握手一次，连续失败/恢复时发 Telegram。
 	s.cron.AddJob("@every 5m", job.NewNodeMonitorJob())
+	// 每天自动体检（异常推 TG）
+	s.cron.AddJob("@daily", job.NewHealthCheckJob())
+	// 订阅守卫拉黑事件汇总推送
+	s.cron.AddJob("@every 1m", job.NewSubGuardNotifyJob())
 
 	// Xray periodic restart scheduling
 	if xrayRestartEnabled, _ := s.settingService.GetXrayRestartEnabled(); xrayRestartEnabled {

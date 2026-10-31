@@ -1046,6 +1046,9 @@
       <span v-if="!auditLoading" style="color: #666;">
         共 [[ auditRows.length ]] 个入站，异常 [[ auditBadTotal ]] 项
       </span>
+      <span v-if="healthReport && healthReport.at" style="color: #999; font-size: 12px;">
+        · 每天自动体检：[[ relTime(healthReport.at) ]] [[ healthReport.badCount > 0 ? '发现 ' + healthReport.badCount + ' 个问题（已推送 TG）' : '一切正常' ]]
+      </span>
     </div>
     <div style="max-height: 60vh; overflow-y: auto;">
       <div v-for="row in auditRows" :key="row.id"
@@ -1546,6 +1549,7 @@ function subLinkToken(subId) {
       healthStatus: {},
       probeState: {},
       extProbe: {},
+      healthReport: null,
       healthLoading: false,
       healthCheckedAt: 0,
       linkRtt: null,
@@ -1648,6 +1652,10 @@ function subLinkToken(subId) {
               this.probeState = ps.obj.probes || {};
               this.extProbe = ps.obj.ext || {};
             }
+            try {
+              const hr = await HttpUtil.get('/panel/api/inbounds/healthReport');
+              if (hr && hr.success && hr.obj) this.healthReport = hr.obj;
+            } catch (e) { /* 自动体检还没跑过时忽略 */ }
           } catch (e) { /* 实测状态拿不到不影响健康检查 */ }
         } finally {
           this.healthLoading = false;

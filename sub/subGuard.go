@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/XiaSummer740/XX-UI/banqueue"
 )
 
 // 订阅防泄漏：订阅链接一旦被转发出去，别人也能直接拉走节点。
@@ -23,6 +25,9 @@ type SubGuard struct {
 	violate  map[string]int     // IP -> 违规次数（滑动窗口内）
 	lastSeen map[string]int64   // IP -> 最近一次违规时间
 }
+
+// BanEvent 记录一次订阅拉黑事件，由 banqueue 统一收集后推送 Telegram。
+// （定义在独立包里，避免 sub 与 web/job 循环引用）
 
 // NewSubGuard 创建防泄漏中间件。
 func NewSubGuard() *SubGuard {
@@ -95,6 +100,7 @@ func (g *SubGuard) Guard(enable bool, strictUA bool, rpm int, blockMinutes int) 
 			}
 			g.mu.Unlock()
 			if blocked {
+				banqueue.Record(ip, "User-Agent 不符（疑似转发订阅）")
 				c.AbortWithStatus(http.StatusTooManyRequests)
 				return
 			}
@@ -115,11 +121,15 @@ func (g *SubGuard) Guard(enable bool, strictUA bool, rpm int, blockMinutes int) 
 		if len(kept) > rpm {
 			g.violate[ip]++
 			g.lastSeen[ip] = nowUnix
-			if g.violate[ip] >= 5 {
+			banned := g.violate[ip] >= 5
+			if banned {
 				g.blocked[ip] = nowUnix + int64(blockMinutes)*60
 				g.violate[ip] = 0
 			}
 			g.mu.Unlock()
+			if banned {
+				banqueue.Record(ip, "请求过于频繁（疑似批量抓取节点）")
+			}
 			c.AbortWithStatus(http.StatusTooManyRequests)
 			return
 		}
