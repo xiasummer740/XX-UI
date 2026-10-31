@@ -25,6 +25,7 @@ func NewShopController(g *gin.RouterGroup) *ShopController {
 func (a *ShopController) initRouter(g *gin.RouterGroup) {
 	g.GET("/stats", a.getStats)
 	g.GET("/orders", a.getOrders)
+	g.POST("/clear-orders", a.clearOrders)
 }
 
 // getStats 返回经营看板数据。
@@ -37,6 +38,16 @@ func (a *ShopController) getStats(c *gin.Context) {
 func (a *ShopController) getOrders(c *gin.Context) {
 	orders, err := a.shopService.ListOrdersForPanel(200)
 	jsonObj(c, orders, err)
+}
+
+// clearOrders 清空全部订单记录（自测数据）。
+func (a *ShopController) clearOrders(c *gin.Context) {
+	n, err := a.shopService.ClearOrders()
+	if err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	jsonObj(c, gin.H{"deleted": n}, nil)
 }
 
 // BufPayNotify 是 BufPay 的到账回调（公网访问，不能要求登录，靠签名校验）。

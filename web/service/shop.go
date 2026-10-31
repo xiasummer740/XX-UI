@@ -12,6 +12,7 @@ import (
 	"github.com/XiaSummer740/XX-UI/database/model"
 	"github.com/google/uuid"
 	tu "github.com/mymmrac/telego/telegoutil"
+	"gorm.io/gorm"
 )
 
 // 流量商店：朋友在 Telegram 里自助下单，扫码付款后管理员点一下确认，
@@ -827,4 +828,20 @@ func (s *ShopService) WarnShopBroken(reason string) {
 	var bot Tgbot
 	bot.NewTgbot().SendMsgToTgbotAdmins("⚠️ <b>流量商店当前不可用</b>\n\n" + reason +
 		"\n\n请到面板「设置 → 流量商店 → 基础设置」重新选择投放设备。买家已被拦下，没有产生扣款。")
+}
+
+// ClearOrders 清空全部订单记录（自测数据 / 重新开张时用）。
+// 只删 orders 表，不动入站里的客户端。
+func (s *ShopService) ClearOrders() (int64, error) {
+	db := database.GetDB()
+	var total int64
+	if err := db.Model(&model.Order{}).Count(&total).Error; err != nil {
+		return 0, err
+	}
+	if err := db.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&model.Order{}).Error; err != nil {
+		return 0, err
+	}
+	// 让订单号从 #1 重新开始
+	db.Exec("DELETE FROM sqlite_sequence WHERE name = 'orders'")
+	return total, nil
 }

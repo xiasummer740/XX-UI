@@ -444,6 +444,16 @@
         if (status === "revoked") return "已撤销";
         return "待确认";
       },
+      async clearShopOrders() {
+        const msg = await HttpUtil.post("/panel/api/shop/clear-orders", {});
+        if (msg.success) {
+          this.$message.success("已清空 " + (msg.obj && msg.obj.deleted ? msg.obj.deleted : 0) + " 条订单记录");
+          this.loadShopReport();
+          this.loadShopOrders && this.loadShopOrders();
+        } else {
+          this.$message.error(msg.msg || "清空失败");
+        }
+      },
       shopNotifyUrl() {
         const p = window.location.pathname;
         const idx = p.indexOf("/panel");

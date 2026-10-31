@@ -70,6 +70,9 @@
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
           <div style="font-weight: 600;">最近订单</div>
           <a-button size="small" icon="reload" @click="loadShopReport">刷新</a-button>
+        <a-popconfirm title="确定清空全部订单记录吗？只删订单表，不会动入站里的客户端。" ok-text="清空" cancel-text="算了" @confirm="clearShopOrders">
+          <a-button size="small" type="danger" icon="delete" style="margin-left: 8px;">清空订单记录</a-button>
+        </a-popconfirm>
         </div>
         <a-table :columns="shopOrderColumns" :data-source="shopOrders" :pagination="{ pageSize: 10, size: 'small' }"
           size="small" :scroll="{ x: 720 }">
