@@ -151,6 +151,9 @@ type AllSetting struct {
 	ShopPayNote    string `json:"shopPayNote" form:"shopPayNote"`       // 付款说明
 	ShopQrUrl      string `json:"shopQrUrl" form:"shopQrUrl"`           // 微信收款码图片
 	ShopQrUrl2     string `json:"shopQrUrl2" form:"shopQrUrl2"`         // 支付宝收款码图片
+		ShopPayMode    string `json:"shopPayMode" form:"shopPayMode"`       // manual=人工确认 / auto=BufPay 自动到账
+		ShopBufAid     string `json:"shopBufAid" form:"shopBufAid"`         // BufPay 应用 aid
+		ShopBufSecret  string `json:"shopBufSecret" form:"shopBufSecret"`   // BufPay 应用 secret
 	ShopInboundId  int    `json:"shopInboundId" form:"shopInboundId"`   // 开通时投放到哪个入站
 	ShopDailyLimit int    `json:"shopDailyLimit" form:"shopDailyLimit"` // 每人每天最多下几单`r`n	ShopLimitIp    int    `json:"shopLimitIp" form:"shopLimitIp"`       // 每个客户端限几台设备
 }

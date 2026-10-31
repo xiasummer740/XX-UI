@@ -87,6 +87,9 @@ class AllSetting {
         this.shopPayNote = "";
         this.shopQrUrl = "";
         this.shopQrUrl2 = "";
+        this.shopPayMode = "manual";
+        this.shopBufAid = "";
+        this.shopBufSecret = "";
         this.shopInboundId = 0;
         this.shopDailyLimit = 3;
         this.shopLimitIp = 2;

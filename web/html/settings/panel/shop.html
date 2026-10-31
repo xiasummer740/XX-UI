@@ -189,9 +189,42 @@
         <div style="font-weight: 600; margin-bottom: 8px;">付款说明（显示在订单确认页）</div>
         <a-textarea v-model="allSetting.shopPayNote" :rows="3"
           placeholder="扫码付款后点「我已付款」，我确认到账后会自动开通。"></a-textarea>
-        <div style="margin-top: 10px;">
-          <a-button type="primary" icon="save" @click="saveShopSettings">保存收款设置</a-button>
+      </div>
+
+      <a-divider style="margin: 20px 0 12px;">自动到账（BufPay 免签支付）</a-divider>
+
+      <div style="background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 8px; padding: 12px; margin-bottom: 14px; font-size: 13px; line-height: 1.8;">
+        <b>不接也能用</b>：现在是「买家付款 → 你在 TG 点一下确认」。<br />
+        接上 BufPay 后变成「买家付款 → 手机收到到账通知 → 自动开通 + 自动发节点」，你不用盯着。
+      </div>
+
+      <a-radio-group v-model="allSetting.shopPayMode" style="margin-bottom: 14px;">
+        <a-radio-button value="manual">人工确认（推荐先用这个）</a-radio-button>
+        <a-radio-button value="auto">BufPay 自动到账</a-radio-button>
+      </a-radio-group>
+
+      <a-row :gutter="16" v-if="allSetting.shopPayMode === 'auto'">
+        <a-col :span="10">
+          <div style="font-weight: 600; margin-bottom: 6px;">应用 aid</div>
+          <a-input v-model="allSetting.shopBufAid" placeholder="例如 107376"></a-input>
+        </a-col>
+        <a-col :span="14">
+          <div style="font-weight: 600; margin-bottom: 6px;">app secret</div>
+          <a-input-password v-model="allSetting.shopBufSecret" placeholder="BufPay 后台「应用配置」里的 secret"></a-input-password>
+        </a-col>
+      </a-row>
+
+      <div v-if="allSetting.shopPayMode === 'auto'" style="margin-top: 12px;">
+        <div style="font-weight: 600; margin-bottom: 6px;">回调地址（下单时自动传给 BufPay，不用你填）</div>
+        <a-input :value="shopNotifyUrl()" readonly style="font-family: monospace; font-size: 12px;"></a-input>
+        <div style="margin-top: 8px; color: #888; font-size: 12px; line-height: 1.7;">
+          ⚠️ 这个地址必须能让 <b>BufPay 的服务器从公网访问到</b>（端口 2053 要对外开放）。<br />
+          ⚠️ BufPay 后台建议上传 <b>固定金额</b> 的收款码（¥15 / ¥20 / ¥90…），用「任意金额」码会让买家手输金额，容易输错。
         </div>
+      </div>
+
+      <div style="margin-top: 14px;">
+        <a-button type="primary" icon="save" @click="saveShopSettings">保存收款设置</a-button>
       </div>
     </a-collapse-panel>
 

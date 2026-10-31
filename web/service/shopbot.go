@@ -13,6 +13,8 @@ import (
 	"github.com/mymmrac/telego"
 	tu "github.com/mymmrac/telego/telegoutil"
 	"github.com/skip2/go-qrcode"
+
+	"github.com/XiaSummer740/XX-UI/logger"
 )
 
 // 流量商店的 Telegram 交互：
@@ -53,13 +55,13 @@ func (t *Tgbot) handleShopCallback(callbackQuery *telego.CallbackQuery, chatId i
 			return true
 		}
 		gb, _ := strconv.Atoi(args[1])
-		t.sendShopConfirm(chatId, gb, args[2])
+		t.sendShopConfirm(chatId, &callbackQuery.From, gb, args[2])
 	case "pay":
 		if len(args) < 4 {
 			return true
 		}
 		gb, _ := strconv.Atoi(args[1])
-		t.sendShopPayQR(chatId, gb, args[2], args[3])
+		t.sendShopPayQR(chatId, &callbackQuery.From, gb, args[2], args[3])
 	case "paid":
 		if len(args) < 3 {
 			return true
@@ -107,6 +109,11 @@ func (t *Tgbot) handleShopCallback(callbackQuery *telego.CallbackQuery, chatId i
 		}
 		id, _ := strconv.Atoi(args[1])
 		t.rejectShopOrder(chatId, callbackQuery.From.ID, id)
+	case "check":
+		if len(args) >= 2 {
+			id, _ := strconv.Atoi(args[1])
+			t.checkShopOrder(chatId, id)
+		}
 	case "back":
 		t.sendShopMenu(chatId)
 	case "node_qr":
@@ -197,13 +204,32 @@ func (t *Tgbot) sendShopCyclePicker(chatId int64, gb int) {
 }
 
 // sendShopConfirm 第 3 步：确认订单并让买家选支付方式。
-func (t *Tgbot) sendShopConfirm(chatId int64, gb int, cycle string) {
+func (t *Tgbot) sendShopConfirm(chatId int64, from *telego.User, gb int, cycle string) {
 	shop := ShopService{}
 	price, ok := shop.PriceOf(gb, cycle)
 	if !ok {
 		t.SendMsgToTgbot(chatId, "这个组合暂时不可购买，回套餐里重新选一个吧 🙏")
 		return
 	}
+	// BufPay 自动到账模式：不管有没有上传静态收款码，都让买家选支付方式
+	if shop.GetPayMode() == "auto" && shop.GetBufAid() != "" && shop.GetBufSecret() != "" {
+		days := cycleDays(cycle)
+		msg := fmt.Sprintf("🧾 <b>订单确认</b>  <i>(第 3 步 / 共 4 步)</i>\n\n"+
+			"套餐：<b>%d GB</b>\n周期：%s（%d 天）\n金额：<b>¥%s</b>\n\n💳 用哪个付？点下面的按钮，我把收款码发给你：",
+			gb, cycleLabel(cycle), days, formatPrice(price))
+		kb := tu.InlineKeyboard(
+			tu.InlineKeyboardRow(
+				tu.InlineKeyboardButton("💚 微信支付").WithCallbackData(fmt.Sprintf("shop_pay %d %s wechat", gb, cycle)),
+				tu.InlineKeyboardButton("💙 支付宝").WithCallbackData(fmt.Sprintf("shop_pay %d %s alipay", gb, cycle)),
+			),
+			tu.InlineKeyboardRow(
+				tu.InlineKeyboardButton("⬅️ 返回套餐").WithCallbackData("shop_back"),
+			),
+		)
+		t.SendMsgToTgbot(chatId, msg, kb)
+		return
+	}
+
 	days := cycleDays(cycle)
 	msg := fmt.Sprintf("🧾 <b>订单确认</b>  <i>(第 3 步 / 共 4 步)</i>\n\n"+
 		"套餐：<b>%d GB</b>\n"+
@@ -229,9 +255,9 @@ func (t *Tgbot) sendShopConfirm(chatId int64, gb int, cycle string) {
 		)
 		t.SendMsgToTgbot(chatId, msg, kb)
 	case qrWechat != "":
-		t.sendShopPayQR(chatId, gb, cycle, "wechat")
+		t.sendShopPayQR(chatId, from, gb, cycle, "wechat")
 	case qrAlipay != "":
-		t.sendShopPayQR(chatId, gb, cycle, "alipay")
+		t.sendShopPayQR(chatId, from, gb, cycle, "alipay")
 	default:
 		// 没配收款码 → 只发文字说明 + 我已付款
 		note := shop.GetShopPayNote()
@@ -252,8 +278,15 @@ func (t *Tgbot) sendShopConfirm(chatId int64, gb int, cycle string) {
 }
 
 // sendShopPayQR 第 4 步：发对应收款码 + 「我已付款」按钮。
-func (t *Tgbot) sendShopPayQR(chatId int64, gb int, cycle string, method string) {
+func (t *Tgbot) sendShopPayQR(chatId int64, from *telego.User, gb int, cycle string, method string) {
 	shop := ShopService{}
+	// BufPay 自动到账模式：直接生成一笔支付，付完自动开通
+	if shop.GetPayMode() == "auto" && shop.GetBufAid() != "" && shop.GetBufSecret() != "" {
+		if t.sendShopBufPayQR(chatId, from, gb, cycle, method) {
+			return
+		}
+		t.SendMsgToTgbot(chatId, "自动收款暂时不可用，先按扫码 + 人工确认的方式给你开通 👇")
+	}
 	price, ok := shop.PriceOf(gb, cycle)
 	if !ok {
 		t.SendMsgToTgbot(chatId, "这个组合暂时不可购买，回套餐里重新选一个吧 🙏")
@@ -389,6 +422,11 @@ func (t *Tgbot) approveShopOrder(chatId int64, adminId int64, orderId int) {
 	shop := ShopService{}
 	order, err := shop.ApproveOrder(orderId, adminId)
 	if err != nil {
+		if chatId == 0 {
+			t.SendMsgToTgbotAdmins("⚠️ <b>BufPay 到账了但自动开通失败</b>\n\n" + err.Error() +
+				fmt.Sprintf("\n\n订单：#%d，请手动处理。", orderId))
+			return
+		}
 		t.SendMsgToTgbot(chatId, "❌ 开通失败："+err.Error())
 		return
 	}
@@ -441,6 +479,11 @@ func (t *Tgbot) approveShopOrder(chatId int64, adminId int64, orderId int) {
 			tu.InlineKeyboardButton("↩️ 撤销这笔开通").WithCallbackData(fmt.Sprintf("shop_revoke %d", order.Id)),
 		),
 	)
+	if chatId == 0 {
+		t.SendMsgToTgbotAdmins(fmt.Sprintf("🤖 <b>BufPay 自动到账</b>，已自动开通订单 #%d\n（%d GB/%s，¥%s，%s）\n客户端：%s\n节点和二维码已发给买家。\n\n如有疑问可以点下面的按钮撤销。",
+			order.Id, order.PlanGb, cycleLabel(order.Cycle), formatPrice(order.Price), order.Remark, order.ClientEmail), revokeKB)
+		return
+	}
 	t.SendMsgToTgbot(chatId, fmt.Sprintf("✅ 订单 #%d 已开通（客户端 %s，%d GB/%s），节点和二维码已发给买家。\n\n点错了吗？可以点下面的按钮撤销。",
 		order.Id, order.ClientEmail, order.PlanGb, cycleLabel(order.Cycle)), revokeKB)
 }
@@ -748,4 +791,106 @@ func shopStatusLabel(status string) string {
 	default:
 		return "待确认"
 	}
+}
+
+// sendShopBufPayQR 自动到账模式：先建订单，再向 BufPay 申请支付二维码。
+// 返回 true 表示已经处理完（成功或已经给买家发了说明），false 表示需要回落到人工流程。
+func (t *Tgbot) sendShopBufPayQR(chatId int64, from *telego.User, gb int, cycle, method string) bool {
+	shop := ShopService{}
+	price, ok := shop.PriceOf(gb, cycle)
+	if !ok {
+		t.SendMsgToTgbot(chatId, "这个组合暂时不可购买，回套餐里重新选一个吧 🙏")
+		return true
+	}
+
+	payType := "wechat"
+	methodLabel := "微信支付"
+	icon := "💚"
+	if method == "alipay" {
+		payType = "alipay"
+		methodLabel = "支付宝"
+		icon = "💙"
+	}
+
+	name := "朋友"
+	if from != nil {
+		name = from.FirstName
+		if from.Username != "" {
+			name += "(@" + from.Username + ")"
+		}
+	}
+
+	order, err := shop.CreateOrder(chatId, name, gb, cycle, methodLabel)
+	if err != nil {
+		t.SendMsgToTgbot(chatId, "❌ "+err.Error())
+		return true
+	}
+
+	notifyURL := shop.GetNotifyURL()
+	var buf BufPayService
+	pay, err := buf.CreatePayment(
+		shop.GetBufAid(), shop.GetBufSecret(),
+		fmt.Sprintf("%dGB %s", gb, cycleLabel(cycle)),
+		payType, NormalizePrice(price),
+		strconv.Itoa(order.Id), strconv.FormatInt(chatId, 10),
+		notifyURL,
+	)
+	if err != nil {
+		// 支付通道出问题就把这单作废，别把买家卡住，改走人工流程
+		_ = shop.AbandonPendingOrder(order.Id, "支付通道异常："+err.Error())
+		logger.Warning("[shop] BufPay 下单失败: ", err)
+		return false
+	}
+
+	caption := fmt.Sprintf("%s <b>%s</b>\n\n金额：<b>¥%s</b>　（%d GB · %s）\n订单号：#%d\n\n"+
+		"<b>第 4 步</b>：扫码付款，付完我会<b>自动</b>给你开通并发送节点 ✅\n"+
+		"<i>一般 5~20 秒，不用等我确认。</i>",
+		icon, methodLabel, pay.QRPriceDisplay(price), gb, cycleLabel(cycle), order.Id)
+
+	rows := [][]telego.InlineKeyboardButton{
+		tu.InlineKeyboardRow(
+			tu.InlineKeyboardButton("🔄 我付好了，查一下").WithCallbackData(fmt.Sprintf("shop_check %d", order.Id)),
+		),
+		tu.InlineKeyboardRow(
+			tu.InlineKeyboardButton("⬅️ 返回套餐").WithCallbackData("shop_back"),
+		),
+	}
+
+	if pay.QrImg != "" {
+		t.sendShopQrPhoto(chatId, pay.QrImg, caption)
+		t.SendMsgToTgbot(chatId, "☝️ 上面是这次的收款码，付完就自动开通 ✅", tu.InlineKeyboard(rows...))
+		return true
+	}
+	if pay.Qr != "" {
+		t.sendContentQR(chatId, pay.Qr, caption)
+		t.SendMsgToTgbot(chatId, "☝️ 上面是这次的收款码，付完就自动开通 ✅", tu.InlineKeyboard(rows...))
+		return true
+	}
+	// 既没图也没内容，退还人工
+	_ = shop.AbandonPendingOrder(order.Id, "BufPay 未返回收款码")
+	return false
+}
+
+// checkShopOrder 买家点「我付好了，查一下」时回一句当前状态。
+func (t *Tgbot) checkShopOrder(chatId int64, orderId int) {
+	shop := ShopService{}
+	order, err := shop.GetOrder(orderId)
+	if err != nil {
+		t.SendMsgToTgbot(chatId, "找不到这个订单 🤔 发 /buy 重新下一单吧")
+		return
+	}
+	switch order.Status {
+	case orderApproved:
+		t.SendMsgToTgbot(chatId, "✅ 这单已经开通啦！节点和二维码在上面那条消息里。\n没看到的话点下面的「我的流量 / 订阅链接」都能找到。")
+	case orderPending:
+		t.SendMsgToTgbot(chatId, "⏳ 还没收到到账通知，通常 5~20 秒就好，稍等一下再点一次。\n"+
+			"如果你确实已经扣款了，把<b>付款截图</b>发我，我核对后手动给你开通 🙏")
+	default:
+		t.SendMsgToTgbot(chatId, "这单已经关闭了，重新下一单就好 🛒 发 /buy")
+	}
+}
+
+// AutoApproveShopOrder 供 BufPay 回调调用：钱到了 → 自动开通 + 通知买卖双方。
+func (t *Tgbot) AutoApproveShopOrder(orderId int) {
+	t.approveShopOrder(0, 0, orderId)
 }

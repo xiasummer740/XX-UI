@@ -629,3 +629,88 @@ func (s *ShopService) RevokeOrder(id int, adminId int64) (*model.Order, error) {
 	}
 	return order, nil
 }
+
+// ---- BufPay 自动到账 ----
+
+// GetPayMode 返回收款模式：manual（人工确认）/ auto（BufPay 自动到账）。
+func (s *ShopService) GetPayMode() string {
+	mode, err := s.settingService.getString("shopPayMode")
+	if err != nil || mode == "" {
+		return "manual"
+	}
+	return mode
+}
+
+// GetBufAid 返回 BufPay 应用 aid。
+func (s *ShopService) GetBufAid() string {
+	aid, _ := s.settingService.getString("shopBufAid")
+	return strings.TrimSpace(aid)
+}
+
+// GetBufSecret 返回 BufPay 应用 secret。
+func (s *ShopService) GetBufSecret() string {
+	secret, _ := s.settingService.getString("shopBufSecret")
+	return strings.TrimSpace(secret)
+}
+
+// GetNotifyURL 拼出 BufPay 回调地址（必须是公网可访问的地址）。
+func (s *ShopService) GetNotifyURL() string {
+	domain, _ := s.settingService.GetWebDomain()
+	domain = strings.TrimSpace(domain)
+	if domain == "" {
+		domain, _ = s.settingService.GetSubDomain()
+		domain = strings.TrimSpace(domain)
+	}
+	port, _ := s.settingService.GetPort()
+	basePath, _ := s.settingService.GetBasePath()
+	if domain == "" {
+		return ""
+	}
+	// 去掉协议前缀和端口，统一重建
+	domain = strings.TrimPrefix(domain, "https://")
+	domain = strings.TrimPrefix(domain, "http://")
+	if i := strings.Index(domain, ":"); i > 0 {
+		domain = domain[:i]
+	}
+	if !strings.HasPrefix(basePath, "/") {
+		basePath = "/" + basePath
+	}
+	basePath = strings.TrimSuffix(basePath, "/")
+	return fmt.Sprintf("https://%s:%d%s/panel/api/shop/bufpay/notify", domain, port, basePath)
+}
+
+// VerifyBufPayNotify 校验 BufPay 回调（签名 + 金额），返回对应订单。
+func (s *ShopService) VerifyBufPayNotify(aoid, orderId, orderUid, price, payPrice, sign string) (*model.Order, error) {
+	var buf BufPayService
+	if !buf.VerifyNotify(s.GetBufSecret(), aoid, orderId, orderUid, price, payPrice, sign) {
+		return nil, fmt.Errorf("签名校验失败")
+	}
+	id, err := strconv.Atoi(strings.TrimSpace(orderId))
+	if err != nil {
+		return nil, fmt.Errorf("订单号异常: %s", orderId)
+	}
+	order, err := s.GetOrder(id)
+	if err != nil {
+		return nil, fmt.Errorf("没找到订单 #%s", orderId)
+	}
+	if !PriceEqual(NormalizePrice(order.Price), payPrice) {
+		return nil, fmt.Errorf("金额不符：订单 ¥%s，实付 ¥%s", NormalizePrice(order.Price), payPrice)
+	}
+	return order, nil
+}
+
+// AbandonPendingOrder 作废一笔还没付款的订单（支付通道异常时用），
+// 不删除记录，标记为 rejected 并写明原因，方便以后对账。
+func (s *ShopService) AbandonPendingOrder(id int, reason string) error {
+	order, err := s.GetOrder(id)
+	if err != nil {
+		return err
+	}
+	if order.Status != orderPending {
+		return fmt.Errorf("订单已处理过")
+	}
+	order.Status = orderRejected
+	order.Remark = reason
+	order.HandledAt = time.Now().Unix()
+	return database.GetDB().Save(order).Error
+}

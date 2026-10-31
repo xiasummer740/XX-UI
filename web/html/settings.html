@@ -444,6 +444,12 @@
         if (status === "revoked") return "已撤销";
         return "待确认";
       },
+      shopNotifyUrl() {
+        const p = window.location.pathname;
+        const idx = p.indexOf("/panel");
+        const base = idx >= 0 ? p.substring(0, idx) : "/";
+        return window.location.origin + base + "/panel/api/shop/bufpay/notify";
+      },
       formatShopTime(ts) {
         if (!ts) return "";
         const d = new Date(ts * 1000);

@@ -17,6 +17,7 @@ type APIController struct {
 	BaseController
 	inboundController *InboundController
 	serverController  *ServerController
+	shopController    *ShopController
 	Tgbot             service.Tgbot
 }
 
@@ -59,7 +60,7 @@ func (a *APIController) initRouter(g *gin.RouterGroup, customGeo *service.Custom
 	NewCustomGeoController(api.Group("/custom-geo"), customGeo)
 
 	// 流量商店经营数据
-	NewShopController(api.Group("/shop"))
+	a.shopController = NewShopController(api.Group("/shop"))
 
 	// Remote management API (uses API key auth, not session)
 	remote := g.Group("/panel/remote")
@@ -71,6 +72,10 @@ func (a *APIController) initRouter(g *gin.RouterGroup, customGeo *service.Custom
 	// Telegram), so it must never be reachable from a link, image or top-level
 	// navigation that carries the session cookie.
 	api.POST("/backuptotgbot", a.BackuptoTgbot)
+
+	// BufPay 支付回调：由 BufPay 服务器直接访问，不能要求登录态，
+	// 安全性由 MD5 签名 + 金额比对保证，所以放在 api 组之外注册。
+	g.POST("/panel/api/shop/bufpay/notify", a.shopController.BufPayNotify)
 }
 
 // BackuptoTgbot sends a backup of the panel data to Telegram bot admins.

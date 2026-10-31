@@ -141,6 +141,10 @@ var defaultValueMap = map[string]string{
 
 	"shopQrUrl2": "",
 
+	"shopPayMode":   "manual",
+	"shopBufAid":    "",
+	"shopBufSecret": "",
+
 	"shopInboundId": "0",
 
 	"shopDailyLimit": "3",
