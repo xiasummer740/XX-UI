@@ -45,9 +45,15 @@
       <template #description>直接上传图片（存进数据库，随面板备份），或填一个公网图片链接。留空则只发文字说明。</template>
       <template #control>
         <a-space direction="vertical" style="width: 100%;">
-          <a-upload :before-upload="handleQrUpload" :show-upload-list="false" accept="image/*">
-            <a-button icon="upload">上传收款码</a-button>
-          </a-upload>
+          <div @dragover.prevent @drop.prevent="handleQrDrop"
+            style="border: 1px dashed #d9d9d9; border-radius: 8px; padding: 12px; text-align: center; background: #fafafa;">
+            <a-upload :before-upload="handleQrUpload" :show-upload-list="false" accept="image/*">
+              <a-button icon="upload">选择图片</a-button>
+            </a-upload>
+            <div style="margin-top: 8px; color: #888; font-size: 12px;">
+              也可以 <b>Ctrl+V 直接粘贴截图</b>（微信/QQ 截图都行），或把图片拖进这个框
+            </div>
+          </div>
           <a-input v-model="allSetting.shopQrUrl" placeholder="https://.../pay.png 或留空"></a-input>
           <img v-if="allSetting.shopQrUrl" :src="allSetting.shopQrUrl" alt="收款码"
             style="max-height: 140px; border: 1px solid #eee; border-radius: 6px;" />

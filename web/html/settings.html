@@ -301,23 +301,68 @@
           this.inboundOptions = [];
         }
       },
-      handleQrUpload(file) {
-        const isImage = file.type && file.type.startsWith("image/");
-        if (!isImage) {
+      // 把任意图片（选择/粘贴/拖拽）转成收款码：自动缩到最长边 720，存成 JPEG，避免撑爆数据库
+      async applyQrImage(file) {
+        if (!file || !file.type || !file.type.startsWith("image/")) {
           this.$message.error("请选择图片文件");
           return false;
         }
-        if (file.size > 400 * 1024) {
-          this.$message.error("图片太大，请压缩到 400KB 以内");
-          return false;
-        }
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          this.allSetting.shopQrUrl = e.target.result;
+        try {
+          const dataUrl = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+          const img = await new Promise((resolve, reject) => {
+            const i = new Image();
+            i.onload = () => resolve(i);
+            i.onerror = reject;
+            i.src = dataUrl;
+          });
+          const max = 720;
+          let w = img.naturalWidth || img.width;
+          let h = img.naturalHeight || img.height;
+          if (Math.max(w, h) > max) {
+            const scale = max / Math.max(w, h);
+            w = Math.round(w * scale);
+            h = Math.round(h * scale);
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          this.allSetting.shopQrUrl = canvas.toDataURL("image/jpeg", 0.9);
           this.$message.success("收款码已载入，记得点保存");
-        };
-        reader.readAsDataURL(file);
+        } catch (e) {
+          this.$message.error("图片读取失败，换一张试试");
+        }
         return false;
+      },
+      handleQrUpload(file) {
+        return this.applyQrImage(file);
+      },
+      handleQrDrop(e) {
+        const files = e && e.dataTransfer ? e.dataTransfer.files : null;
+        if (!files || !files.length) return;
+        this.applyQrImage(files[0]);
+      },
+      // Ctrl+V 直接粘贴截图（微信/QQ 截图都行）
+      handleQrPaste(e) {
+        if (!e || !e.clipboardData || !e.clipboardData.items) return;
+        for (const item of e.clipboardData.items) {
+          if (item.kind === "file" && item.type.startsWith("image/")) {
+            const file = item.getAsFile();
+            if (file) {
+              e.preventDefault();
+              this.applyQrImage(file);
+              return;
+            }
+          }
+        }
       },
       parseShopPlans(raw) {
         const defaults = [
@@ -717,6 +762,7 @@
       await this.getAllSetting();
       await this.loadInboundTags();
       await this.loadShopInbounds();
+      document.addEventListener("paste", this.handleQrPaste);
       while (true) {
         await PromiseUtil.sleep(1000);
         this.saveBtnDisable = this.oldAllSetting.equals(this.allSetting);
