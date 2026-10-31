@@ -951,3 +951,22 @@ func shopNotifyAdminsCancel(order *model.Order) {
 	bot.NewTgbot().SendMsgToTgbotAdmins(fmt.Sprintf("🚫 买家取消了订单 #%d（%d GB/%s，¥%s，%s）",
 		order.Id, order.PlanGb, cycleLabel(order.Cycle), formatPrice(order.Price), order.TgName))
 }
+
+// NotifyShopSuspiciousNotify 收到回调但签名对不上时，兜底提醒管理员手动确认。
+// （比如 BufPay 改了签名规则，钱是真的到了，不能因为验签失败就丢单）
+func (t *Tgbot) NotifyShopSuspiciousNotify(order *model.Order, detail string) {
+	kb := tu.InlineKeyboard(
+		tu.InlineKeyboardRow(
+			tu.InlineKeyboardButton("✅ 确认到账并开通").WithCallbackData(fmt.Sprintf("shop_ok %d", order.Id)),
+			tu.InlineKeyboardButton("❌ 拒绝").WithCallbackData(fmt.Sprintf("shop_no %d", order.Id)),
+		),
+	)
+	t.SendMsgToTgbotAdmins(fmt.Sprintf(
+		"⚠️ <b>收到到账回调，但签名没对上</b>\n\n"+
+			"订单 #%d　%d GB · %s\n金额：¥%s（实付 ¥%s）\n买家：%s\n\n"+
+			"<b>钱大概率是真的到了</b>，只是 BufPay 的签名规则和预期不一致。\n"+
+			"确认无误就点下面的按钮开通 👇\n\n"+
+			"<i>原始参数：%s</i>",
+		order.Id, order.PlanGb, cycleLabel(order.Cycle),
+		formatPrice(order.Price), "", order.TgName, detail), kb)
+}

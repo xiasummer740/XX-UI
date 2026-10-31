@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -76,6 +77,16 @@ func (a *ShopController) BufPayNotify(c *gin.Context) {
 			detail.WriteString(fmt.Sprintf("%s=%q ", k, c.Request.PostForm.Get(k)))
 		}
 		logger.Warning("[bufpay] 回调校验失败: ", err, " | 参数: ", detail.String())
+		// 兜底：订单号和金额都对得上时，提醒管理员手动确认，别因为验签失败丢单
+		if id, perr := strconv.Atoi(strings.TrimSpace(orderId)); perr == nil {
+			if o, ge := a.shopService.GetOrder(id); ge == nil && o.Status == "pending" &&
+				service.PriceEqual(service.NormalizePrice(o.Price), payPrice) {
+				var bot service.Tgbot
+				bot.NotifyShopSuspiciousNotify(o, detail.String())
+				c.String(http.StatusOK, "success")
+				return
+			}
+		}
 		c.String(http.StatusBadRequest, "fail")
 		return
 	}

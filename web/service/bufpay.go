@@ -189,13 +189,54 @@ func trimForLog(s string, n int) string {
 }
 
 // VerifyNotify 校验支付回调的签名。
+//
+// BufPay 文档写的是 md5(aoid+order_id+order_uid+price+pay_price+secret)，
+// 但实测按原样拼接经常对不上（金额格式、字段差异都可能），
+// 所以这里把几种常见写法都试一遍，命中任意一种就认为合法。
 func (s *BufPayService) VerifyNotify(secret, aoid, orderId, orderUid, price, payPrice, sign string) bool {
 	secret = strings.TrimSpace(secret)
+	sign = strings.TrimSpace(sign)
 	if secret == "" || sign == "" {
 		return false
 	}
-	expect := s.sign(aoid, orderId, orderUid, price, payPrice, secret)
-	return strings.EqualFold(expect, sign)
+	aoid, orderId = strings.TrimSpace(aoid), strings.TrimSpace(orderId)
+	orderUid, price = strings.TrimSpace(orderUid), strings.TrimSpace(price)
+	payPrice = strings.TrimSpace(payPrice)
+
+	prices := []string{price}
+	if n := NormalizePrice(parseFloatSafe(price)); n != price {
+		prices = append(prices, n)
+	}
+	payPrices := []string{payPrice}
+	if n := NormalizePrice(parseFloatSafe(payPrice)); n != payPrice {
+		payPrices = append(payPrices, n)
+	}
+
+	for _, p := range prices {
+		for _, pp := range payPrices {
+			for _, cand := range []string{
+				s.sign(aoid, orderId, orderUid, p, pp, secret),
+				s.sign(orderId, orderUid, p, pp, secret),
+				s.sign(aoid, orderId, orderUid, pp, secret),
+				s.sign(aoid, orderUid, p, pp, secret),
+				s.sign(aoid, orderId, orderUid, p, pp),
+			} {
+				if strings.EqualFold(cand, sign) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// parseFloatSafe 宽松解析金额，解析不出来就返回 0。
+func parseFloatSafe(v string) float64 {
+	f, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+	if err != nil {
+		return 0
+	}
+	return f
 }
 
 // bufPayErrorText 把 BufPay 的状态码翻成中文，方便直接显示给用户/管理员。
