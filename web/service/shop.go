@@ -22,6 +22,7 @@ const (
 	shopPlansKey   = "shopPlans"
 	shopPayNoteKey = "shopPayNote"
 	shopQrURLKey   = "shopQrUrl"
+	shopQr2URLKey  = "shopQrUrl2"
 	shopInboundKey = "shopInboundId"
 	shopDailyKey   = "shopDailyLimit"
 	shopLimitIPKey = "shopLimitIp"
@@ -112,6 +113,16 @@ func (s *ShopService) GetShopPayNote() string {
 func (s *ShopService) GetShopQrURL() string {
 	var ss SettingService
 	v, err := ss.getString(shopQrURLKey)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(v)
+}
+
+// GetShopQrURL2 支付宝收款码。
+func (s *ShopService) GetShopQrURL2() string {
+	var ss SettingService
+	v, err := ss.getString(shopQr2URLKey)
 	if err != nil {
 		return ""
 	}

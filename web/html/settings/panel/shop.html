@@ -1,112 +1,160 @@
 {{define "settings/panel/shop"}}
-<a-collapse :default-active-key="['1']">
-  <a-collapse-panel key="1" header="流量商店（Telegram 自助下单）">
-    <a-setting-list-item paddings="small">
-      <template #title>启用流量商店</template>
-      <template #description>开启后，任何人在机器人里发 /buy 都能看到套餐并下单。</template>
-      <template #control>
-        <a-switch v-model="allSetting.shopEnable"></a-switch>
-      </template>
-    </a-setting-list-item>
+<div>
+  <!-- 状态概览 -->
+  <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;">
+    <div style="flex: 1; min-width: 160px; border-radius: 10px; padding: 14px 16px; background: linear-gradient(135deg, #52c41a22, #52c41a08); border: 1px solid #52c41a33;">
+      <div style="font-size: 12px; color: #888;">商店状态</div>
+      <div style="font-size: 18px; font-weight: 600; margin-top: 4px;">
+        [[ allSetting.shopEnable ? '营业中 🟢' : '已关闭 ⚪️' ]]
+      </div>
+    </div>
+    <div style="flex: 1; min-width: 160px; border-radius: 10px; padding: 14px 16px; background: linear-gradient(135deg, #1890ff22, #1890ff08); border: 1px solid #1890ff33;">
+      <div style="font-size: 12px; color: #888;">在售档位</div>
+      <div style="font-size: 18px; font-weight: 600; margin-top: 4px;">[[ shopPlansTable.length ]] 个</div>
+    </div>
+    <div style="flex: 1; min-width: 200px; border-radius: 10px; padding: 14px 16px; background: linear-gradient(135deg, #faad1422, #faad1408); border: 1px solid #faad1433;">
+      <div style="font-size: 12px; color: #888;">投放入站</div>
+      <div style="font-size: 16px; font-weight: 600; margin-top: 4px;">
+        [[ (shopInbounds.find(i => i.id === allSetting.shopInboundId) || {}).remark || '未选择' ]]
+      </div>
+    </div>
+  </div>
 
-    <a-setting-list-item paddings="small">
-      <template #title>投放到哪个入站</template>
-      <template #description>买家付款后，机器人会在这个入站上新建一个客户端（email 形如 tg&lt;用户ID&gt;）。</template>
-      <template #control>
-        <a-select v-model="allSetting.shopInboundId" :dropdown-class-name="themeSwitcher.currentTheme"
-          :style="{ width: '100%' }" placeholder="选择入站">
-          <a-select-option v-for="ib in shopInbounds" :key="ib.id" :value="ib.id">
-            #[[ ib.id ]] 端口 [[ ib.port ]] · [[ ib.remark || ib.protocol ]]
-          </a-select-option>
-        </a-select>
-      </template>
-    </a-setting-list-item>
+  <a-collapse :default-active-key="['1', '2']">
+    <a-collapse-panel key="1" header="基础设置">
+      <a-setting-list-item paddings="small">
+        <template #title>启用流量商店</template>
+        <template #description>开启后，任何人在机器人里发 /buy（或点菜单里的「🛒 购买流量」）都能看到套餐并下单。</template>
+        <template #control>
+          <a-switch v-model="allSetting.shopEnable"></a-switch>
+        </template>
+      </a-setting-list-item>
 
-    <a-setting-list-item paddings="small">
-      <template #title>每个客户端限几台设备</template>
-      <template #description>默认 2 台（limitIp），防止一个人把订阅分给一堆人。</template>
-      <template #control>
-        <a-input-number v-model="allSetting.shopLimitIp" :min="0" :max="20"></a-input-number>
-      </template>
-    </a-setting-list-item>
+      <a-setting-list-item paddings="small">
+        <template #title>投放到哪个入站</template>
+        <template #description>买家付款后，机器人会在这个入站上新建一个客户端（email 形如 tg&lt;用户ID&gt;）。建议单独建一个「店铺专用」入站。</template>
+        <template #control>
+          <a-select v-model="allSetting.shopInboundId" :dropdown-class-name="themeSwitcher.currentTheme"
+            :style="{ width: '100%' }" placeholder="选择入站">
+            <a-select-option v-for="ib in shopInbounds" :key="ib.id" :value="ib.id">
+              #[[ ib.id ]] 端口 [[ ib.port ]] · [[ ib.remark || ib.protocol ]]
+            </a-select-option>
+          </a-select>
+        </template>
+      </a-setting-list-item>
 
-    <a-setting-list-item paddings="small">
-      <template #title>每人每天最多下单</template>
-      <template #description>防止被刷单，默认 3 单/天；同时每人只能有 1 个待确认订单。</template>
-      <template #control>
-        <a-input-number v-model="allSetting.shopDailyLimit" :min="1" :max="20"></a-input-number>
-      </template>
-    </a-setting-list-item>
-  </a-collapse-panel>
+      <a-setting-list-item paddings="small">
+        <template #title>每个客户端限几台设备</template>
+        <template #description>默认 2 台（limitIp），防止一个人把订阅分给一堆人。</template>
+        <template #control>
+          <a-input-number v-model="allSetting.shopLimitIp" :min="0" :max="20"></a-input-number>
+        </template>
+      </a-setting-list-item>
 
-  <a-collapse-panel key="2" header="收款方式">
-    <a-setting-list-item paddings="small">
-      <template #title>收款码图片</template>
-      <template #description>直接上传图片（存进数据库，随面板备份），或填一个公网图片链接。留空则只发文字说明。</template>
-      <template #control>
-        <a-space direction="vertical" style="width: 100%;">
-          <div @dragover.prevent @drop.prevent="handleQrDrop"
-            style="border: 1px dashed #d9d9d9; border-radius: 8px; padding: 12px; text-align: center; background: #fafafa;">
-            <a-upload :before-upload="handleQrUpload" :show-upload-list="false" accept="image/*">
-              <a-button icon="upload">选择图片</a-button>
+      <a-setting-list-item paddings="small">
+        <template #title>每人每天最多下单</template>
+        <template #description>防止被刷单，默认 3 单/天；另外每人同时只能有 1 个待确认订单。</template>
+        <template #control>
+          <a-input-number v-model="allSetting.shopDailyLimit" :min="1" :max="20"></a-input-number>
+        </template>
+      </a-setting-list-item>
+    </a-collapse-panel>
+
+    <a-collapse-panel key="2" header="收款方式（微信 / 支付宝，两个码买家任选）">
+      <div style="color: #888; font-size: 12px; margin-bottom: 12px;">
+        点一下下面的框选定「粘贴目标」，然后 <b>Ctrl+V</b> 直接粘贴微信/QQ 截图；也可以点「选择图片」或把图片拖进去。
+        图片会自动缩到 720px 存进数据库，随面板一起备份。
+      </div>
+
+      <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+        <!-- 微信 -->
+        <div style="flex: 1; min-width: 260px;">
+          <div style="font-weight: 600; margin-bottom: 8px;">💚 微信收款码</div>
+          <div @click="qrPasteTarget = 'wechat'" @dragover.prevent @drop.prevent="handleQrDrop($event, 'wechat')"
+            :style="{ border: qrPasteTarget === 'wechat' ? '2px solid #52c41a' : '1px dashed #d9d9d9', borderRadius: '10px', padding: '14px', textAlign: 'center', background: '#fafafa', cursor: 'pointer' }">
+            <a-upload :before-upload="f => handleQrUpload(f, 'wechat')" :show-upload-list="false" accept="image/*">
+              <a-button icon="upload" size="small">选择图片</a-button>
             </a-upload>
-            <div style="margin-top: 8px; color: #888; font-size: 12px;">
-              也可以 <b>Ctrl+V 直接粘贴截图</b>（微信/QQ 截图都行），或把图片拖进这个框
+            <div style="margin-top: 8px; color: #999; font-size: 12px; line-height: 1.7;">
+              点这里再 Ctrl+V 粘贴<br />或把图片拖进来
             </div>
+            <img v-if="allSetting.shopQrUrl" :src="allSetting.shopQrUrl" alt="微信收款码"
+              style="max-height: 150px; margin-top: 10px; border: 1px solid #eee; border-radius: 8px; background: #fff;" />
           </div>
-          <a-input v-model="allSetting.shopQrUrl" placeholder="https://.../pay.png 或留空"></a-input>
-          <img v-if="allSetting.shopQrUrl" :src="allSetting.shopQrUrl" alt="收款码"
-            style="max-height: 140px; border: 1px solid #eee; border-radius: 6px;" />
-          <a v-if="allSetting.shopQrUrl" style="color: #ff4d4f;" @click="allSetting.shopQrUrl = ''">清除图片</a>
-        </a-space>
-      </template>
-    </a-setting-list-item>
+          <a v-if="allSetting.shopQrUrl" style="color: #ff4d4f; font-size: 12px;"
+            @click="allSetting.shopQrUrl = ''">清除微信收款码</a>
+        </div>
 
-    <a-setting-list-item paddings="small">
-      <template #title>付款说明</template>
-      <template #description>显示在订单确认页，比如「支付宝扫码，备注你的 Telegram 用户名」。</template>
-      <template #control>
+        <!-- 支付宝 -->
+        <div style="flex: 1; min-width: 260px;">
+          <div style="font-weight: 600; margin-bottom: 8px;">💙 支付宝收款码</div>
+          <div @click="qrPasteTarget = 'alipay'" @dragover.prevent @drop.prevent="handleQrDrop($event, 'alipay')"
+            :style="{ border: qrPasteTarget === 'alipay' ? '2px solid #1890ff' : '1px dashed #d9d9d9', borderRadius: '10px', padding: '14px', textAlign: 'center', background: '#fafafa', cursor: 'pointer' }">
+            <a-upload :before-upload="f => handleQrUpload(f, 'alipay')" :show-upload-list="false" accept="image/*">
+              <a-button icon="upload" size="small">选择图片</a-button>
+            </a-upload>
+            <div style="margin-top: 8px; color: #999; font-size: 12px; line-height: 1.7;">
+              点这里再 Ctrl+V 粘贴<br />或把图片拖进来
+            </div>
+            <img v-if="allSetting.shopQrUrl2" :src="allSetting.shopQrUrl2" alt="支付宝收款码"
+              style="max-height: 150px; margin-top: 10px; border: 1px solid #eee; border-radius: 8px; background: #fff;" />
+          </div>
+          <a v-if="allSetting.shopQrUrl2" style="color: #ff4d4f; font-size: 12px;"
+            @click="allSetting.shopQrUrl2 = ''">清除支付宝收款码</a>
+        </div>
+      </div>
+
+      <a-alert style="margin-top: 14px;" type="info" show-icon
+        message="两个都填 = 买家能看到两个码任选；只填一个 = 只显示那个。" />
+
+      <a-divider style="margin: 18px 0 12px;"></a-divider>
+
+      <div>
+        <div style="font-weight: 600; margin-bottom: 8px;">付款说明（显示在订单确认页）</div>
         <a-textarea v-model="allSetting.shopPayNote" :rows="3"
           placeholder="扫码付款后点「我已付款」，我确认到账后会自动开通。"></a-textarea>
-      </template>
-    </a-setting-list-item>
-  </a-collapse-panel>
+        <div style="margin-top: 10px;">
+          <a-button type="primary" icon="save" @click="saveShopSettings">保存收款设置</a-button>
+        </div>
+      </div>
+    </a-collapse-panel>
 
-  <a-collapse-panel key="3" header="套餐与价格">
-    <div style="margin-bottom: 10px; color: #888; font-size: 13px;">
-      每一行是一个流量档位。<b>某个周期填 0 或清空 = 那个周期不卖</b>（买家点进去会看不到这个选项）；<b>整行点「删除」= 这个档位不卖</b>。改完点「保存商店设置」立即生效，不用重启。
-    </div>
-    <a-table :columns="shopPlanColumns" :data-source="shopPlansTable" :pagination="false"
-      size="small" :scroll="{ x: 620 }">
-      <template slot="gb" slot-scope="text, record">
-        <a-input-number v-model="record.gb" :min="1" :max="100000" style="width: 100px;"></a-input-number>
-      </template>
-      <template slot="month" slot-scope="text, record">
-        <a-input-number v-model="record.month" :min="0" :precision="2" placeholder="不卖" style="width: 110px;"></a-input-number>
-      </template>
-      <template slot="quarter" slot-scope="text, record">
-        <a-input-number v-model="record.quarter" :min="0" :precision="2" placeholder="不卖" style="width: 110px;"></a-input-number>
-      </template>
-      <template slot="year" slot-scope="text, record">
-        <a-input-number v-model="record.year" :min="0" :precision="2" placeholder="不卖" style="width: 110px;"></a-input-number>
-      </template>
-      <template slot="action" slot-scope="text, record, index">
-        <a @click="removeShopPlan(index)" style="color: #ff4d4f;">删除</a>
-      </template>
-    </a-table>
-    <div style="margin-top: 10px;">
-      <a-button icon="plus" @click="addShopPlan">新增档位</a-button>
-      <a-button style="margin-left: 8px;" type="primary" icon="save" @click="saveShopSettings">保存商店设置</a-button>
-    </div>
-  </a-collapse-panel>
+    <a-collapse-panel key="3" header="套餐与价格">
+      <div style="margin-bottom: 10px; color: #888; font-size: 13px;">
+        每一行是一个流量档位。<b>某个周期填 0 或清空 = 那个周期不卖</b>（买家点进去会看不到这个选项）；<b>整行点「删除」= 这个档位不卖</b>。
+      </div>
+      <a-table :columns="shopPlanColumns" :data-source="shopPlansTable" :pagination="false"
+        size="small" :scroll="{ x: 620 }">
+        <template slot="gb" slot-scope="text, record">
+          <a-input-number v-model="record.gb" :min="1" :max="100000" style="width: 100px;"></a-input-number>
+        </template>
+        <template slot="month" slot-scope="text, record">
+          <a-input-number v-model="record.month" :min="0" :precision="2" placeholder="不卖" style="width: 110px;"></a-input-number>
+        </template>
+        <template slot="quarter" slot-scope="text, record">
+          <a-input-number v-model="record.quarter" :min="0" :precision="2" placeholder="不卖" style="width: 110px;"></a-input-number>
+        </template>
+        <template slot="year" slot-scope="text, record">
+          <a-input-number v-model="record.year" :min="0" :precision="2" placeholder="不卖" style="width: 110px;"></a-input-number>
+        </template>
+        <template slot="action" slot-scope="text, record, index">
+          <a @click="removeShopPlan(index)" style="color: #ff4d4f;">删除</a>
+        </template>
+      </a-table>
+      <div style="margin-top: 10px;">
+        <a-button icon="plus" @click="addShopPlan">新增档位</a-button>
+        <a-button style="margin-left: 8px;" type="primary" icon="save" @click="saveShopSettings">保存商店设置</a-button>
+      </div>
+    </a-collapse-panel>
 
-  <a-collapse-panel key="4" header="怎么用">
-    <div style="line-height: 1.9; font-size: 13px;">
-      <p><b>买家</b>：给机器人发 <code>/buy</code> → 选流量 → 选月付/季付/年付 → 看到收款码 → 付款后点「✅ 我已付款」。</p>
-      <p><b>你</b>：马上会收到一条「🛒 新订单」，核对收款后点「✅ 确认到账并开通」，机器人会自动开客户端并把订阅链接发给买家。</p>
-      <p><b>查订单</b>：机器人里发 <code>/orders</code> 查看最近 20 单。</p>
-      <p style="color: #d48806;"><b>注意</b>：开启后任何陌生人发 /buy 都能下单，是靠你人工确认收款来把关的 —— 不确认就不会开通。</p>
-    </div>
-  </a-collapse-panel>
-</a-collapse>
+    <a-collapse-panel key="4" header="怎么用">
+      <div style="line-height: 2; font-size: 13px;">
+        <p><b>买家</b>：机器人里点「🛒 购买流量」或发 <code>/buy</code> → 选流量 → 选周期 → 看到微信/支付宝收款码 → 付款后点「✅ 我已付款」。</p>
+        <p><b>你</b>：收到「🛒 新订单来了」，核对到账后点「✅ 确认到账并开通」，机器人自动开客户端、发订阅链接 + 二维码给买家。</p>
+        <p><b>查订单</b>：机器人里发 <code>/orders</code>，会给出待确认单数、已开通单数和合计金额。</p>
+        <p style="color: #d48806;"><b>注意</b>：开启后任何陌生人发 /buy 都能下单，全靠你人工确认收款把关 —— 不确认就不会开通，不会白送。</p>
+      </div>
+    </a-collapse-panel>
+  </a-collapse>
+</div>
 {{end}}

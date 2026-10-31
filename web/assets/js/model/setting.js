@@ -86,6 +86,7 @@ class AllSetting {
         this.shopPlans = "";
         this.shopPayNote = "";
         this.shopQrUrl = "";
+        this.shopQrUrl2 = "";
         this.shopInboundId = 0;
         this.shopDailyLimit = 3;
         this.shopLimitIp = 2;

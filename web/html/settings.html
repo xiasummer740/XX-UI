@@ -154,6 +154,7 @@
       inboundOptions: [],
       shopInbounds: [],
       shopPlansTable: [],
+      qrPasteTarget: 'wechat',
       shopPlanColumns: [
         { title: '流量 (GB)', dataIndex: 'gb', key: 'gb', scopedSlots: { customRender: 'gb' }, width: 120 },
         { title: '月付 ¥', dataIndex: 'month', key: 'month', scopedSlots: { customRender: 'month' }, width: 130 },
@@ -302,11 +303,12 @@
         }
       },
       // 把任意图片（选择/粘贴/拖拽）转成收款码：自动缩到最长边 720，存成 JPEG，避免撑爆数据库
-      async applyQrImage(file) {
+      async applyQrImage(file, target) {
         if (!file || !file.type || !file.type.startsWith("image/")) {
           this.$message.error("请选择图片文件");
           return false;
         }
+        const t = target || this.qrPasteTarget || "wechat";
         try {
           const dataUrl = await new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -335,22 +337,28 @@
           ctx.fillStyle = "#ffffff";
           ctx.fillRect(0, 0, w, h);
           ctx.drawImage(img, 0, 0, w, h);
-          this.allSetting.shopQrUrl = canvas.toDataURL("image/jpeg", 0.9);
-          this.$message.success("收款码已载入，记得点保存");
+          const data = canvas.toDataURL("image/jpeg", 0.9);
+          if (t === "alipay") {
+            this.allSetting.shopQrUrl2 = data;
+            this.$message.success("支付宝收款码已载入，记得点保存");
+          } else {
+            this.allSetting.shopQrUrl = data;
+            this.$message.success("微信收款码已载入，记得点保存");
+          }
         } catch (e) {
           this.$message.error("图片读取失败，换一张试试");
         }
         return false;
       },
-      handleQrUpload(file) {
-        return this.applyQrImage(file);
+      handleQrUpload(file, target) {
+        return this.applyQrImage(file, target);
       },
-      handleQrDrop(e) {
+      handleQrDrop(e, target) {
         const files = e && e.dataTransfer ? e.dataTransfer.files : null;
         if (!files || !files.length) return;
-        this.applyQrImage(files[0]);
+        this.applyQrImage(files[0], target);
       },
-      // Ctrl+V 直接粘贴截图（微信/QQ 截图都行）
+      // Ctrl+V 直接粘贴截图（微信/QQ 截图都行），粘到当前选中的那个码
       handleQrPaste(e) {
         if (!e || !e.clipboardData || !e.clipboardData.items) return;
         for (const item of e.clipboardData.items) {
@@ -358,7 +366,7 @@
             const file = item.getAsFile();
             if (file) {
               e.preventDefault();
-              this.applyQrImage(file);
+              this.applyQrImage(file, this.qrPasteTarget);
               return;
             }
           }

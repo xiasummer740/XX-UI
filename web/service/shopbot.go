@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/XiaSummer740/XX-UI/database/model"
-
 	"github.com/mymmrac/telego"
 	tu "github.com/mymmrac/telego/telegoutil"
 	"github.com/skip2/go-qrcode"
@@ -99,16 +97,23 @@ func (t *Tgbot) sendShopMenu(chatId int64) {
 		return
 	}
 
-	msg := "🛒 <b>流量套餐</b>\n\n请选择要购买的流量：\n"
-	var rows [][]telego.InlineKeyboardButton
+	msg := "🎁 <b>挑一个适合你的套餐</b>\n\n"
 	for _, p := range plans {
-		msg += fmt.Sprintf("\n• <b>%d GB</b>　%s", p.Gb, planPriceText(p))
-		rows = append(rows, tu.InlineKeyboardRow(
-			tu.InlineKeyboardButton(fmt.Sprintf("%d GB", p.Gb)).WithCallbackData(fmt.Sprintf("shop_gb %d", p.Gb)),
-		))
+		msg += fmt.Sprintf("▫️ <b>%d GB</b>  ·  %s\n", p.Gb, planPriceText(p))
 	}
-	msg += "\n\n点下面的按钮继续。"
-	t.SendMsgToTgbot(chatId, msg, tu.InlineKeyboard(rows...))
+	msg += "\n点下面的按钮选流量，随时可以反悔 👇"
+
+	var buttons []telego.InlineKeyboardButton
+	for _, p := range plans {
+		buttons = append(buttons, tu.InlineKeyboardButton(fmt.Sprintf("%d GB", p.Gb)).
+			WithCallbackData(fmt.Sprintf("shop_gb %d", p.Gb)))
+	}
+	cols := 2
+	if len(buttons) < 2 {
+		cols = 1
+	}
+	keyboard := tu.InlineKeyboardGrid(tu.InlineKeyboardCols(cols, buttons...))
+	t.SendMsgToTgbot(chatId, msg, keyboard)
 }
 
 // sendShopCyclePicker 让买家选月付/季付/年付。
@@ -141,7 +146,7 @@ func (t *Tgbot) sendShopCyclePicker(chatId int64, gb int) {
 	rows = append(rows, tu.InlineKeyboardRow(
 		tu.InlineKeyboardButton("⬅️ 返回套餐").WithCallbackData("shop_back"),
 	))
-	t.SendMsgToTgbot(chatId, fmt.Sprintf("已选 <b>%d GB</b>，请选择付款周期：", gb), tu.InlineKeyboard(rows...))
+	t.SendMsgToTgbot(chatId, fmt.Sprintf("已选 <b>%d GB</b> ✨\n想按哪种方式付款？\n\n<i>季付、年付更划算，用得久就更省一点。</i>", gb), tu.InlineKeyboard(rows...))
 }
 
 // sendShopConfirm 展示订单确认页（金额 + 收款说明 + 我已付款）。
@@ -153,15 +158,20 @@ func (t *Tgbot) sendShopConfirm(chatId int64, gb int, cycle string) {
 		return
 	}
 	days := cycleDays(cycle)
-	msg := fmt.Sprintf("🧾 <b>订单确认</b>\n\n套餐：<b>%d GB</b>\n周期：%s（%d 天）\n金额：<b>¥%s</b>\n",
+	msg := fmt.Sprintf("🧾 <b>订单确认</b>\n\n"+
+		"套餐：<b>%d GB</b>\n"+
+		"周期：%s（%d 天）\n"+
+		"金额：<b>¥%s</b>\n",
 		gb, cycleLabel(cycle), days, formatPrice(price))
+
 	note := shop.GetShopPayNote()
 	if note != "" {
-		msg += "\n" + note + "\n"
+		msg += "\n" + note
 	}
-	msg += "\n付款后点下面的「✅ 我已付款」，我确认到账后会自动给你开通。"
+	msg += "\n\n💛 付完记得回来点下面的「✅ 我已付款」，我看到就立刻给你开通。"
 
-	qr := shop.GetShopQrURL()
+	qrWechat := shop.GetShopQrURL()
+	qrAlipay := shop.GetShopQrURL2()
 	keyboard := tu.InlineKeyboard(
 		tu.InlineKeyboardRow(
 			tu.InlineKeyboardButton("✅ 我已付款").WithCallbackData(fmt.Sprintf("shop_paid %d %s", gb, cycle)),
@@ -170,10 +180,19 @@ func (t *Tgbot) sendShopConfirm(chatId int64, gb int, cycle string) {
 			tu.InlineKeyboardButton("⬅️ 返回套餐").WithCallbackData("shop_back"),
 		),
 	)
-	if qr != "" {
-		// 先发收款码图片，再发确认文案
-		t.sendShopQrPhoto(chatId, qr, msg)
-		t.SendMsgToTgbot(chatId, "☝️ 上面是收款码，付款后点下面按钮。", keyboard)
+
+	// 收款码：微信 / 支付宝 两个都发，买家任选
+	sentQR := false
+	if qrWechat != "" {
+		t.sendShopQrPhoto(chatId, qrWechat, "💚 <b>微信支付</b> 扫这个")
+		sentQR = true
+	}
+	if qrAlipay != "" {
+		t.sendShopQrPhoto(chatId, qrAlipay, "💙 <b>支付宝</b> 扫这个")
+		sentQR = true
+	}
+	if sentQR {
+		t.SendMsgToTgbot(chatId, msg+"\n\n☝️ 上面两个收款码，哪个方便扫哪个。", keyboard)
 		return
 	}
 	t.SendMsgToTgbot(chatId, msg, keyboard)
@@ -241,7 +260,11 @@ func (t *Tgbot) createShopOrder(chatId int64, from *telego.User, gb int, cycle s
 	}
 
 	t.SendMsgToTgbot(chatId, fmt.Sprintf(
-		"📨 订单 #%d 已提交。\n\n%d GB / %s / ¥%s\n\n我确认收款后会自动开通，开通后订阅链接直接发给你。",
+		"💌 <b>收到啦，订单 #%d 已登记</b>\n\n"+
+			"套餐：<b>%d GB</b>　%s\n"+
+			"金额：<b>¥%s</b>\n\n"+
+			"我核对到账后马上开通，订阅链接和二维码会直接发到这里，你不用守着刷 ⏳\n"+
+			"<i>一般几分钟内就好，夜里可能慢一点点。</i>",
 		order.Id, order.PlanGb, cycleLabel(order.Cycle), formatPrice(order.Price)))
 
 	kb := tu.InlineKeyboard(
@@ -250,7 +273,7 @@ func (t *Tgbot) createShopOrder(chatId int64, from *telego.User, gb int, cycle s
 			tu.InlineKeyboardButton("❌ 拒绝").WithCallbackData(fmt.Sprintf("shop_no %d", order.Id)),
 		),
 	)
-	t.SendMsgToTgbotAdmins(fmt.Sprintf("🛒 <b>新订单</b>\n\n%s\n\n请核对收款后处理：", orderText(order)), kb)
+	t.SendMsgToTgbotAdmins(fmt.Sprintf("🛒 <b>新订单来了</b>\n\n%s\n\n核对到账后点下面按钮 👇", orderText(order)), kb)
 }
 
 // approveShopOrder 管理员确认到账 → 开通客户端 → 把订阅链接发给买家。
@@ -263,15 +286,20 @@ func (t *Tgbot) approveShopOrder(chatId int64, adminId int64, orderId int) {
 	}
 
 	subURL, subJsonURL, err := t.buildSubscriptionURLs(order.ClientEmail)
-	msg := fmt.Sprintf("✅ 订单 #%d 已开通\n\n%d GB / %s\n到期：%s 之后\n",
-		order.Id, order.PlanGb, cycleLabel(order.Cycle), fmt.Sprintf("%d 天", order.Days))
+	expireAt := time.Now().AddDate(0, 0, order.Days).Format("2006-01-02")
+	msg := fmt.Sprintf("🎉 <b>开通好啦，欢迎上车！</b>\n\n"+
+		"套餐：<b>%d GB</b>　%s\n"+
+		"有效期到：<b>%s</b>\n",
+		order.PlanGb, cycleLabel(order.Cycle), expireAt)
 	if err == nil && subURL != "" {
-		msg += "\n<b>订阅链接</b>\n<code>" + subURL + "</code>"
+		msg += "\n📎 <b>订阅链接</b>（长按或点一下即可复制）\n<code>" + subURL + "</code>"
 		if subJsonURL != "" {
-			msg += "\n\nJSON: <code>" + subJsonURL + "</code>"
+			msg += "\n\n🧩 JSON: <code>" + subJsonURL + "</code>"
 		}
+		msg += "\n\n⬇️ 下面还有一张二维码，扫码导入的是同一个订阅，二选一就行。\n" +
+			"<i>用的时候有任何问题，直接回我一句就好 🌙</i>"
 	} else {
-		msg += "\n（订阅链接生成失败，请到面板里手动取）"
+		msg += "\n（订阅链接生成失败，请联系管理员手动获取）"
 	}
 	kb := tu.InlineKeyboard(
 		tu.InlineKeyboardRow(
@@ -287,7 +315,8 @@ func (t *Tgbot) approveShopOrder(chatId int64, adminId int64, orderId int) {
 	if err == nil && subURL != "" {
 		t.sendContentQR(order.ChatId, subURL, "📷 用客户端扫这个二维码就是同一个订阅（链接和二维码二选一即可）")
 	}
-	t.SendMsgToTgbot(chatId, fmt.Sprintf("✅ 订单 #%d 已开通（客户端 %s）。", order.Id, order.ClientEmail))
+	t.SendMsgToTgbot(chatId, fmt.Sprintf("✅ 订单 #%d 已开通（客户端 %s，%d GB/%s），订阅已发给买家。",
+		order.Id, order.ClientEmail, order.PlanGb, cycleLabel(order.Cycle)))
 }
 
 // rejectShopOrder 管理员拒绝订单。
@@ -298,9 +327,11 @@ func (t *Tgbot) rejectShopOrder(chatId int64, adminId int64, orderId int) {
 		t.SendMsgToTgbot(chatId, "❌ "+err.Error())
 		return
 	}
-	t.SendMsgToTgbot(chatId, fmt.Sprintf("已拒绝订单 #%d。", order.Id))
+	t.SendMsgToTgbot(chatId, fmt.Sprintf("已拒绝订单 #%d，买家会收到通知。", order.Id))
 	t.SendMsgToTgbot(order.ChatId, fmt.Sprintf(
-		"❌ 订单 #%d 未通过。\n如有疑问请直接联系管理员（可能是没收到款或信息对不上）。", order.Id))
+		"🥺 <b>订单 #%d 没能通过</b>\n\n"+
+			"可能是没收到款，或者金额/备注对不上。\n"+
+			"不用着急，直接回我一句说明情况，我们核对一下就补上 🙌", order.Id))
 }
 
 // sendShopOrders 管理员查看最近订单。
@@ -311,7 +342,19 @@ func (t *Tgbot) sendShopOrders(chatId int64, shop *ShopService) {
 		return
 	}
 	var sb strings.Builder
-	sb.WriteString("📋 <b>最近订单</b>\n")
+	var pendingCount, approvedCount int
+	var revenue float64
+	for _, o := range orders {
+		switch o.Status {
+		case orderPending:
+			pendingCount++
+		case orderApproved:
+			approvedCount++
+			revenue += o.Price
+		}
+	}
+	sb.WriteString(fmt.Sprintf("📋 <b>最近 %d 单</b>\n待确认 <b>%d</b> 单 · 已开通 <b>%d</b> 单 · 合计 <b>¥%.2f</b>\n\n",
+		len(orders), pendingCount, approvedCount, revenue))
 	for _, o := range orders {
 		icon := "⏳"
 		if o.Status == orderApproved {
@@ -323,6 +366,3 @@ func (t *Tgbot) sendShopOrders(chatId int64, shop *ShopService) {
 	}
 	t.SendMsgToTgbot(chatId, sb.String())
 }
-
-// shopOrder 供外部（面板）使用的构造器占位，避免未使用告警。
-var _ = func() *model.Order { return nil }

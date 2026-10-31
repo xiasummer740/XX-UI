@@ -139,6 +139,8 @@ var defaultValueMap = map[string]string{
 
 	"shopQrUrl": "",
 
+	"shopQrUrl2": "",
+
 	"shopInboundId": "0",
 
 	"shopDailyLimit": "3",
