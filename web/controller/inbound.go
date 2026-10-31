@@ -676,9 +676,9 @@ func (a *InboundController) vpsUsage(c *gin.Context) {
 }
 
 // auditInbounds 对全部入站做体检（启用/监听/防火墙/REALITY 公钥/链接字段/subId/运行时配置/偷站目标）。
-// probeState 返回各节点最近一次「真实可用」实测结果。
+// probeState 返回各节点最近一次「真实可用」实测结果 + 外部多点实测延迟。
 func (a *InboundController) probeState(c *gin.Context) {
-	jsonObj(c, a.inboundService.NodeProbeSnapshot(), nil)
+	jsonObj(c, a.inboundService.ProbeState(), nil)
 }
 
 func (a *InboundController) auditInbounds(c *gin.Context) {

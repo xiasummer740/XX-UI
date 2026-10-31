@@ -21,4 +21,6 @@ func (j *NodeMonitorJob) Run() {
 	j.inboundService.RunNodeMonitor(tgBot)
 	// 顺带做一轮「真实可用」实测（10 分钟节流，单节点单次）
 	j.inboundService.RunNodeProbes()
+	// 再从外部探针节点量一次「别人连你要多久」（20 分钟节流，每轮最多 2 个节点）
+	j.inboundService.RunExternalProbes()
 }
