@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -84,6 +86,10 @@ func (t *Tgbot) handleShopCallback(callbackQuery *telego.CallbackQuery, chatId i
 		t.rejectShopOrder(chatId, callbackQuery.From.ID, id)
 	case "back":
 		t.sendShopMenu(chatId)
+	case "node_qr":
+		t.sendShopNodeQR(chatId)
+	case "clash":
+		t.sendShopClash(chatId)
 	case "orders":
 		if isAdmin {
 			t.sendShopOrders(chatId, &shop)
@@ -311,9 +317,10 @@ func (t *Tgbot) sendContentQR(chatId int64, content string, caption string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	_, _ = bot.SendPhoto(ctx, &telego.SendPhotoParams{
-		ChatID:  tu.ID(chatId),
-		Photo:   tu.FileFromBytes(png, "sub-qr.png"),
-		Caption: caption,
+		ChatID:    tu.ID(chatId),
+		Photo:     tu.FileFromBytes(png, "sub-qr.png"),
+		Caption:   caption,
+		ParseMode: telego.ModeHTML,
 	})
 }
 
@@ -363,37 +370,50 @@ func (t *Tgbot) approveShopOrder(chatId int64, adminId int64, orderId int) {
 		return
 	}
 
-	subURL, subJsonURL, err := t.buildSubscriptionURLs(order.ClientEmail)
+	links, linkErr := t.fetchClientLinks(order.ClientEmail)
 	expireAt := time.Now().AddDate(0, 0, order.Days).Format("2006-01-02")
 	msg := fmt.Sprintf("🎉 <b>开通好啦，欢迎上车！</b>\n\n"+
 		"套餐：<b>%d GB</b>　%s\n"+
 		"有效期到：<b>%s</b>\n",
 		order.PlanGb, cycleLabel(order.Cycle), expireAt)
-	if err == nil && subURL != "" {
-		msg += "\n📎 <b>订阅链接</b>（长按或点一下即可复制）\n<code>" + subURL + "</code>"
-		if subJsonURL != "" {
-			msg += "\n\n🧩 JSON: <code>" + subJsonURL + "</code>"
+
+	if linkErr == nil && len(links) > 0 {
+		msg += "\n📱 <b>你的节点链接</b>（点一下复制到客户端）\n"
+		msg += "<code>" + links[0] + "</code>"
+		if len(links) > 1 {
+			msg += fmt.Sprintf("\n\n<i>（这个订阅里一共 %d 个节点，下面按钮里有完整订阅）</i>", len(links))
 		}
-		msg += "\n\n⬇️ 下面还有一张二维码，扫码导入的是同一个订阅，二选一就行。\n" +
+		msg += "\n\n⬇️ 下面还有一张<b>节点二维码</b>，小火箭/Clash Verge 等直接扫码就能加节点。\n" +
 			"<i>用的时候有任何问题，直接回我一句就好 🌙</i>"
 	} else {
-		msg += "\n（订阅链接生成失败，请联系管理员手动获取）"
+		subURL, _, err := t.buildSubscriptionURLs(order.ClientEmail)
+		if err == nil && subURL != "" {
+			msg += "\n📎 <b>订阅链接</b>\n<code>" + subURL + "</code>"
+		} else {
+			msg += "\n（链接生成失败，请联系管理员手动获取）"
+		}
 	}
+
 	kb := tu.InlineKeyboard(
 		tu.InlineKeyboardRow(
-			tu.InlineKeyboardButton("📶 我的流量").WithCallbackData("client_traffic"),
-			tu.InlineKeyboardButton("📷 订阅二维码").WithCallbackData("client_qr_links"),
+			tu.InlineKeyboardButton("📱 节点二维码").WithCallbackData("shop_node_qr"),
+			tu.InlineKeyboardButton("🐱 Clash 订阅").WithCallbackData("shop_clash"),
 		),
 		tu.InlineKeyboardRow(
-			tu.InlineKeyboardButton("🔗 单节点链接").WithCallbackData("client_individual_links"),
+			tu.InlineKeyboardButton("📶 我的流量").WithCallbackData("client_traffic"),
+			tu.InlineKeyboardButton("🔗 订阅链接").WithCallbackData("client_sub_links"),
+		),
+		tu.InlineKeyboardRow(
 			tu.InlineKeyboardButton("🛒 再买一份").WithCallbackData("shop_back"),
 		),
 	)
 	t.SendMsgToTgbot(order.ChatId, msg, kb)
-	if err == nil && subURL != "" {
-		t.sendContentQR(order.ChatId, subURL, "📷 用客户端扫这个二维码就是同一个订阅（链接和二维码二选一即可）")
+
+	// 默认给单节点二维码（小火箭扫了直接加节点）
+	if linkErr == nil && len(links) > 0 {
+		t.sendContentQR(order.ChatId, links[0], "📱 这是你的<b>节点二维码</b>，用客户端扫码直接添加节点")
 	}
-	t.SendMsgToTgbot(chatId, fmt.Sprintf("✅ 订单 #%d 已开通（客户端 %s，%d GB/%s），订阅已发给买家。",
+	t.SendMsgToTgbot(chatId, fmt.Sprintf("✅ 订单 #%d 已开通（客户端 %s，%d GB/%s），节点和二维码已发给买家。",
 		order.Id, order.ClientEmail, order.PlanGb, cycleLabel(order.Cycle)))
 }
 
@@ -443,4 +463,134 @@ func (t *Tgbot) sendShopOrders(chatId int64, shop *ShopService) {
 		sb.WriteString(fmt.Sprintf("\n%s %s", icon, orderText(o)))
 	}
 	t.SendMsgToTgbot(chatId, sb.String())
+}
+
+// fetchClientLinks 拉取订阅内容并拆成单节点链接（vless://... 等）。
+func (t *Tgbot) fetchClientLinks(email string) ([]string, error) {
+	subURL, _, err := t.buildSubscriptionURLs(email)
+	if err != nil || subURL == "" {
+		return nil, fmt.Errorf("订阅地址不可用")
+	}
+	req, err := http.NewRequest("GET", subURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "text/plain, */*;q=0.1")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	req = req.WithContext(ctx)
+
+	resp, err := optimizedHTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	content := string(body)
+	if encoded, _ := t.settingService.GetSubEncrypt(); encoded {
+		if decoded, derr := base64.StdEncoding.DecodeString(strings.TrimSpace(content)); derr == nil {
+			content = string(decoded)
+		}
+	}
+
+	var links []string
+	for _, line := range strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.Contains(line, "://") && !strings.HasPrefix(line, "http") {
+			links = append(links, line)
+		}
+	}
+	if len(links) == 0 {
+		return nil, fmt.Errorf("没有解析到节点")
+	}
+	return links, nil
+}
+
+// buildClashURL 生成 Clash/Mihomo 订阅地址（面板里 /clash/ 路径）。
+func (t *Tgbot) buildClashURL(email string) (string, error) {
+	if enable, _ := t.settingService.GetSubClashEnable(); !enable {
+		return "", fmt.Errorf("Clash 订阅未开启")
+	}
+	traffic, client, err := t.inboundService.GetClientByEmail(email)
+	_ = traffic
+	if err != nil || client == nil {
+		return "", fmt.Errorf("client not found")
+	}
+
+	subURL, _, err := t.buildSubscriptionURLs(email)
+	if err != nil || subURL == "" {
+		return "", fmt.Errorf("订阅地址不可用")
+	}
+	// 把 /sub/<token> 换成 /clash/<token>，域名与端口保持一致
+	clashPath, _ := t.settingService.GetSubClashPath()
+	subPath, _ := t.settingService.GetSubPath()
+	clashPath = "/" + strings.Trim(clashPath, "/") + "/"
+	if subPath = "/" + strings.Trim(subPath, "/") + "/"; subPath != "/" && strings.Contains(subURL, subPath) {
+		return strings.Replace(subURL, subPath, clashPath, 1), nil
+	}
+	// 兜底：按 scheme://host 重拼
+	idx := strings.Index(subURL, "://")
+	if idx < 0 {
+		return "", fmt.Errorf("订阅地址异常")
+	}
+	rest := subURL[idx+3:]
+	slash := strings.Index(rest, "/")
+	if slash < 0 {
+		return "", fmt.Errorf("订阅地址异常")
+	}
+	return subURL[:idx+3] + rest[:slash] + clashPath + rest[strings.LastIndex(rest, "/")+1:], nil
+}
+
+// clientEmailByChatId 按 Telegram 用户 ID 找到他的客户端 email。
+func (t *Tgbot) clientEmailByChatId(chatId int64) string {
+	traffics, err := t.inboundService.GetClientTrafficTgBot(chatId)
+	if err != nil || len(traffics) == 0 {
+		return ""
+	}
+	return traffics[0].Email
+}
+
+// sendShopNodeQR 发送单节点链接 + 节点二维码。
+func (t *Tgbot) sendShopNodeQR(chatId int64) {
+	email := t.clientEmailByChatId(chatId)
+	if email == "" {
+		t.SendMsgToTgbot(chatId, "还没找到你的节点，可能是还没开通，或者已经在别处登录过 🥲")
+		return
+	}
+	links, err := t.fetchClientLinks(email)
+	if err != nil || len(links) == 0 {
+		t.SendMsgToTgbot(chatId, "节点暂时取不到，稍后再点一次，或者直接找我 🙌")
+		return
+	}
+	msg := "📱 <b>你的节点链接</b>\n<code>" + links[0] + "</code>"
+	if len(links) > 1 {
+		msg += fmt.Sprintf("\n\n<i>订阅里一共有 %d 个节点，想要全部就用「🔗 订阅链接」。</i>", len(links))
+	}
+	t.SendMsgToTgbot(chatId, msg)
+	t.sendContentQR(chatId, links[0], "📱 扫码直接添加节点（小火箭 / Clash Verge / v2rayN 都行）")
+}
+
+// sendShopClash 发送 Clash 订阅（链接 + 二维码）。
+func (t *Tgbot) sendShopClash(chatId int64) {
+	email := t.clientEmailByChatId(chatId)
+	if email == "" {
+		t.SendMsgToTgbot(chatId, "还没找到你的订阅，可能是还没开通 🥲")
+		return
+	}
+	clashURL, err := t.buildClashURL(email)
+	if err != nil || clashURL == "" {
+		t.SendMsgToTgbot(chatId, "Clash 订阅没开启，先找管理员开一下 🙏")
+		return
+	}
+	msg := "🐱 <b>Clash / Mihomo 订阅</b>\n<code>" + clashURL + "</code>\n\n" +
+		"<i>把这条链接粘到 Clash Verge / Mihomo / ClashX 的「订阅」里，点更新就行。</i>\n" +
+		"下面那张二维码也可以直接扫。"
+	t.SendMsgToTgbot(chatId, msg)
+	t.sendContentQR(chatId, clashURL, "🐱 Clash 订阅二维码，扫码导入订阅")
 }
