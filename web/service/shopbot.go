@@ -12,6 +12,7 @@ import (
 
 	"github.com/mymmrac/telego"
 	tu "github.com/mymmrac/telego/telegoutil"
+	"github.com/skip2/go-qrcode"
 )
 
 // 流量商店的 Telegram 交互：
@@ -208,6 +209,24 @@ func (t *Tgbot) sendShopQrPhoto(chatId int64, qr string, caption string) {
 	}
 }
 
+// sendContentQR 把一段内容（订阅链接）画成二维码图片发给买家。
+func (t *Tgbot) sendContentQR(chatId int64, content string, caption string) {
+	if bot == nil || !isRunning || content == "" {
+		return
+	}
+	png, err := qrcode.Encode(content, qrcode.Medium, 512)
+	if err != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	_, _ = bot.SendPhoto(ctx, &telego.SendPhotoParams{
+		ChatID:  tu.ID(chatId),
+		Photo:   tu.FileFromBytes(png, "sub-qr.png"),
+		Caption: caption,
+	})
+}
+
 // createShopOrder 买家点「我已付款」：落单并通知管理员。
 func (t *Tgbot) createShopOrder(chatId int64, from *telego.User, gb int, cycle string) {
 	shop := ShopService{}
@@ -257,10 +276,17 @@ func (t *Tgbot) approveShopOrder(chatId int64, adminId int64, orderId int) {
 	kb := tu.InlineKeyboard(
 		tu.InlineKeyboardRow(
 			tu.InlineKeyboardButton("📶 我的流量").WithCallbackData("client_traffic"),
+			tu.InlineKeyboardButton("📷 订阅二维码").WithCallbackData("client_qr_links"),
+		),
+		tu.InlineKeyboardRow(
 			tu.InlineKeyboardButton("🔗 单节点链接").WithCallbackData("client_individual_links"),
+			tu.InlineKeyboardButton("🛒 再买一份").WithCallbackData("shop_back"),
 		),
 	)
 	t.SendMsgToTgbot(order.ChatId, msg, kb)
+	if err == nil && subURL != "" {
+		t.sendContentQR(order.ChatId, subURL, "📷 用客户端扫这个二维码就是同一个订阅（链接和二维码二选一即可）")
+	}
 	t.SendMsgToTgbot(chatId, fmt.Sprintf("✅ 订单 #%d 已开通（客户端 %s）。", order.Id, order.ClientEmail))
 }
 
