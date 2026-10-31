@@ -94,7 +94,7 @@ func (t *Tgbot) sendShopMenu(chatId int64) {
 	}
 	plans := shop.GetShopPlans()
 	if len(plans) == 0 {
-		t.SendMsgToTgbot(chatId, "🛒 还没有配置套餐。")
+		t.SendMsgToTgbot(chatId, "🛒 暂时没有在售套餐，请稍后再来。")
 		return
 	}
 

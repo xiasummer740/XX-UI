@@ -73,7 +73,22 @@ func (s *ShopService) GetShopPlans() []ShopPlan {
 	if err := json.Unmarshal([]byte(raw), &plans); err != nil || len(plans) == 0 {
 		return defaultShopPlans()
 	}
-	return plans
+	// 只保留真正在售的档位：流量要大于 0，且至少有一个周期填了价格。
+	valid := make([]ShopPlan, 0, len(plans))
+	for _, p := range plans {
+		if p.Gb > 0 && p.HasPrice() {
+			valid = append(valid, p)
+		}
+	}
+	if len(valid) == 0 {
+		return nil
+	}
+	return valid
+}
+
+// HasPrice 判断该档位是否至少有一个周期在售。
+func (p ShopPlan) HasPrice() bool {
+	return p.Month > 0 || p.Quarter > 0 || p.Year > 0
 }
 
 func (s *ShopService) SetShopPlans(plans []ShopPlan) error {

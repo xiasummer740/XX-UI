@@ -68,7 +68,7 @@
 
   <a-collapse-panel key="3" header="套餐与价格">
     <div style="margin-bottom: 10px; color: #888; font-size: 13px;">
-      每一行是一个流量档位，价格留空表示该周期不卖。改完点上面的「保存」即可生效。
+      每一行是一个流量档位。<b>某个周期填 0 或清空 = 那个周期不卖</b>（买家点进去会看不到这个选项）；<b>整行点「删除」= 这个档位不卖</b>。改完点「保存商店设置」立即生效，不用重启。
     </div>
     <a-table :columns="shopPlanColumns" :data-source="shopPlansTable" :pagination="false"
       size="small" :scroll="{ x: 620 }">
