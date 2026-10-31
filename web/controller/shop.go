@@ -1,7 +1,10 @@
 package controller
 
 import (
+	"fmt"
 	"net/http"
+	"sort"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -61,7 +64,18 @@ func (a *ShopController) BufPayNotify(c *gin.Context) {
 
 	order, err := a.shopService.VerifyBufPayNotify(aoid, orderId, orderUid, price, payPrice, sign)
 	if err != nil {
-		logger.Warning("[bufpay] 回调校验失败: ", err)
+		// 排障：把 BufPay 真实回调的参数打出来（签名候选在 service 层打印）
+		_ = c.Request.ParseForm()
+		keys := make([]string, 0, len(c.Request.PostForm))
+		for k := range c.Request.PostForm {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		var detail strings.Builder
+		for _, k := range keys {
+			detail.WriteString(fmt.Sprintf("%s=%q ", k, c.Request.PostForm.Get(k)))
+		}
+		logger.Warning("[bufpay] 回调校验失败: ", err, " | 参数: ", detail.String())
 		c.String(http.StatusBadRequest, "fail")
 		return
 	}

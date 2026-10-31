@@ -238,3 +238,29 @@ func PriceEqual(a, b string) bool {
 	}
 	return diff < 0.005
 }
+
+// DiagnoseBufPaySign 输出几种候选签名，用于排查 BufPay 实际使用的签名规则。
+// 只在验签失败时打到日志里，方便一次性定位。
+func (s *BufPayService) DiagnoseBufPaySign(secret, aoid, orderId, orderUid, price, payPrice, sign string) string {
+	type pair struct{ name, value string }
+	candidates := []pair{
+		{"aoid+order_id+order_uid+price+pay_price", aoid + orderId + orderUid + price + payPrice},
+		{"order_id+order_uid+price+pay_price", orderId + orderUid + price + payPrice},
+		{"aoid+order_id+order_uid+pay_price", aoid + orderId + orderUid + payPrice},
+		{"aoid+order_uid+price+pay_price", aoid + orderUid + price + payPrice},
+	}
+	var b strings.Builder
+	b.WriteString("收到sign=" + sign)
+	for _, cand := range candidates {
+		if cand.value == "" {
+			continue
+		}
+		h := s.sign(cand.value, secret)
+		mark := ""
+		if strings.EqualFold(h, sign) {
+			mark = "  ✅ 匹配"
+		}
+		b.WriteString(fmt.Sprintf("\n  %s -> %s%s", cand.name, h, mark))
+	}
+	return b.String()
+}

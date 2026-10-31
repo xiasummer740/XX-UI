@@ -10,6 +10,7 @@ import (
 
 	"github.com/XiaSummer740/XX-UI/database"
 	"github.com/XiaSummer740/XX-UI/database/model"
+	"github.com/XiaSummer740/XX-UI/logger"
 	"github.com/google/uuid"
 	tu "github.com/mymmrac/telego/telegoutil"
 	"gorm.io/gorm"
@@ -685,7 +686,10 @@ func (s *ShopService) GetNotifyURL() string {
 // VerifyBufPayNotify 校验 BufPay 回调（签名 + 金额），返回对应订单。
 func (s *ShopService) VerifyBufPayNotify(aoid, orderId, orderUid, price, payPrice, sign string) (*model.Order, error) {
 	var buf BufPayService
-	if !buf.VerifyNotify(s.GetBufSecret(), aoid, orderId, orderUid, price, payPrice, sign) {
+	secret := s.GetBufSecret()
+	if !buf.VerifyNotify(secret, aoid, orderId, orderUid, price, payPrice, sign) {
+		// 排障：把几种候选签名都算一遍，看 BufPay 到底用什么规则
+		logger.Warning("[bufpay] 验签明细 ", buf.DiagnoseBufPaySign(secret, aoid, orderId, orderUid, price, payPrice, sign))
 		return nil, fmt.Errorf("签名校验失败")
 	}
 	id, err := strconv.Atoi(strings.TrimSpace(orderId))
