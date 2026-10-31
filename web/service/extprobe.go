@@ -258,11 +258,32 @@ func (s *InboundService) RunExternalProbes() {
 			continue
 		}
 		probe := ExtProbe{At: now, Nodes: nodes, Host: fmt.Sprintf("%s:%d", host, c.ib.Port)}
+		// 先用中位数把明显异常的抖动（比如某探针节点偶发 1 秒）标出来，
+		// 免得一个 1160ms 的毛刺把整行数字拖成「109-1160」
+		var vals []int64
+		for _, n := range nodes {
+			if n.Err == "" && n.Ms >= 3 {
+				vals = append(vals, n.Ms)
+			}
+		}
+		var median int64
+		if len(vals) > 0 {
+			sorted := append([]int64(nil), vals...)
+			sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+			median = sorted[len(sorted)/2]
+		}
 		var sum int64
 		var okCount int
-		for _, n := range nodes {
+		for idx := range probe.Nodes {
+			n := &probe.Nodes[idx]
 			// 跨地区连一台海外 VPS 不可能 1-2ms，这种是探针自身抖动，剔掉
 			if n.Err != "" || n.Ms < 3 {
+				probe.Fail++
+				continue
+			}
+			// 超过中位数 3 倍视为偶发毛刺，不计入区间
+			if median > 0 && n.Ms > median*3 {
+				n.Err = "抖动，已忽略"
 				probe.Fail++
 				continue
 			}
