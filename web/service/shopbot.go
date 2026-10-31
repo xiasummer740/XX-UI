@@ -870,8 +870,9 @@ func (t *Tgbot) sendShopBufPayQR(chatId int64, from *telego.User, gb int, cycle,
 
 	caption := fmt.Sprintf("%s <b>%s</b>\n\n金额：<b>¥%s</b>　（%d GB · %s）\n订单号：#%d\n\n"+
 		"<b>第 4 步</b>：扫码付款，付完我会<b>自动</b>给你开通并发送节点 ✅\n"+
-		"<i>一般 5~20 秒，不用等我确认。</i>",
-		icon, methodLabel, pay.QRPriceDisplay(price), gb, cycleLabel(cycle), order.Id)
+		"<i>一般 5~20 秒，不用等我确认。</i>\n\n"+
+		"⚠️ 如果扫码后要你<b>手动输入金额</b>，请一定填 <b>¥%s</b>（一分都不能差，否则对不上账）。",
+		icon, methodLabel, pay.QRPriceDisplay(price), gb, cycleLabel(cycle), order.Id, NormalizePrice(price))
 
 	rows := [][]telego.InlineKeyboardButton{
 		tu.InlineKeyboardRow(

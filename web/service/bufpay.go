@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -105,6 +106,9 @@ func (s *BufPayService) CreatePayment(aid, secret, name, payType, price, orderId
 }
 
 // doPay 发一次下单请求，区分「网络失败」和「接口拒绝」。
+//
+// BufPay 现在返回的是渲染好的支付页（HTML，里面带一张 base64 二维码），
+// 而不是文档里写的 JSON，所以这里两种格式都要能吃下。
 func (s *BufPayService) doPay(endpoint string, form url.Values) (pay *BufPayPayment, apiErr error, transportErr error) {
 	client := &http.Client{Timeout: 20 * time.Second}
 	resp, err := client.PostForm(endpoint, form)
@@ -113,19 +117,75 @@ func (s *BufPayService) doPay(endpoint string, form url.Values) (pay *BufPayPaym
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if err != nil {
 		return nil, nil, fmt.Errorf("读取 BufPay 响应失败: %w", err)
 	}
+	text := strings.TrimSpace(string(body))
 
-	result := &BufPayPayment{}
-	if err := json.Unmarshal(body, result); err != nil {
-		return nil, nil, fmt.Errorf("BufPay 返回了非预期内容: %s", strings.TrimSpace(string(body)))
+	// 1) 先按官方文档的 JSON 格式解析（以防他们哪天改回来）
+	if strings.HasPrefix(text, "{") {
+		result := &BufPayPayment{}
+		if err := json.Unmarshal(body, result); err != nil {
+			return nil, nil, fmt.Errorf("BufPay 返回了非预期的 JSON: %s", text)
+		}
+		if result.Status != "ok" {
+			return nil, fmt.Errorf("bufpay 返回: %s", bufPayErrorText(result.Status)), nil
+		}
+		return result, nil, nil
 	}
-	if result.Status != "ok" {
-		return nil, fmt.Errorf("bufpay 返回: %s", bufPayErrorText(result.Status)), nil
+
+	// 2) 实际返回的是支付页 HTML：把里面的二维码图片抠出来
+	return parseBufPayPage(text)
+}
+
+var (
+	reBufPayQRImage  = regexp.MustCompile(`(?s)id="qr"[^>]*src="(data:image/[a-zA-Z]+;base64,[^"]{500,})"`)
+	reBufPayAnyImage = regexp.MustCompile(`(data:image/(?:jpeg|jpg|png);base64,[A-Za-z0-9+/=]{800,})`)
+	reBufPayExpires  = regexp.MustCompile(`expires_in\s*[:=]\s*(\d+)`)
+)
+
+// parseBufPayPage 从 BufPay 的支付页里提取二维码。
+func parseBufPayPage(text string) (pay *BufPayPayment, apiErr error, transportErr error) {
+	result := &BufPayPayment{Status: "ok"}
+
+	if m := reBufPayQRImage.FindStringSubmatch(text); m != nil {
+		result.QrImg = m[1]
+	} else if m := reBufPayAnyImage.FindStringSubmatch(text); m != nil {
+		result.QrImg = m[1]
 	}
-	return result, nil, nil
+	if m := reBufPayExpires.FindStringSubmatch(text); m != nil {
+		if n, err := strconv.Atoi(m[1]); err == nil {
+			result.ExpiresIn = n
+		}
+	}
+
+	if result.QrImg != "" {
+		return result, nil, nil
+	}
+
+	// 没有二维码 → 说明是错误页，把原因翻出来
+	switch {
+	case strings.Contains(text, "sign_error"), strings.Contains(text, "签名错误"):
+		return nil, fmt.Errorf("bufpay 返回: %s", bufPayErrorText("sign_error")), nil
+	case strings.Contains(text, "free_limit"), strings.Contains(text, "每日订单"):
+		return nil, fmt.Errorf("bufpay 返回: %s", bufPayErrorText("free_limit")), nil
+	case strings.Contains(text, "fee_error"), strings.Contains(text, "余额不足"):
+		return nil, fmt.Errorf("bufpay 返回: %s", bufPayErrorText("fee_error")), nil
+	case strings.Contains(text, "qr_limit"), strings.Contains(text, "可用二维码"):
+		return nil, fmt.Errorf("bufpay 返回: %s", bufPayErrorText("qr_limit")), nil
+	}
+	return nil, fmt.Errorf("bufpay 没返回二维码（可能二维码额度用完或金额无可用码），页面片段: %s",
+		trimForLog(text, 200)), nil
+}
+
+// trimForLog 截断长文本用于日志。
+func trimForLog(s string, n int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "..."
 }
 
 // VerifyNotify 校验支付回调的签名。
