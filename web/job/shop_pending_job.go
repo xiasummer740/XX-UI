@@ -18,5 +18,7 @@ func NewShopPendingJob() *ShopPendingJob {
 
 // Run 执行一轮提醒。
 func (j *ShopPendingJob) Run() {
-	j.shopService.RemindPendingOrders(j.tgbotService.NewTgbot())
+	bot := j.tgbotService.NewTgbot()
+	j.shopService.RemindPendingOrders(bot)
+	j.shopService.CheckShopHealth(bot)
 }

@@ -320,7 +320,7 @@ func (s *ShopService) ApproveOrder(id int, adminId int64) (*model.Order, error) 
 	}
 	inbound, err := s.inboundService.GetInbound(inboundId)
 	if err != nil {
-		return nil, fmt.Errorf("读取入站失败: %v", err)
+		return nil, fmt.Errorf("店铺投放的入站 #%d 已经不存在了（可能被删掉了），请到「设置 → 流量商店 → 基础设置」重新选一个投放设备", inboundId)
 	}
 
 	// 老买家重复购买：直接在原客户端上叠加流量和时长，订阅链接保持不变。
@@ -757,4 +757,44 @@ func (s *ShopService) RemindPendingOrders(bot *Tgbot) {
 				"如果买家其实没付，点「拒绝」就行，他那边会收到说明；买家也可以自己取消。",
 			o.Id, waitMin, orderText(o)), kb)
 	}
+}
+
+var shopHealthMu sync.Mutex
+var shopHealthLastWarn int64
+
+// CheckShopHealth 检查店铺配置是否还能用（投放的入站是否还在），
+// 有问题就提醒管理员。每小时最多提醒一次，避免刷屏。
+func (s *ShopService) CheckShopHealth(bot *Tgbot) {
+	if bot == nil {
+		return
+	}
+	enable, err := s.settingService.GetShopEnable()
+	if err != nil || !enable {
+		return
+	}
+	inboundId := s.GetShopInboundID()
+	var problem string
+	switch {
+	case inboundId <= 0:
+		problem = "还没有选择投放的入站"
+	default:
+		if _, err := s.inboundService.GetInbound(inboundId); err != nil {
+			problem = fmt.Sprintf("投放的入站 #%d 已经不存在了（可能被删掉了）", inboundId)
+		}
+	}
+	if problem == "" {
+		return
+	}
+
+	shopHealthMu.Lock()
+	defer shopHealthMu.Unlock()
+	now := time.Now().Unix()
+	if now-shopHealthLastWarn < 3600 {
+		return
+	}
+	shopHealthLastWarn = now
+	bot.SendMsgToTgbotAdmins(fmt.Sprintf(
+		"⚠️ <b>流量商店现在无法开通</b>\n\n%s。\n\n"+
+			"买家还能看到套餐，但付款后开通会失败。\n"+
+			"请到面板「设置 → 流量商店 → 基础设置」重新选择投放设备。", problem))
 }
