@@ -17,6 +17,7 @@ import (
 	"github.com/XiaSummer740/XX-UI/database/model"
 	"github.com/XiaSummer740/XX-UI/logger"
 	"github.com/XiaSummer740/XX-UI/xray"
+	"gorm.io/gorm"
 )
 
 // IPWithTimestamp tracks an IP address with its last seen timestamp
@@ -351,7 +352,14 @@ func (j *CheckClientIpJob) updateInboundClientIps(inboundClientIps *model.Inboun
 	// Get the inbound configuration
 	inbound, err := j.getInboundByEmail(clientEmail)
 	if err != nil {
-		logger.Errorf("failed to fetch inbound settings for email %s: %s", clientEmail, err)
+		// 客户端所属的入站已经被删除时，inbound_client_ips 里会留下孤儿记录，
+		// 每轮都会命中一次「record not found」。这里直接清掉，避免日志被刷屏。
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			database.GetDB().Where("client_email = ?", clientEmail).Delete(&model.InboundClientIps{})
+			logger.Debugf("cleanup stale client ip record: %s", clientEmail)
+		} else {
+			logger.Errorf("failed to fetch inbound settings for email %s: %s", clientEmail, err)
+		}
 		return false
 	}
 
