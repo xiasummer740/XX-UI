@@ -164,6 +164,10 @@
                         @click="openSubscribeConvert()">
                         <template v-if="!isMobile">订阅转换</template>
                       </a-button>
+                      <a-button type="primary" icon="medicine-box"
+                        @click="openAudit">
+                        <template v-if="!isMobile">入站体检</template>
+                      </a-button>
                       <a-dropdown :trigger="['click']">
                         <a-button type="primary" icon="menu">
                           <template v-if="!isMobile">{{ i18n
@@ -195,10 +199,6 @@
                           <a-menu-item key="syncFirewall">
                             <a-icon type="safety-certificate"></a-icon>
                             {{ i18n "pages.inbounds.syncFirewall" }}
-                          </a-menu-item>
-                          <a-menu-item key="auditInbounds">
-                            <a-icon type="medicine-box"></a-icon>
-                            入站体检
                           </a-menu-item>
                           <a-menu-item key="resetClients">
                             <a-icon type="file-done"></a-icon>
@@ -1013,7 +1013,7 @@
   </a-modal>
   <!-- 入站体检弹窗 -->
   <a-modal title="入站体检" :visible="auditVisible" @cancel="auditVisible = false" :footer="null"
-    :class="themeSwitcher.currentTheme" width="860px">
+    :class="themeSwitcher.currentTheme" width="94%" style="max-width: 860px;">
     <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">
       <a-button icon="reload" :loading="auditLoading" @click="runAudit">重新体检</a-button>
       <span v-if="!auditLoading" style="color: #666;">
@@ -1161,7 +1161,7 @@
   :mask-closable="false"
   @ok="() => copyClientsModal.ok()"
   @cancel="() => copyClientsModal.close()"
-  width="900px">
+  width="94%" style="max-width: 900px;">
   <a-space direction="vertical" style="width: 100%;">
     <div>
       <div style="margin-bottom: 6px;">{{ i18n "pages.client.copySource" }}</div>
@@ -1918,9 +1918,7 @@ function subLinkToken(subId) {
           case "syncFirewall":
             this.syncFirewall();
             break;
-          case "auditInbounds":
-            this.openAudit();
-            break;
+
           case "resetClients":
             this.resetAllClientTraffics(-1);
             break;
