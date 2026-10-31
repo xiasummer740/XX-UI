@@ -20,7 +20,6 @@ func NewShopController(g *gin.RouterGroup) *ShopController {
 
 // initRouter 注册 /panel/shop/* 路由。
 func (a *ShopController) initRouter(g *gin.RouterGroup) {
-	g = g.Group("/shop")
 	g.GET("/stats", a.getStats)
 	g.GET("/orders", a.getOrders)
 }

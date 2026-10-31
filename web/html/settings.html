@@ -430,9 +430,9 @@
       },
       async loadShopReport() {
         try {
-          const s = await HttpUtil.get("/panel/shop/stats");
+          const s = await HttpUtil.get("/panel/api/shop/stats");
           if (s && s.success && s.obj) this.shopStats = s.obj;
-          const o = await HttpUtil.get("/panel/shop/orders");
+          const o = await HttpUtil.get("/panel/api/shop/orders");
           if (o && o.success && Array.isArray(o.obj)) this.shopOrders = o.obj;
         } catch (e) {
           // 面板旧版本可能没有这个接口，静默失败

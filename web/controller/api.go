@@ -58,6 +58,9 @@ func (a *APIController) initRouter(g *gin.RouterGroup, customGeo *service.Custom
 
 	NewCustomGeoController(api.Group("/custom-geo"), customGeo)
 
+	// 流量商店经营数据
+	NewShopController(api.Group("/shop"))
+
 	// Remote management API (uses API key auth, not session)
 	remote := g.Group("/panel/remote")
 	remote.Use(middleware.ApiKeyAuth())
