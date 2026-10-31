@@ -278,6 +278,7 @@ func (t *Tgbot) trySetBotCommands(bot *telego.Bot) {
 			{Command: "id", Description: t.I18nBot("tgbot.commands.idDesc")},
 			{Command: "buy", Description: "购买流量套餐"},
 			{Command: "orders", Description: "查看订单（管理员）"},
+			{Command: "stats", Description: "经营看板（管理员）"},
 		},
 	})
 	if err != nil {
@@ -689,6 +690,12 @@ func (t *Tgbot) answerCommand(message *telego.Message, chatId int64, isAdmin boo
 			onlyMessage = true
 			shop := ShopService{}
 			t.sendShopOrders(chatId, &shop)
+			return
+		}
+	case "stats":
+		if isAdmin {
+			onlyMessage = true
+			t.sendShopStats(chatId)
 			return
 		}
 	case "usage":

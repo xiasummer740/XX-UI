@@ -36,6 +36,7 @@ func (a *XUIController) initRouter(g *gin.RouterGroup) {
 
 	a.settingController = NewSettingController(g)
 	a.xraySettingController = NewXraySettingController(g)
+	NewShopController(g)
 }
 
 // index renders the main panel index page.

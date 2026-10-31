@@ -458,3 +458,113 @@ func planPriceText(p ShopPlan) string {
 func formatPrice(v float64) string {
 	return strconv.FormatFloat(v, 'f', -1, 64)
 }
+
+// ShopStats 经营看板数据。
+type ShopStats struct {
+	TodayRevenue float64         `json:"todayRevenue"`
+	MonthRevenue float64         `json:"monthRevenue"`
+	TotalRevenue float64         `json:"totalRevenue"`
+	TodayOrders  int64           `json:"todayOrders"`
+	MonthOrders  int64           `json:"monthOrders"`
+	TotalOrders  int64           `json:"totalOrders"`
+	Approved     int64           `json:"approved"`
+	Pending      int64           `json:"pending"`
+	Rejected     int64           `json:"rejected"`
+	Buyers       int64           `json:"buyers"`
+	Clients      int             `json:"clients"`
+	UsedGB       float64         `json:"usedGb"`
+	QuotaGB      float64         `json:"quotaGb"`
+	Daily        []ShopDailyStat `json:"daily"`
+}
+
+// ShopDailyStat 某一天的经营数据。
+type ShopDailyStat struct {
+	Date    string  `json:"date"`
+	Count   int64   `json:"count"`
+	Revenue float64 `json:"revenue"`
+}
+
+// GetShopStats 汇总经营数据（只统计已开通的订单算收入，待确认单单独计数）。
+func (s *ShopService) GetShopStats() (*ShopStats, error) {
+	db := database.GetDB()
+	stats := &ShopStats{}
+
+	now := time.Now()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Unix()
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).Unix()
+
+	type agg struct {
+		Cnt int64
+		Sum float64
+	}
+	var a agg
+
+	// 累计
+	db.Model(&model.Order{}).Where("status = ?", orderApproved).
+		Select("count(*) as cnt, coalesce(sum(price),0) as sum").Scan(&a)
+	stats.Approved, stats.TotalRevenue = a.Cnt, a.Sum
+	db.Model(&model.Order{}).Count(&stats.TotalOrders)
+	db.Model(&model.Order{}).Where("status = ?", orderPending).Count(&stats.Pending)
+	db.Model(&model.Order{}).Where("status = ?", orderRejected).Count(&stats.Rejected)
+
+	// 今天
+	a = agg{}
+	db.Model(&model.Order{}).Where("status = ? AND created_at >= ?", orderApproved, todayStart).
+		Select("count(*) as cnt, coalesce(sum(price),0) as sum").Scan(&a)
+	stats.TodayOrders, stats.TodayRevenue = a.Cnt, a.Sum
+
+	// 本月
+	a = agg{}
+	db.Model(&model.Order{}).Where("status = ? AND created_at >= ?", orderApproved, monthStart).
+		Select("count(*) as cnt, coalesce(sum(price),0) as sum").Scan(&a)
+	stats.MonthOrders, stats.MonthRevenue = a.Cnt, a.Sum
+
+	// 买家数（去重 chat_id）
+	db.Model(&model.Order{}).Where("status = ?", orderApproved).
+		Distinct("chat_id").Count(&stats.Buyers)
+
+	// 最近 7 天
+	for i := 6; i >= 0; i-- {
+		day := now.AddDate(0, 0, -i)
+		start := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, day.Location()).Unix()
+		end := start + 86400
+		a = agg{}
+		db.Model(&model.Order{}).Where("status = ? AND created_at >= ? AND created_at < ?", orderApproved, start, end).
+			Select("count(*) as cnt, coalesce(sum(price),0) as sum").Scan(&a)
+		stats.Daily = append(stats.Daily, ShopDailyStat{
+			Date:    day.Format("01-02"),
+			Count:   a.Cnt,
+			Revenue: a.Sum,
+		})
+	}
+
+	// 店铺入站里的客户端用量
+	inboundID := s.GetShopInboundID()
+	if inboundID > 0 {
+		type usage struct {
+			Cnt   int
+			Used  int64
+			Total int64
+		}
+		var u usage
+		db.Table("client_traffics").
+			Where("inbound_id = ? AND email LIKE ?", inboundID, "tg%").
+			Select("count(*) as cnt, coalesce(sum(up+down),0) as used, coalesce(sum(total),0) as total").
+			Scan(&u)
+		stats.Clients = u.Cnt
+		stats.UsedGB = float64(u.Used) / 1073741824
+		stats.QuotaGB = float64(u.Total) / 1073741824
+	}
+
+	return stats, nil
+}
+
+// ListOrdersForPanel 面板用：最近 N 条订单。
+func (s *ShopService) ListOrdersForPanel(limit int) ([]model.Order, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	var orders []model.Order
+	err := database.GetDB().Order("id desc").Limit(limit).Find(&orders).Error
+	return orders, err
+}

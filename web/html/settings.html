@@ -155,6 +155,17 @@
       shopInbounds: [],
       shopPlansTable: [],
       qrPasteTarget: 'wechat',
+      shopStats: null,
+      shopOrders: [],
+      shopOrderColumns: [
+        { title: '订单', dataIndex: 'id', width: 70 },
+        { title: '买家', dataIndex: 'tgName', width: 150, scopedSlots: { customRender: 'buyer' } },
+        { title: '套餐', dataIndex: 'planGb', width: 120, scopedSlots: { customRender: 'plan' } },
+        { title: '金额', dataIndex: 'price', width: 90, scopedSlots: { customRender: 'price' } },
+        { title: '支付', dataIndex: 'remark', width: 90 },
+        { title: '状态', dataIndex: 'status', width: 110, scopedSlots: { customRender: 'status' } },
+        { title: '下单时间', dataIndex: 'createdAt', width: 150, scopedSlots: { customRender: 'time' } },
+      ],
       shopPlanColumns: [
         { title: '流量 (GB)', dataIndex: 'gb', key: 'gb', scopedSlots: { customRender: 'gb' }, width: 120 },
         { title: '月付 ¥', dataIndex: 'month', key: 'month', scopedSlots: { customRender: 'month' }, width: 130 },
@@ -416,6 +427,27 @@
       removeShopPlan(index) {
         this.shopPlansTable.splice(index, 1);
         this.syncShopPlans();
+      },
+      async loadShopReport() {
+        try {
+          const s = await HttpUtil.get("/panel/shop/stats");
+          if (s && s.success && s.obj) this.shopStats = s.obj;
+          const o = await HttpUtil.get("/panel/shop/orders");
+          if (o && o.success && Array.isArray(o.obj)) this.shopOrders = o.obj;
+        } catch (e) {
+          // 面板旧版本可能没有这个接口，静默失败
+        }
+      },
+      shopOrderStatusText(status) {
+        if (status === "approved") return "已开通";
+        if (status === "rejected") return "已拒绝";
+        return "待确认";
+      },
+      formatShopTime(ts) {
+        if (!ts) return "";
+        const d = new Date(ts * 1000);
+        const p = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
       },
       async loadShopInbounds() {
         const msg = await HttpUtil.get("/panel/api/inbounds/list");
@@ -783,6 +815,7 @@
       await this.getAllSetting();
       await this.loadInboundTags();
       await this.loadShopInbounds();
+      this.loadShopReport();
       document.addEventListener("paste", this.handleQrPaste);
       while (true) {
         await PromiseUtil.sleep(1000);

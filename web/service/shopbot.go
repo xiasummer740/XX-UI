@@ -594,3 +594,43 @@ func (t *Tgbot) sendShopClash(chatId int64) {
 	t.SendMsgToTgbot(chatId, msg)
 	t.sendContentQR(chatId, clashURL, "🐱 Clash 订阅二维码，扫码导入订阅")
 }
+
+// sendShopStats 管理员经营看板（/stats）。
+func (t *Tgbot) sendShopStats(chatId int64) {
+	shop := ShopService{}
+	stats, err := shop.GetShopStats()
+	if err != nil {
+		t.SendMsgToTgbot(chatId, "❌ 统计读取失败："+err.Error())
+		return
+	}
+
+	var sb strings.Builder
+	sb.WriteString("📊 <b>经营看板</b>\n\n")
+	sb.WriteString(fmt.Sprintf("今日：<b>¥%.2f</b>（%d 单）\n", stats.TodayRevenue, stats.TodayOrders))
+	sb.WriteString(fmt.Sprintf("本月：<b>¥%.2f</b>（%d 单）\n", stats.MonthRevenue, stats.MonthOrders))
+	sb.WriteString(fmt.Sprintf("累计：<b>¥%.2f</b>（%d 单已开通）\n\n", stats.TotalRevenue, stats.Approved))
+
+	sb.WriteString(fmt.Sprintf("⏳ 待确认：<b>%d</b> 单\n", stats.Pending))
+	sb.WriteString(fmt.Sprintf("❌ 已拒绝：%d 单\n", stats.Rejected))
+	sb.WriteString(fmt.Sprintf("👥 买家：<b>%d</b> 人\n", stats.Buyers))
+	sb.WriteString(fmt.Sprintf("🖥 在售客户端：<b>%d</b> 个\n", stats.Clients))
+	sb.WriteString(fmt.Sprintf("📶 流量：%.2f / %.0f GB 已用\n", stats.UsedGB, stats.QuotaGB))
+
+	sb.WriteString("\n<b>最近 7 天</b>\n")
+	for _, d := range stats.Daily {
+		bar := ""
+		if d.Revenue > 0 {
+			n := int(d.Revenue/10) + 1
+			if n > 10 {
+				n = 10
+			}
+			bar = strings.Repeat("▮", n)
+		}
+		sb.WriteString(fmt.Sprintf("%s  ¥%-7.2f %s\n", d.Date, d.Revenue, bar))
+	}
+
+	if stats.Pending > 0 {
+		sb.WriteString("\n👉 有待确认订单，发 /orders 处理。")
+	}
+	t.SendMsgToTgbot(chatId, sb.String())
+}

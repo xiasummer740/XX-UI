@@ -20,7 +20,82 @@
     </div>
   </div>
 
-  <a-collapse :default-active-key="['1', '2']">
+  <a-collapse :default-active-key="['0', '1', '2']">
+    <a-collapse-panel key="0" header="经营数据（收入 / 订单 / 客户）">
+      <div v-if="!shopStats" style="color: #999; font-size: 13px;">加载中…</div>
+      <div v-else>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px;">
+          <div style="flex: 1; min-width: 130px; border-radius: 10px; padding: 12px 14px; background: #f6ffed; border: 1px solid #b7eb8f;">
+            <div style="font-size: 12px; color: #888;">今日收入</div>
+            <div style="font-size: 20px; font-weight: 700; color: #389e0d;">¥[[ shopStats.todayRevenue.toFixed(2) ]]</div>
+            <div style="font-size: 12px; color: #999;">[[ shopStats.todayOrders ]] 单</div>
+          </div>
+          <div style="flex: 1; min-width: 130px; border-radius: 10px; padding: 12px 14px; background: #e6f7ff; border: 1px solid #91d5ff;">
+            <div style="font-size: 12px; color: #888;">本月收入</div>
+            <div style="font-size: 20px; font-weight: 700; color: #096dd9;">¥[[ shopStats.monthRevenue.toFixed(2) ]]</div>
+            <div style="font-size: 12px; color: #999;">[[ shopStats.monthOrders ]] 单</div>
+          </div>
+          <div style="flex: 1; min-width: 130px; border-radius: 10px; padding: 12px 14px; background: #fff7e6; border: 1px solid #ffd591;">
+            <div style="font-size: 12px; color: #888;">累计收入</div>
+            <div style="font-size: 20px; font-weight: 700; color: #d46b08;">¥[[ shopStats.totalRevenue.toFixed(2) ]]</div>
+            <div style="font-size: 12px; color: #999;">[[ shopStats.approved ]] 单已开通</div>
+          </div>
+          <div style="flex: 1; min-width: 130px; border-radius: 10px; padding: 12px 14px; background: #fff1f0; border: 1px solid #ffa39e;">
+            <div style="font-size: 12px; color: #888;">待确认订单</div>
+            <div style="font-size: 20px; font-weight: 700; color: #cf1322;">[[ shopStats.pending ]] 单</div>
+            <div style="font-size: 12px; color: #999;">买家：[[ shopStats.buyers ]] 人</div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px;">
+          <div style="flex: 1; min-width: 200px; border-radius: 10px; padding: 12px 14px; background: #fafafa; border: 1px solid #eee;">
+            <div style="font-size: 12px; color: #888; margin-bottom: 6px;">在售客户端 / 流量</div>
+            <div style="font-size: 15px;">
+              <b>[[ shopStats.clients ]]</b> 个客户端 ·
+              <b>[[ shopStats.usedGb.toFixed(2) ]]</b> / [[ shopStats.quotaGb.toFixed(0) ]] GB 已用
+            </div>
+          </div>
+          <div style="flex: 2; min-width: 260px; border-radius: 10px; padding: 12px 14px; background: #fafafa; border: 1px solid #eee;">
+            <div style="font-size: 12px; color: #888; margin-bottom: 6px;">最近 7 天</div>
+            <div style="display: flex; gap: 10px; align-items: flex-end; height: 60px;">
+              <div v-for="d in shopStats.daily" :key="d.date" style="flex: 1; text-align: center;">
+                <div :style="{ height: (8 + Math.min(46, d.revenue * 3)) + 'px', background: d.revenue > 0 ? 'linear-gradient(180deg,#52c41a,#95de64)' : '#e8e8e8', borderRadius: '4px 4px 0 0' }"></div>
+                <div style="font-size: 11px; color: #999; margin-top: 4px;">[[ d.date ]]</div>
+                <div style="font-size: 11px; color: #666;">¥[[ d.revenue.toFixed(0) ]]</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div style="font-weight: 600;">最近订单</div>
+          <a-button size="small" icon="reload" @click="loadShopReport">刷新</a-button>
+        </div>
+        <a-table :columns="shopOrderColumns" :data-source="shopOrders" :pagination="{ pageSize: 10, size: 'small' }"
+          size="small" :scroll="{ x: 720 }">
+          <template slot="buyer" slot-scope="text">
+            [[ text ]]
+          </template>
+          <template slot="plan" slot-scope="text, record">
+            <b>[[ text ]] GB</b> · [[ record.cycle === 'month' ? '月付' : (record.cycle === 'quarter' ? '季付' : '年付') ]]
+          </template>
+          <template slot="price" slot-scope="text">
+            <span style="color: #389e0d; font-weight: 600;">¥[[ Number(text).toFixed(2) ]]</span>
+          </template>
+          <template slot="time" slot-scope="text">
+            [[ formatShopTime(text) ]]
+          </template>
+          <template slot="status" slot-scope="text">
+            <a-tag v-if="text === 'approved'" color="green">✅ 已开通</a-tag>
+            <a-tag v-else-if="text === 'rejected'" color="red">❌ 已拒绝</a-tag>
+            <a-tag v-else color="orange">⏳ 待确认</a-tag>
+          </template>
+        </a-table>
+
+        <a-alert style="margin-top: 12px;" type="info" show-icon
+          message="收入只统计「已开通」的订单；待确认的单子核对到账后再点确认即可。" />
+      </div>
+    </a-collapse-panel>
     <a-collapse-panel key="1" header="基础设置">
       <a-setting-list-item paddings="small">
         <template #title>启用流量商店</template>
