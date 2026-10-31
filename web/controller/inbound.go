@@ -67,6 +67,9 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/syncFirewall", a.syncFirewall)
 	// 整机流量用量：套餐额度 / 本周期已用 / 阈值 / 剩余天数
 	g.POST("/vpsUsage", a.vpsUsage)
+	// 入站体检：一次性查出「为什么连不上」，并支持按项修复
+	g.POST("/audit", a.auditInbounds)
+	g.POST("/auditFix", a.auditFix)
 	g.POST("/applyTrafficReset", a.applyTrafficReset)
 	g.GET("/trafficHistory", a.getTrafficHistory)
 	g.GET("/chainProxy/:id", a.getChainProxy)
@@ -669,6 +672,36 @@ func (a *InboundController) suggestReality(c *gin.Context) {
 func (a *InboundController) vpsUsage(c *gin.Context) {
 	usage, err := a.inboundService.GetVPSUsage()
 	jsonObj(c, usage, err)
+}
+
+// auditInbounds 对全部入站做体检（启用/监听/防火墙/REALITY 公钥/链接字段/subId/运行时配置/偷站目标）。
+func (a *InboundController) auditInbounds(c *gin.Context) {
+	result, err := a.inboundService.CheckInboundsHealth()
+	jsonObj(c, result, err)
+}
+
+// auditFix 修复单个入站的某一类问题；需要时顺带重启 xray。
+func (a *InboundController) auditFix(c *gin.Context) {
+	var req struct {
+		Id     int    `json:"id" form:"id"`
+		FixKey string `json:"fixKey" form:"fixKey"`
+	}
+	if err := c.ShouldBind(&req); err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	msg, needRestart, err := a.inboundService.FixInboundIssue(req.Id, req.FixKey)
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	if needRestart {
+		if rerr := a.xrayService.RestartXray(true); rerr != nil {
+			jsonMsg(c, msg+"（xray 重启失败: "+rerr.Error()+"）", nil)
+			return
+		}
+	}
+	jsonMsg(c, msg, nil)
 }
 
 // syncFirewall 把所有启用入站的端口在系统防火墙（ufw）里补齐放行。

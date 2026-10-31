@@ -24,7 +24,7 @@
             <a-col>
               <a-card size="small" :style="{ padding: '16px' }" hoverable>
                 <a-row>
-                  <a-col :sm="12" :md="5">
+                  <a-col :sm="12" :md="4">
                     <a-custom-statistic
                       title='{{ i18n "pages.inbounds.totalDownUp" }}'
                       :value="`${SizeFormatter.sizeFormat(total.up)} / ${SizeFormatter.sizeFormat(total.down)}`">
@@ -33,7 +33,7 @@
                       </template>
                     </a-custom-statistic>
                   </a-col>
-                  <a-col :sm="12" :md="5">
+                  <a-col :sm="12" :md="4">
                     <a-custom-statistic
                       title='{{ i18n "pages.inbounds.totalUsage" }}'
                       :value="SizeFormatter.sizeFormat(total.up + total.down)"
@@ -43,7 +43,24 @@
                       </template>
                     </a-custom-statistic>
                   </a-col>
-                  <a-col :sm="12" :md="5">
+                  <a-col :sm="12" :md="4">
+                    <a-custom-statistic title='套餐用量' :value="vpsQuotaTitle"
+                      :style="{ marginTop: isMobile ? '10px' : 0 }"
+                      style="cursor: pointer;" @click="openVpsModal">
+                      <template #prefix>
+                        <a-icon :type="vpsQuotaIcon" :style="{ color: vpsQuotaColor }"></a-icon>
+                      </template>
+                    </a-custom-statistic>
+                    <a-progress v-if="vpsUsage && vpsUsage.quotaBytes > 0"
+                      :percent="Math.min(100, Number((vpsUsage.percent || 0).toFixed(1)))"
+                      :show-info="false" size="small" :stroke-color="vpsQuotaColor"
+                      style="margin: -6px 0 0 0;"></a-progress>
+                    <div v-if="vpsUsage && vpsUsage.quotaBytes > 0"
+                      :style="{ fontSize: '12px', color: vpsQuotaColor, marginTop: '2px' }">
+                      [[ vpsUsage.percent.toFixed(1) ]]% · 剩 [[ vpsUsage.daysLeft ]] 天
+                    </div>
+                  </a-col>
+                  <a-col :sm="12" :md="4">
                     <a-custom-statistic
                       title='{{ i18n "pages.inbounds.allTimeTrafficUsage" }}'
                       :value="SizeFormatter.sizeFormat(total.allTime)"
@@ -53,7 +70,7 @@
                       </template>
                     </a-custom-statistic>
                   </a-col>
-                  <a-col :sm="12" :md="5">
+                  <a-col :sm="12" :md="4">
                     <a-custom-statistic
                       title='{{ i18n "pages.inbounds.inboundCount" }}'
                       :value="dbInbounds.length"
@@ -178,6 +195,10 @@
                           <a-menu-item key="syncFirewall">
                             <a-icon type="safety-certificate"></a-icon>
                             {{ i18n "pages.inbounds.syncFirewall" }}
+                          </a-menu-item>
+                          <a-menu-item key="auditInbounds">
+                            <a-icon type="medicine-box"></a-icon>
+                            入站体检
                           </a-menu-item>
                           <a-menu-item key="resetClients">
                             <a-icon type="file-done"></a-icon>
@@ -990,7 +1011,42 @@
       </a-form-item>
     </a-form>
   </a-modal>
-  <!-- VPS 配置弹窗 -->
+  <!-- 入站体检弹窗 -->
+  <a-modal title="入站体检" :visible="auditVisible" @cancel="auditVisible = false" :footer="null"
+    :class="themeSwitcher.currentTheme" width="860px">
+    <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">
+      <a-button icon="reload" :loading="auditLoading" @click="runAudit">重新体检</a-button>
+      <span v-if="!auditLoading" style="color: #666;">
+        共 [[ auditRows.length ]] 个入站，异常 [[ auditBadTotal ]] 项
+      </span>
+    </div>
+    <div style="max-height: 60vh; overflow-y: auto;">
+      <div v-for="row in auditRows" :key="row.id"
+        style="border-bottom: 1px solid #f0f0f0; padding: 10px 0;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <a-tag :color="row.badCount > 0 ? 'red' : 'green'">
+            [[ row.badCount > 0 ? '异常 ' + row.badCount : '正常' ]]
+          </a-tag>
+          <b>[[ row.remark || '(无备注)' ]]</b>
+          <span style="color: #999;">端口 [[ row.port ]] · [[ row.protocol ]]</span>
+        </div>
+        <div v-for="it in row.items" :key="it.key" style="margin: 6px 0 0 4px; font-size: 13px;">
+          <template v-if="it.status !== 'ok' && it.status !== 'skip'">
+            <a-icon :type="it.status === 'fail' ? 'close-circle' : 'warning'"
+              :style="{ color: it.status === 'fail' ? '#ff4d4f' : '#fa8c16', marginRight: '6px' }"></a-icon>
+            <b>[[ it.label ]]</b>：[[ it.detail ]]
+            <a v-if="it.fixable" style="margin-left: 8px;" @click="fixAuditItem(row, it)">一键修复</a>
+          </template>
+        </div>
+      </div>
+      <div v-if="!auditLoading && auditRows.length === 0" style="color: #999; text-align: center; padding: 20px;">
+        暂无入站
+      </div>
+    </div>
+    <div style="margin-top: 12px; color: #999; font-size: 12px;">
+      检查项：启用状态 / 端口监听 / 防火墙放行 / REALITY 公钥 / 分享链接字段 / 订阅 ID / 运行时配置 / 偷站目标可达性
+    </div>
+  </a-modal>  <!-- VPS 配置弹窗 -->
   <a-modal :title="'VPS 配置'" :visible="vpsModalVisible" @ok="saveVpsConfig" @cancel="vpsModalVisible = false" ok-text="保存" cancel-text="取消" :confirm-loading="vpsSaving" :class="themeSwitcher.currentTheme" width="500px">
     <a-form layout="vertical">
       <a-form-item label="VPS 名称">
@@ -1309,7 +1365,8 @@ function subLinkToken(subId) {
       themeSwitcher,
     },
     computed: {
-      previewEmails() {
+
+      previewEmails() { {
         if (!this.copyClientsModal.targetInboundId) return [];
         return this.copyClientsModal.selectedEmails.map(email => `${email}_${this.copyClientsModal.targetInboundId}`);
       },
@@ -1524,6 +1581,9 @@ function subLinkToken(subId) {
         vpsQuotaNotify: '80,95',
       },
       vpsUsage: null,
+      auditVisible: false,
+      auditLoading: false,
+      auditRows: [],
       vpsPurchaseDateMoment: null,
       trafficHistoryModal: {
         visible: false,
@@ -1857,6 +1917,9 @@ function subLinkToken(subId) {
             break;
           case "syncFirewall":
             this.syncFirewall();
+            break;
+          case "auditInbounds":
+            this.openAudit();
             break;
           case "resetClients":
             this.resetAllClientTraffics(-1);
@@ -2994,7 +3057,46 @@ function subLinkToken(subId) {
         } finally {
           m.loading = false;
         }
-      },      // 拉取整机流量用量（套餐额度 / 本周期已用 / 阈值 / 剩余天数）
+      },      // 入站体检：查出「为什么连不上」
+      openAudit() {
+        this.auditVisible = true;
+        this.runAudit();
+      },
+      async runAudit() {
+        this.auditLoading = true;
+        try {
+          const msg = await HttpUtil.post('/panel/api/inbounds/audit', {});
+          if (msg && msg.success) {
+            this.auditRows = msg.obj || [];
+          } else {
+            this.$message.error('体检失败: ' + ((msg && msg.msg) || '未知错误'));
+          }
+        } catch (e) {
+          this.$message.error('体检失败: ' + (e.message || e));
+        } finally {
+          this.auditLoading = false;
+        }
+      },
+      async fixAuditItem(row, item) {
+        const hide = this.$message.loading('正在修复 ' + item.label + '...', 0);
+        try {
+          const msg = await HttpUtil.post('/panel/api/inbounds/auditFix', {
+            id: row.id, fixKey: item.fixKey,
+          });
+          hide();
+          if (msg && msg.success) {
+            this.$message.success(msg.msg || '修复完成');
+            this.runAudit();
+            this.getDBInbounds();
+          } else {
+            this.$message.error('修复失败: ' + ((msg && msg.msg) || '未知错误'));
+          }
+        } catch (e) {
+          hide();
+          this.$message.error('修复失败: ' + (e.message || e));
+        }
+      },
+      // 拉取整机流量用量（套餐额度 / 本周期已用 / 阈值 / 剩余天数）
       async loadVpsUsage() {
         try {
           const msg = await HttpUtil.post('/panel/api/inbounds/vpsUsage', {});
@@ -3265,6 +3367,8 @@ function subLinkToken(subId) {
       }, 500)
     },
     mounted() {
+      // 顶部「套餐用量」卡片：进页面就拉一次，之后跟随刷新
+      this.loadVpsUsage();
       // Fetch VPS settings for the VPS info card
       HttpUtil.post('/panel/setting/all').then(msg => {
         if (msg.success && msg.obj) {
@@ -3407,7 +3511,27 @@ function subLinkToken(subId) {
       }
     },
     computed: {
-      // 当前选中入站下的客户端邮箱，供流量历史的「客户端」下拉使用
+      // 顶部套餐用量卡片的标题/图标/颜色
+      auditBadTotal() {
+        return (this.auditRows || []).reduce((n, r) => n + (r.badCount || 0), 0);
+      },
+      vpsQuotaTitle() {
+        const u = this.vpsUsage;
+        if (!u || !u.quotaBytes) return '未设置套餐';
+        return SizeFormatter.sizeFormat(u.usedBytes) + ' / ' + u.quotaGB + ' GB';
+      },
+      vpsQuotaColor() {
+        const p = this.vpsUsage ? (this.vpsUsage.percent || 0) : 0;
+        if (p >= 95) return '#ff4d4f';
+        if (p >= 80) return '#fa8c16';
+        return '#1890ff';
+      },
+      vpsQuotaIcon() {
+        const p = this.vpsUsage ? (this.vpsUsage.percent || 0) : 0;
+        if (p >= 95) return 'warning';
+        if (p >= 80) return 'clock-circle';
+        return 'dashboard';
+      },      // 当前选中入站下的客户端邮箱，供流量历史的「客户端」下拉使用
       trafficHistoryClients() {
         const ib = (this.dbInbounds || []).find(x => x.id === this.trafficHistoryModal.inboundId);
         if (!ib || !Array.isArray(ib.clientStats)) return [];
