@@ -131,6 +131,20 @@ var defaultValueMap = map[string]string{
 
 	"subGuardEnable": "false",
 
+	"shopEnable": "false",
+
+	"shopPlans": "",
+
+	"shopPayNote": "扫码付款后点「我已付款」，我确认到账后会自动开通。",
+
+	"shopQrUrl": "",
+
+	"shopInboundId": "0",
+
+	"shopDailyLimit": "3",
+
+	"shopLimitIp": "2",
+
 	"subGuardStrictUA": "false",
 
 	"subGuardRPM": "30",
@@ -535,6 +549,9 @@ func (s *SettingService) GetSubJsonEnable() (bool, error) {
 
 // GetSubGuardEnable 返回是否启用订阅防泄漏。
 func (s *SettingService) GetSubGuardEnable() (bool, error) { return s.getBool("subGuardEnable") }
+
+// GetShopEnable 返回流量商店开关。
+func (s *SettingService) GetShopEnable() (bool, error) { return s.getBool("shopEnable") }
 
 // GetSubGuardStrictUA 返回是否启用 UA 白名单（严格模式）。
 func (s *SettingService) GetSubGuardStrictUA() (bool, error) { return s.getBool("subGuardStrictUA") }

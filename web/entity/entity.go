@@ -144,6 +144,14 @@ type AllSetting struct {
 	SubGuardStrictUA bool `json:"subGuardStrictUA" form:"subGuardStrictUA"` // 只允许常见客户端的 UA
 	SubGuardRPM      int  `json:"subGuardRPM" form:"subGuardRPM"`           // 每 IP 每分钟订阅请求上限
 	SubGuardBlockMin int  `json:"subGuardBlockMin" form:"subGuardBlockMin"` // 违规 IP 封禁分钟数
+
+	// 流量商店：朋友在 Telegram 里自助下单
+	ShopEnable     bool   `json:"shopEnable" form:"shopEnable"`         // 总开关
+	ShopPlans      string `json:"shopPlans" form:"shopPlans"`           // 套餐/价格 JSON
+	ShopPayNote    string `json:"shopPayNote" form:"shopPayNote"`       // 付款说明
+	ShopQrUrl      string `json:"shopQrUrl" form:"shopQrUrl"`           // 收款码图片地址
+	ShopInboundId  int    `json:"shopInboundId" form:"shopInboundId"`   // 开通时投放到哪个入站
+	ShopDailyLimit int    `json:"shopDailyLimit" form:"shopDailyLimit"` // 每人每天最多下几单`r`n	ShopLimitIp    int    `json:"shopLimitIp" form:"shopLimitIp"`       // 每个客户端限几台设备
 }
 
 // CheckValid validates all settings in the AllSetting struct, checking IP addresses, ports, SSL certificates, and other configuration values.

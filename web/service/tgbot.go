@@ -276,6 +276,8 @@ func (t *Tgbot) trySetBotCommands(bot *telego.Bot) {
 			{Command: "help", Description: t.I18nBot("tgbot.commands.helpDesc")},
 			{Command: "status", Description: t.I18nBot("tgbot.commands.statusDesc")},
 			{Command: "id", Description: t.I18nBot("tgbot.commands.idDesc")},
+			{Command: "buy", Description: "购买流量套餐"},
+			{Command: "orders", Description: "查看订单（管理员）"},
 		},
 	})
 	if err != nil {
@@ -674,6 +676,18 @@ func (t *Tgbot) answerCommand(message *telego.Message, chatId int64, isAdmin boo
 	case "id":
 		onlyMessage = true
 		msg += t.I18nBot("tgbot.commands.getID", "ID=="+strconv.FormatInt(message.From.ID, 10))
+	case "buy":
+		// 流量商店（买家与管理员都能用）
+		onlyMessage = true
+		t.sendShopMenu(chatId)
+		return
+	case "orders":
+		if isAdmin {
+			onlyMessage = true
+			shop := ShopService{}
+			t.sendShopOrders(chatId, &shop)
+			return
+		}
 	case "usage":
 		onlyMessage = true
 		if len(commandArgs) > 0 {
@@ -755,6 +769,11 @@ func (t *Tgbot) randomShadowSocksPassword() string {
 // answerCallback processes callback queries from inline keyboards.
 func (t *Tgbot) answerCallback(callbackQuery *telego.CallbackQuery, isAdmin bool) {
 	chatId := callbackQuery.Message.GetChat().ID
+
+	// 流量商店回调（买家与管理员共用，数据不走 encodeQuery 通道）
+	if t.handleShopCallback(callbackQuery, chatId, isAdmin) {
+		return
+	}
 
 	if isAdmin {
 		// get query from hash storage

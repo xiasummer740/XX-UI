@@ -107,6 +107,13 @@
                     </template>
                     {{ template "settings/panel/remote" . }}
                   </a-tab-pane>
+                  <a-tab-pane key="9" :style="{ paddingTop: '20px' }">
+                    <template #tab>
+                      <a-icon type="shopping-cart"></a-icon>
+                      <span>流量商店</span>
+                    </template>
+                    {{ template "settings/panel/shop" . }}
+                  </a-tab-pane>
                 </a-tabs>
               </a-col>
             </a-row>
@@ -145,6 +152,15 @@
       user: {},
       lang: LanguageManager.getLanguage(),
       inboundOptions: [],
+      shopInbounds: [],
+      shopPlansTable: [],
+      shopPlanColumns: [
+        { title: '流量 (GB)', dataIndex: 'gb', key: 'gb', scopedSlots: { customRender: 'gb' }, width: 120 },
+        { title: '月付 ¥', dataIndex: 'month', key: 'month', scopedSlots: { customRender: 'month' }, width: 130 },
+        { title: '季付 ¥', dataIndex: 'quarter', key: 'quarter', scopedSlots: { customRender: 'quarter' }, width: 130 },
+        { title: '年付 ¥', dataIndex: 'year', key: 'year', scopedSlots: { customRender: 'year' }, width: 130 },
+        { title: '', key: 'action', scopedSlots: { customRender: 'action' }, width: 80 },
+      ],
       remarkModels: { i: 'Inbound', e: 'Email', o: 'Other' },
       remarkSeparators: [' ', '-', '_', '@', ':', '~', '|', ',', '.', '/'],
       datepickerList: [{ name: 'Gregorian (Standard)', value: 'gregorian' }, { name: 'Jalalian (شمسی)', value: 'jalalian' }],
@@ -269,6 +285,7 @@
 
           this.oldAllSetting = new AllSetting(msg.obj);
           this.allSetting = new AllSetting(msg.obj);
+          this.shopPlansTable = this.parseShopPlans(msg.obj.shopPlans);
           app.changeRemarkSample();
           this.saveBtnDisable = true;
         }
@@ -284,7 +301,66 @@
           this.inboundOptions = [];
         }
       },
+      handleQrUpload(file) {
+        const isImage = file.type && file.type.startsWith("image/");
+        if (!isImage) {
+          this.$message.error("请选择图片文件");
+          return false;
+        }
+        if (file.size > 400 * 1024) {
+          this.$message.error("图片太大，请压缩到 400KB 以内");
+          return false;
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          this.allSetting.shopQrUrl = e.target.result;
+          this.$message.success("收款码已载入，记得点保存");
+        };
+        reader.readAsDataURL(file);
+        return false;
+      },
+      parseShopPlans(raw) {
+        const defaults = [
+          { gb: 100, month: 10, quarter: 27, year: 96 },
+          { gb: 200, month: 18, quarter: 50, year: 180 },
+          { gb: 400, month: 32, quarter: 90, year: 320 },
+          { gb: 500, month: 38, quarter: 108, year: 380 },
+        ];
+        if (!raw) return JSON.parse(JSON.stringify(defaults));
+        try {
+          const arr = JSON.parse(raw);
+          if (!Array.isArray(arr) || !arr.length) return JSON.parse(JSON.stringify(defaults));
+          return arr.map(p => ({
+            gb: Number(p.gb) || 0,
+            month: Number(p.month) || 0,
+            quarter: Number(p.quarter) || 0,
+            year: Number(p.year) || 0,
+          }));
+        } catch (e) {
+          return JSON.parse(JSON.stringify(defaults));
+        }
+      },
+      syncShopPlans() {
+        this.allSetting.shopPlans = JSON.stringify(this.shopPlansTable);
+      },
+      addShopPlan() {
+        this.shopPlansTable.push({ gb: 0, month: 0, quarter: 0, year: 0 });
+        this.syncShopPlans();
+      },
+      removeShopPlan(index) {
+        this.shopPlansTable.splice(index, 1);
+        this.syncShopPlans();
+      },
+      async loadShopInbounds() {
+        const msg = await HttpUtil.get("/panel/api/inbounds/list");
+        if (msg && msg.success && Array.isArray(msg.obj)) {
+          this.shopInbounds = msg.obj.map(ib => ({ id: ib.id, port: ib.port, remark: ib.remark, protocol: ib.protocol }));
+        } else {
+          this.shopInbounds = [];
+        }
+      },
       async updateAllSetting() {
+        this.syncShopPlans();
         this.loading(true);
         const msg = await HttpUtil.post("/panel/setting/update", this.allSetting);
         this.loading(false);
@@ -625,6 +701,12 @@
         set: function (val) {
           this.allSetting.vpsPurchaseDate = val ? String(Math.floor(val / 1000)) : '';
         }
+      },
+      shopPlansTable: {
+        deep: true,
+        handler() {
+          this.syncShopPlans();
+        }
       }
     },
     async mounted() {
@@ -634,6 +716,7 @@
       this.entryIsIP = this._isIp(this.entryHost);
       await this.getAllSetting();
       await this.loadInboundTags();
+      await this.loadShopInbounds();
       while (true) {
         await PromiseUtil.sleep(1000);
         this.saveBtnDisable = this.oldAllSetting.equals(this.allSetting);

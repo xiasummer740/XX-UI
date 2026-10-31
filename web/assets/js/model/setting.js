@@ -81,6 +81,15 @@ class AllSetting {
         this.ldapDefaultLimitIP = 0;
         this.apiKey = "";
 
+        // 流量商店
+        this.shopEnable = false;
+        this.shopPlans = "";
+        this.shopPayNote = "";
+        this.shopQrUrl = "";
+        this.shopInboundId = 0;
+        this.shopDailyLimit = 3;
+        this.shopLimitIp = 2;
+
         if (data == null) {
             return
         }

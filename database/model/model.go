@@ -201,3 +201,20 @@ type RemoteServer struct {
 	CreatedAt time.Time `json:"createdAt" form:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt" form:"updatedAt"`
 }
+
+// Order 是流量商店的订单：买家在 Telegram 下单，管理员确认到账后自动开通。
+type Order struct {
+	Id          int     `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
+	ChatId      int64   `json:"chatId" form:"chatId" gorm:"index"` // 买家 Telegram 用户 ID
+	TgName      string  `json:"tgName" form:"tgName"`              // 买家昵称（方便人工核对）
+	PlanGb      int     `json:"planGb" form:"planGb"`              // 购买的流量（GB）
+	Cycle       string  `json:"cycle" form:"cycle"`                // month / quarter / year
+	Days        int     `json:"days" form:"days"`                  // 有效期天数
+	Price       float64 `json:"price" form:"price"`                // 成交价（元）
+	Status      string  `json:"status" form:"status" gorm:"index"` // pending / approved / rejected
+	ClientEmail string  `json:"clientEmail" form:"clientEmail"`    // 开通后生成的客户端 email
+	Remark      string  `json:"remark" form:"remark"`              // 备注（拒绝原因等）
+	CreatedAt   int64   `json:"createdAt" form:"createdAt"`
+	HandledAt   int64   `json:"handledAt" form:"handledAt"`
+	HandledBy   int64   `json:"handledBy" form:"handledBy"` // 处理该订单的管理员
+}
