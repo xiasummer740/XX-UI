@@ -1142,28 +1142,6 @@
       每次自动重置前会先记录当期用量，所以只有发生过重置的周期才有数据。
     </div>
   </a-modal>
-  </a-layout>
-{{template "page/body_scripts" .}}
-<script
-  src="{{ .base_path }}assets/qrcode/qrious2.min.js?{{ .cur_ver }}"></script>
-<script src="{{ .base_path }}assets/uri/URI.min.js?{{ .cur_ver }}"></script>
-<script
-  src="{{ .base_path }}assets/js/model/reality_targets.js?{{ .cur_ver }}"></script>
-<script
-  src="{{ .base_path }}assets/js/model/inbound.js?{{ .cur_ver }}"></script>
-<script
-  src="{{ .base_path }}assets/js/model/dbinbound.js?{{ .cur_ver }}"></script>
-{{template "component/aSidebar" .}}
-{{template "component/aThemeSwitch" .}}
-{{template "component/aCustomStatistic" .}}
-{{template "component/aPersianDatepicker" .}}
-{{template "modals/inboundModal"}}
-{{template "modals/promptModal"}}
-{{template "modals/qrcodeModal"}}
-{{template "modals/textModal"}}
-{{template "modals/inboundInfoModal"}}
-{{template "modals/clientsModal"}}
-{{template "modals/clientsBulkModal"}}
 <a-modal id="copy-clients-modal"
   :title="copyClientsModal.title"
   :visible="copyClientsModal.visible"
@@ -1233,6 +1211,28 @@
     </div>
   </a-space>
 </a-modal>
+  </a-layout>
+{{template "page/body_scripts" .}}
+<script
+  src="{{ .base_path }}assets/qrcode/qrious2.min.js?{{ .cur_ver }}"></script>
+<script src="{{ .base_path }}assets/uri/URI.min.js?{{ .cur_ver }}"></script>
+<script
+  src="{{ .base_path }}assets/js/model/reality_targets.js?{{ .cur_ver }}"></script>
+<script
+  src="{{ .base_path }}assets/js/model/inbound.js?{{ .cur_ver }}"></script>
+<script
+  src="{{ .base_path }}assets/js/model/dbinbound.js?{{ .cur_ver }}"></script>
+{{template "component/aSidebar" .}}
+{{template "component/aThemeSwitch" .}}
+{{template "component/aCustomStatistic" .}}
+{{template "component/aPersianDatepicker" .}}
+{{template "modals/inboundModal"}}
+{{template "modals/promptModal"}}
+{{template "modals/qrcodeModal"}}
+{{template "modals/textModal"}}
+{{template "modals/inboundInfoModal"}}
+{{template "modals/clientsModal"}}
+{{template "modals/clientsBulkModal"}}
 <script>
 // 订阅 ID 允许自定义成中文，但 URL 路径必须全程 ASCII：
 // 否则小火箭(Shadowrocket)等客户端会直接报「错误的 URL」。
@@ -1370,22 +1370,7 @@ function subLinkToken(subId) {
     },
   };
 
-  const copyClientsModalApp = new Vue({
-    delimiters: ['[[', ']]'],
-    el: '#copy-clients-modal',
-    data: {
-      copyClientsModal,
-      copyClientsColumns,
-      themeSwitcher,
-    },
-    computed: {
 
-      previewEmails() { {
-        if (!this.copyClientsModal.targetInboundId) return [];
-        return this.copyClientsModal.selectedEmails.map(email => `${email}_${this.copyClientsModal.targetInboundId}`);
-      },
-    },
-  });
 </script>
 <script>
   const columns = [{
@@ -1509,6 +1494,8 @@ function subLinkToken(subId) {
     data: {
       themeSwitcher,
       persianDatepicker,
+      copyClientsModal,
+      copyClientsColumns,
       loadingStates: {
         fetched: false,
         spinning: false
@@ -3528,6 +3515,11 @@ function subLinkToken(subId) {
       }
     },
     computed: {
+      // 复制客户端弹窗里的「邮箱预览」
+      previewEmails() {
+        if (!this.copyClientsModal || !this.copyClientsModal.targetInboundId) return [];
+        return this.copyClientsModal.selectedEmails.map(email => `${email}_${this.copyClientsModal.targetInboundId}`);
+      },
       // 顶部套餐用量卡片的标题/图标/颜色
       auditBadTotal() {
         return (this.auditRows || []).reduce((n, r) => n + (r.badCount || 0), 0);
