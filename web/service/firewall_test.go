@@ -49,6 +49,47 @@ To                         Action      From
 	}
 }
 
+// VPS 上真实 `ufw status` 的片段：很多规则是 `ufw allow <端口>` 加的，
+// 不带 /tcp，之前会被误判成「未放行」。
+const ufwBarePortSample = `Status: active
+To                         Action      From
+--                         ------      ----
+[ 3] 443                        ALLOW IN    Anywhere                  
+[10] 39760                      ALLOW IN    Anywhere                  
+[11] 14704/tcp                  ALLOW IN    Anywhere                   # DM US VLESS Reality
+[13] 42720                      ALLOW IN    Anywhere                  
+[14] 37087                      ALLOW IN    Anywhere                  
+[17] 21666/tcp                  ALLOW IN    Anywhere                  
+[21] 8443/tcp                   ALLOW IN    Anywhere                   # inbound 8443 REALITY
+[27] 443 (v6)                   ALLOW IN    Anywhere (v6)             
+[99] 2087/tcp                   ALLOW IN    69.63.205.35              
+`
+
+func TestUFWPortAllowedBarePort(t *testing.T) {
+	cases := []struct {
+		port  int
+		proto string
+		want  bool
+		why   string
+	}{
+		{443, "tcp", true, "443 不带协议（ufw allow 443）"},
+		{39760, "tcp", true, "39760 不带协议"},
+		{37087, "tcp", true, "37087 不带协议"},
+		{42720, "tcp", true, "42720 不带协议"},
+		{14704, "tcp", true, "14704/tcp 带注释"},
+		{21666, "tcp", true, "21666/tcp"},
+		{8443, "tcp", true, "8443/tcp"},
+		{2087, "tcp", true, "只对某个源 IP 放行也算放行"},
+		{2053, "tcp", false, "确实没放行的端口要报出来"},
+		{4430, "tcp", false, "不能被子串误判"},
+	}
+	for _, c := range cases {
+		if got := ufwPortAllowed(ufwBarePortSample, c.port, c.proto); got != c.want {
+			t.Errorf("端口 %d/%s = %v，期望 %v（%s）", c.port, c.proto, got, c.want, c.why)
+		}
+	}
+}
+
 func TestUDPNeededForProtocol(t *testing.T) {
 	for _, p := range []string{"hysteria", "hysteria2", "tuic", "wireguard"} {
 		if !udpNeededForProtocol(p) {

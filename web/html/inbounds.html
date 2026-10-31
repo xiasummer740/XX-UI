@@ -1176,7 +1176,7 @@
   @ok="() => copyClientsModal.ok()"
   @cancel="() => copyClientsModal.close()"
   width="94%" style="max-width: 900px;">
-  <a-space direction="vertical" style="width: 100%;">
+  <a-space v-if="copyClientsModal.visible" direction="vertical" style="width: 100%;">
     <div>
       <div style="margin-bottom: 6px;">{{ i18n "pages.client.copySource" }}</div>
       <a-select v-model="copyClientsModal.sourceInboundId"
@@ -1210,7 +1210,10 @@
       </a-table>
     </div>
     <div v-if="copyClientsModal.showFlow">
-      <div style="margin-bottom: 6px;">{{ i18n "pages.client.copyFlowLabel" }}</div>
+      <div style="margin-bottom: 6px;">
+        {{ i18n "pages.client.copyFlowLabel" }}
+        <span style="font-size: 12px; opacity: .65;">（套用到所有被复制的客户端，选「留空」则不改）</span>
+      </div>
       <a-select v-model="copyClientsModal.flow"
         style="width: 100%;"
         :dropdown-class-name="themeSwitcher.currentTheme"
@@ -1219,9 +1222,6 @@
         <a-select-option value="xtls-rprx-vision">xtls-rprx-vision</a-select-option>
         <a-select-option value="xtls-rprx-vision-udp443">xtls-rprx-vision-udp443</a-select-option>
       </a-select>
-      <div style="margin-top: 4px; font-size: 12px; opacity: 0.7;">
-        {{ i18n "pages.client.copyFlowHint" }}
-      </div>
     </div>
     <div v-if="copyClientsModal.selectedEmails.length > 0">
       <div style="margin-bottom: 4px;">{{ i18n "pages.client.copyEmailPreview" }}</div>

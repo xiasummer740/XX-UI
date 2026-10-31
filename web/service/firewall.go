@@ -60,16 +60,29 @@ func ufwIsActive(status string) bool {
 
 // ufwPortAllowed 检查某个 TCP/UDP 端口是否已经在 ufw 里放行。
 // 按第一列做精确匹配，避免 443 命中 20443 这种子串误判。
+//
+// ufw 里同一端口有三种写法，都要认：
+//
+//	443/tcp   —— 只放行 TCP
+//	443/udp   —— 只放行 UDP
+//	443       —— 不带协议，TCP/UDP 都放行（`ufw allow 443` 的写法）
 func ufwPortAllowed(status string, port int, proto string) bool {
 	want := strconv.Itoa(port) + "/" + proto
+	bare := strconv.Itoa(port)
 	for _, line := range strings.Split(status, "\n") {
+		// 兼容 `ufw status numbered` 的 "[ 3] 443 ..." 前缀
+		if trimmed := strings.TrimLeft(line, " \t"); strings.HasPrefix(trimmed, "[") {
+			if i := strings.Index(trimmed, "] "); i >= 0 {
+				line = trimmed[i+2:]
+			}
+		}
 		fields := strings.Fields(line)
 		if len(fields) < 2 {
 			continue
 		}
 		// 形如 "8443/tcp (v6)" 的规则
 		to := strings.TrimSuffix(strings.TrimSpace(fields[0]), "(v6)")
-		if to != want {
+		if to != want && to != bare {
 			continue
 		}
 		if strings.Contains(strings.ToUpper(strings.Join(fields[1:], " ")), "ALLOW") {
