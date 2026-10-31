@@ -26,8 +26,6 @@ const (
 	extProbeInterval = 15 * time.Minute
 	// 每轮最多测几个节点（check-host 有速率限制，别打太狠）
 	extProbePerRound = 4
-	// 每个端口最多取几个探针节点（随机模式下用）
-	extProbeMaxNodes = 6
 )
 
 // 优先使用离中国用户近的探针节点，数字才有参考价值
@@ -94,14 +92,13 @@ func extProbeHTTP() *http.Client {
 func queryCheckHost(host string, port int) ([]ExtProbeNode, error) {
 	client := extProbeHTTP()
 	target := fmt.Sprintf("%s:%d", host, port)
-	// 优先挑离中国用户近的亚洲探针节点；显式指定失败时退回随机节点
-	createURL := fmt.Sprintf("https://check-host.net/check-tcp?host=%s&max_nodes=%d", target, extProbeMaxNodes)
+	// 优先挑离中国用户近的亚洲探针节点
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("https://check-host.net/check-tcp?host=%s", target))
 	for _, n := range extProbePreferredNodes {
 		sb.WriteString("&node=" + n)
 	}
-	createURL = sb.String()
+	createURL := sb.String()
 
 	req, err := http.NewRequest(http.MethodGet, createURL, nil)
 	if err != nil {
