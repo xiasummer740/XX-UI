@@ -363,6 +363,9 @@ func (s *Server) startTask() {
 	// VPS 套餐流量阈值提醒：每小时检查一次，越过 80%/95% 发 Telegram。
 	s.cron.AddJob("@hourly", job.NewVPSQuotaJob())
 
+	// 节点在线监控：每 5 分钟真实握手一次，连续失败/恢复时发 Telegram。
+	s.cron.AddJob("@every 5m", job.NewNodeMonitorJob())
+
 	// Xray periodic restart scheduling
 	if xrayRestartEnabled, _ := s.settingService.GetXrayRestartEnabled(); xrayRestartEnabled {
 		xrayRestartCron, err := s.settingService.GetXrayRestartCron()

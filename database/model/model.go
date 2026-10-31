@@ -182,10 +182,10 @@ type Client struct {
 	// PrevSubIDs 保存该客户端用过的历史订阅 ID。改订阅 ID 后，
 	// 老链接 .../sub/<旧ID> 依旧能命中同一个客户端，已经发出去的订阅不会失效。
 	PrevSubIDs []string `json:"prevSubIds,omitempty" form:"prevSubIds"` // Historical subscription identifiers
-	Comment    string `json:"comment" form:"comment"`       // Client comment
-	Reset      int    `json:"reset" form:"reset"`           // Reset period in days
-	CreatedAt  int64  `json:"created_at,omitempty"`         // Creation timestamp
-	UpdatedAt  int64  `json:"updated_at,omitempty"`         // Last update timestamp
+	Comment    string   `json:"comment" form:"comment"`                 // Client comment
+	Reset      int      `json:"reset" form:"reset"`                     // Reset period in days
+	CreatedAt  int64    `json:"created_at,omitempty"`                   // Creation timestamp
+	UpdatedAt  int64    `json:"updated_at,omitempty"`                   // Last update timestamp
 }
 
 // RemoteServer represents a remote panel server for multi-server management.

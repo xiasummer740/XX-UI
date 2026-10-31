@@ -165,6 +165,7 @@ func (s *InboundService) CheckInboundsHealth() ([]*InboundAudit, error) {
 		}
 	}
 	runtimePorts := xrayRuntimePorts()
+	monitorState := s.loadNodeMonitorState()
 
 	results := make([]*InboundAudit, 0, len(inbounds))
 	for _, ib := range inbounds {
@@ -326,6 +327,30 @@ func (s *InboundService) CheckInboundsHealth() ([]*InboundAudit, error) {
 				Key: "runtime", Label: "运行时配置", Status: healthFail,
 				Detail: "xray 运行时配置里没有该端口：重启面板/xray 试试", Fixable: true, FixKey: "restart",
 			})
+		}
+
+		// 9) 在线监测（由后台任务每 5 分钟探测一次）
+		if e, okM := monitorState[ib.Id]; okM && e.LastCheck > 0 {
+			ago := time.Since(time.Unix(e.LastCheck, 0)).Round(time.Minute)
+			switch {
+			case e.Fails == 0:
+				h.Items = append(h.Items, AuditItem{
+					Key: "monitor", Label: "在线监测", Status: healthOK,
+					Detail: fmt.Sprintf("最近探测正常（%s 前）", ago),
+				})
+			case e.Fails < nodeMonitorFailThreshold:
+				h.Items = append(h.Items, AuditItem{
+					Key: "monitor", Label: "在线监测", Status: healthWarn,
+					Detail: fmt.Sprintf("连续 %d 次探测失败：%s", e.Fails, e.LastError),
+				})
+			default:
+				h.Items = append(h.Items, AuditItem{
+					Key: "monitor", Label: "在线监测", Status: healthFail,
+					Detail: fmt.Sprintf("连续 %d 次探测失败（已告警）：%s", e.Fails, e.LastError),
+				})
+			}
+		} else {
+			h.Items = append(h.Items, AuditItem{Key: "monitor", Label: "在线监测", Status: healthSkip, Detail: "尚未探测"})
 		}
 
 		for _, it := range h.Items {
