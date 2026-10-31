@@ -76,7 +76,30 @@ func (t *Tgbot) handleShopCallback(callbackQuery *telego.CallbackQuery, chatId i
 			return true
 		}
 		id, _ := strconv.Atoi(args[1])
+		t.confirmShopApprove(chatId, id)
+	case "ok2":
+		if !isAdmin || len(args) < 2 {
+			t.sendCallbackAnswerTgBot(callbackQuery.ID, "只有管理员能确认订单")
+			return true
+		}
+		id, _ := strconv.Atoi(args[1])
 		t.approveShopOrder(chatId, callbackQuery.From.ID, id)
+	case "revoke":
+		if !isAdmin || len(args) < 2 {
+			t.sendCallbackAnswerTgBot(callbackQuery.ID, "只有管理员能撤销订单")
+			return true
+		}
+		id, _ := strconv.Atoi(args[1])
+		t.confirmShopRevoke(chatId, id)
+	case "revoke2":
+		if !isAdmin || len(args) < 2 {
+			t.sendCallbackAnswerTgBot(callbackQuery.ID, "只有管理员能撤销订单")
+			return true
+		}
+		id, _ := strconv.Atoi(args[1])
+		t.revokeShopOrder(chatId, callbackQuery.From.ID, id)
+	case "cancel":
+		t.sendCallbackAnswerTgBot(callbackQuery.ID, "已取消，什么都没做 ✅")
 	case "no":
 		if !isAdmin || len(args) < 2 {
 			t.sendCallbackAnswerTgBot(callbackQuery.ID, "只有管理员能处理订单")
@@ -413,8 +436,13 @@ func (t *Tgbot) approveShopOrder(chatId int64, adminId int64, orderId int) {
 	if linkErr == nil && len(links) > 0 {
 		t.sendContentQR(order.ChatId, links[0], "📱 这是你的<b>节点二维码</b>，用客户端扫码直接添加节点")
 	}
-	t.SendMsgToTgbot(chatId, fmt.Sprintf("✅ 订单 #%d 已开通（客户端 %s，%d GB/%s），节点和二维码已发给买家。",
-		order.Id, order.ClientEmail, order.PlanGb, cycleLabel(order.Cycle)))
+	revokeKB := tu.InlineKeyboard(
+		tu.InlineKeyboardRow(
+			tu.InlineKeyboardButton("↩️ 撤销这笔开通").WithCallbackData(fmt.Sprintf("shop_revoke %d", order.Id)),
+		),
+	)
+	t.SendMsgToTgbot(chatId, fmt.Sprintf("✅ 订单 #%d 已开通（客户端 %s，%d GB/%s），节点和二维码已发给买家。\n\n点错了吗？可以点下面的按钮撤销。",
+		order.Id, order.ClientEmail, order.PlanGb, cycleLabel(order.Cycle)), revokeKB)
 }
 
 // rejectShopOrder 管理员拒绝订单。
@@ -455,10 +483,13 @@ func (t *Tgbot) sendShopOrders(chatId int64, shop *ShopService) {
 		len(orders), pendingCount, approvedCount, revenue))
 	for _, o := range orders {
 		icon := "⏳"
-		if o.Status == orderApproved {
+		switch o.Status {
+		case orderApproved:
 			icon = "✅"
-		} else if o.Status == orderRejected {
+		case orderRejected:
 			icon = "❌"
+		case "revoked":
+			icon = "↩️"
 		}
 		sb.WriteString(fmt.Sprintf("\n%s %s", icon, orderText(o)))
 	}
@@ -633,4 +664,88 @@ func (t *Tgbot) sendShopStats(chatId int64) {
 		sb.WriteString("\n👉 有待确认订单，发 /orders 处理。")
 	}
 	t.SendMsgToTgbot(chatId, sb.String())
+}
+
+// confirmShopApprove 二次确认：防止管理员手滑点错，把钱没到账的单子开通了。
+func (t *Tgbot) confirmShopApprove(chatId int64, orderId int) {
+	shop := ShopService{}
+	order, err := shop.GetOrder(orderId)
+	if err != nil {
+		t.SendMsgToTgbot(chatId, "找不到这个订单 🤔")
+		return
+	}
+	if order.Status != orderPending {
+		t.SendMsgToTgbot(chatId, fmt.Sprintf("订单 #%d 已经处理过了（当前状态：%s），不用再确认。",
+			order.Id, shopStatusLabel(order.Status)))
+		return
+	}
+	msg := fmt.Sprintf("⚠️ <b>确认已经收到这笔钱了吗？</b>\n\n%s\n\n"+
+		"点「✅ 真的收到，开通」后会立刻给买家开客户端并发送节点。\n"+
+		"如果还没到账，点「取消」就好，不会产生任何影响。", orderText(order))
+	kb := tu.InlineKeyboard(
+		tu.InlineKeyboardRow(
+			tu.InlineKeyboardButton("✅ 真的收到，开通").WithCallbackData(fmt.Sprintf("shop_ok2 %d", order.Id)),
+		),
+		tu.InlineKeyboardRow(
+			tu.InlineKeyboardButton("取消").WithCallbackData("shop_cancel"),
+		),
+	)
+	t.SendMsgToTgbot(chatId, msg, kb)
+}
+
+// confirmShopRevoke 撤销前的二次确认。
+func (t *Tgbot) confirmShopRevoke(chatId int64, orderId int) {
+	shop := ShopService{}
+	order, err := shop.GetOrder(orderId)
+	if err != nil {
+		t.SendMsgToTgbot(chatId, "找不到这个订单 🤔")
+		return
+	}
+	if order.Status != orderApproved {
+		t.SendMsgToTgbot(chatId, fmt.Sprintf("订单 #%d 当前状态是「%s」，只有已开通的订单能撤销。",
+			order.Id, shopStatusLabel(order.Status)))
+		return
+	}
+	msg := fmt.Sprintf("↩️ <b>要撤销订单 #%d 吗？</b>\n\n%s\n\n"+
+		"撤销后会<b>停用</b>该订单开通的客户端（数据保留，可以再手动开启），\n"+
+		"并通知买家。买家如果其实付了款，可以让你恢复。",
+		order.Id, orderText(order))
+	kb := tu.InlineKeyboard(
+		tu.InlineKeyboardRow(
+			tu.InlineKeyboardButton("↩️ 确认撤销").WithCallbackData(fmt.Sprintf("shop_revoke2 %d", order.Id)),
+		),
+		tu.InlineKeyboardRow(
+			tu.InlineKeyboardButton("取消").WithCallbackData("shop_cancel"),
+		),
+	)
+	t.SendMsgToTgbot(chatId, msg, kb)
+}
+
+// revokeShopOrder 执行撤销。
+func (t *Tgbot) revokeShopOrder(chatId int64, adminId int64, orderId int) {
+	shop := ShopService{}
+	order, err := shop.RevokeOrder(orderId, adminId)
+	if err != nil {
+		t.SendMsgToTgbot(chatId, "撤销失败："+err.Error())
+		return
+	}
+	t.SendMsgToTgbot(chatId, fmt.Sprintf("↩️ 订单 #%d 已撤销，开通的客户端已停用（%s）。",
+		order.Id, order.ClientEmail))
+	t.SendMsgToTgbot(order.ChatId, fmt.Sprintf(
+		"🥺 <b>订单 #%d 已被撤销</b>\n\n我们这边没查到对应的到账，所以先把你停用了，抱歉。\n"+
+			"如果你确实付了款，把付款截图发给我，我核对后马上给你恢复 🙏", order.Id))
+}
+
+// shopStatusLabel 把订单状态翻成中文。
+func shopStatusLabel(status string) string {
+	switch status {
+	case orderApproved:
+		return "已开通"
+	case orderRejected:
+		return "已拒绝"
+	case "revoked":
+		return "已撤销"
+	default:
+		return "待确认"
+	}
 }

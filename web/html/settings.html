@@ -441,6 +441,7 @@
       shopOrderStatusText(status) {
         if (status === "approved") return "已开通";
         if (status === "rejected") return "已拒绝";
+        if (status === "revoked") return "已撤销";
         return "待确认";
       },
       formatShopTime(ts) {

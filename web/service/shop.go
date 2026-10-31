@@ -568,3 +568,64 @@ func (s *ShopService) ListOrdersForPanel(limit int) ([]model.Order, error) {
 	err := database.GetDB().Order("id desc").Limit(limit).Find(&orders).Error
 	return orders, err
 }
+
+// orderRevoked 是「已撤销」状态：误点确认后可以撤回。
+const orderRevoked = "revoked"
+
+// RevokeOrder 撤销一笔已开通的订单：停用该订单开通的客户端，并把订单标记为 revoked。
+// 用于「买家其实没付款，管理员误点了确认」的场景。
+func (s *ShopService) RevokeOrder(id int, adminId int64) (*model.Order, error) {
+	order, err := s.GetOrder(id)
+	if err != nil {
+		return nil, err
+	}
+	if order.Status != orderApproved {
+		return nil, fmt.Errorf("只有已开通的订单可以撤销")
+	}
+
+	// 停用客户端（不删，保留数据，方便再次开通）
+	if order.ClientEmail != "" {
+		traffic, client, cerr := s.inboundService.GetClientByEmail(order.ClientEmail)
+		if cerr == nil && client != nil && traffic != nil {
+			client.Enable = false
+			if bs, merr := json.Marshal(client); merr == nil {
+				stub := &model.Inbound{
+					Id:       traffic.InboundId,
+					Settings: fmt.Sprintf(`{"clients":[%s]}`, string(bs)),
+				}
+				var clientId string
+				if inbound, ierr := s.inboundService.GetInbound(traffic.InboundId); ierr == nil && inbound != nil {
+					switch inbound.Protocol {
+					case "trojan":
+						clientId = client.Password
+					case "shadowsocks":
+						clientId = client.Email
+					case "hysteria", "hysteria2":
+						clientId = client.Auth
+					default:
+						clientId = client.ID
+					}
+					if needRestart, uerr := s.inboundService.UpdateInboundClient(stub, clientId); uerr == nil {
+						if needRestart {
+							var xrayService XrayService
+							xrayService.SetToNeedRestart()
+						}
+					}
+				}
+			}
+		}
+	}
+
+	order.Status = orderRevoked
+	order.HandledAt = time.Now().Unix()
+	order.HandledBy = adminId
+	if order.Remark == "" {
+		order.Remark = "已撤销"
+	} else {
+		order.Remark += "（已撤销）"
+	}
+	if err := database.GetDB().Save(order).Error; err != nil {
+		return nil, err
+	}
+	return order, nil
+}

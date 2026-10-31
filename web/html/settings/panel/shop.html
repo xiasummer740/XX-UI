@@ -87,6 +87,7 @@
           </template>
           <template slot="status" slot-scope="text">
             <a-tag v-if="text === 'approved'" color="green">✅ 已开通</a-tag>
+            <a-tag v-else-if="text === 'revoked'" color="purple">↩️ 已撤销</a-tag>
             <a-tag v-else-if="text === 'rejected'" color="red">❌ 已拒绝</a-tag>
             <a-tag v-else color="orange">⏳ 待确认</a-tag>
           </template>
