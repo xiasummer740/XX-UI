@@ -14,6 +14,7 @@ import (
 	tu "github.com/mymmrac/telego/telegoutil"
 	"github.com/skip2/go-qrcode"
 
+	"github.com/XiaSummer740/XX-UI/database/model"
 	"github.com/XiaSummer740/XX-UI/logger"
 )
 
@@ -109,6 +110,11 @@ func (t *Tgbot) handleShopCallback(callbackQuery *telego.CallbackQuery, chatId i
 		}
 		id, _ := strconv.Atoi(args[1])
 		t.rejectShopOrder(chatId, callbackQuery.From.ID, id)
+	case "cancel_order":
+		if len(args) >= 2 {
+			id, _ := strconv.Atoi(args[1])
+			t.cancelShopOrderByBuyer(chatId, id)
+		}
 	case "check":
 		if len(args) >= 2 {
 			id, _ := strconv.Atoi(args[1])
@@ -400,13 +406,20 @@ func (t *Tgbot) createShopOrder(chatId int64, from *telego.User, gb int, cycle s
 		return
 	}
 
+	cancelKB := tu.InlineKeyboard(
+		tu.InlineKeyboardRow(
+			tu.InlineKeyboardButton("✅ 我确实付好了，等开通").WithCallbackData(fmt.Sprintf("shop_check %d", order.Id)),
+			tu.InlineKeyboardButton("🚫 我要取消这单").WithCallbackData(fmt.Sprintf("shop_cancel_order %d", order.Id)),
+		),
+	)
 	t.SendMsgToTgbot(chatId, fmt.Sprintf(
 		"💌 <b>收到啦，订单 #%d 已登记</b>  <i>(4/4 完成)</i>\n\n"+
 			"套餐：<b>%d GB</b>　%s\n"+
 			"金额：<b>¥%s</b>%s\n\n"+
 			"我核对到账后马上开通，订阅链接和二维码会直接发到这里，你不用守着刷 ⏳\n"+
-			"<i>一般几分钟内就好，夜里可能慢一点点。</i>",
-		order.Id, order.PlanGb, cycleLabel(order.Cycle), formatPrice(order.Price), methodLine(order.Remark)))
+			"<i>一般几分钟内就好，夜里可能慢一点点。</i>\n\n"+
+			"⚠️ <b>如果你还没付款</b>：先点下面的「取消这单」，去扫上面的收款码付完再来登记，这样不会卡住。",
+		order.Id, order.PlanGb, cycleLabel(order.Cycle), formatPrice(order.Price), methodLine(order.Remark)), cancelKB)
 
 	kb := tu.InlineKeyboard(
 		tu.InlineKeyboardRow(
@@ -893,4 +906,34 @@ func (t *Tgbot) checkShopOrder(chatId int64, orderId int) {
 // AutoApproveShopOrder 供 BufPay 回调调用：钱到了 → 自动开通 + 通知买卖双方。
 func (t *Tgbot) AutoApproveShopOrder(orderId int) {
 	t.approveShopOrder(0, 0, orderId)
+}
+
+// cancelShopOrderByBuyer 买家自己取消还没确认的订单，避免「没付款却先点了我已付款」把自己卡住。
+func (t *Tgbot) cancelShopOrderByBuyer(chatId int64, orderId int) {
+	shop := ShopService{}
+	order, err := shop.GetOrder(orderId)
+	if err != nil || order.ChatId != chatId {
+		t.SendMsgToTgbot(chatId, "找不到这个订单 🤔 发 /buy 重新下一单就好")
+		return
+	}
+	if order.Status != orderPending {
+		t.SendMsgToTgbot(chatId, fmt.Sprintf("订单 #%d 已经处理完了（%s），不用取消。", order.Id, shopStatusLabel(order.Status)))
+		return
+	}
+	if err := shop.AbandonPendingOrder(order.Id, "买家取消"); err != nil {
+		t.SendMsgToTgbot(chatId, "取消失败："+err.Error())
+		return
+	}
+	t.SendMsgToTgbot(chatId, fmt.Sprintf(
+		"🚫 订单 #%d 已取消，没有产生任何扣费。\n\n"+
+			"想重新买随时发 /buy 🛒\n"+
+			"<i>提醒一下：先扫码付款、再点「我已付款」，这样我这边一对账就能立刻给你开通，最快。</i>", order.Id))
+	shopNotifyAdminsCancel(order)
+}
+
+// shopNotifyAdminsCancel 通知管理员买家取消了订单。
+func shopNotifyAdminsCancel(order *model.Order) {
+	var bot Tgbot
+	bot.NewTgbot().SendMsgToTgbotAdmins(fmt.Sprintf("🚫 买家取消了订单 #%d（%d GB/%s，¥%s，%s）",
+		order.Id, order.PlanGb, cycleLabel(order.Cycle), formatPrice(order.Price), order.TgName))
 }

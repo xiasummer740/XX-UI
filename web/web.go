@@ -370,6 +370,9 @@ func (s *Server) startTask() {
 	// 订阅守卫拉黑事件汇总推送
 	s.cron.AddJob("@every 1m", job.NewSubGuardNotifyJob())
 
+	// 流量商店：买家点了「我已付款」但迟迟没人确认时，再提醒一次管理员
+	s.cron.AddJob("@every 5m", job.NewShopPendingJob())
+
 	// Xray periodic restart scheduling
 	if xrayRestartEnabled, _ := s.settingService.GetXrayRestartEnabled(); xrayRestartEnabled {
 		xrayRestartCron, err := s.settingService.GetXrayRestartCron()

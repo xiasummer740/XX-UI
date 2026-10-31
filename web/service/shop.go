@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/XiaSummer740/XX-UI/database"
 	"github.com/XiaSummer740/XX-UI/database/model"
 	"github.com/google/uuid"
+	tu "github.com/mymmrac/telego/telegoutil"
 )
 
 // 流量商店：朋友在 Telegram 里自助下单，扫码付款后管理员点一下确认，
@@ -713,4 +715,46 @@ func (s *ShopService) AbandonPendingOrder(id int, reason string) error {
 	order.Remark = reason
 	order.HandledAt = time.Now().Unix()
 	return database.GetDB().Save(order).Error
+}
+
+var shopReminderMu sync.Mutex
+var shopRemindedAt = map[int]int64{}
+
+// RemindPendingOrders 对长时间没人处理的待确认订单，再提醒一次管理员。
+// 每笔订单最多每 30 分钟提醒一次，避免刷屏。
+func (s *ShopService) RemindPendingOrders(bot *Tgbot) {
+	if bot == nil {
+		return
+	}
+	now := time.Now().Unix()
+	orders := make([]*model.Order, 0)
+	err := database.GetDB().
+		Where("status = ? AND created_at < ?", orderPending, now-15*60).
+		Order("created_at asc").
+		Limit(20).
+		Find(&orders).Error
+	if err != nil || len(orders) == 0 {
+		return
+	}
+
+	shopReminderMu.Lock()
+	defer shopReminderMu.Unlock()
+
+	for _, o := range orders {
+		if last, ok := shopRemindedAt[o.Id]; ok && now-last < 30*60 {
+			continue
+		}
+		shopRemindedAt[o.Id] = now
+		waitMin := (now - o.CreatedAt) / 60
+		kb := tu.InlineKeyboard(
+			tu.InlineKeyboardRow(
+				tu.InlineKeyboardButton("✅ 确认到账并开通").WithCallbackData(fmt.Sprintf("shop_ok %d", o.Id)),
+				tu.InlineKeyboardButton("❌ 拒绝").WithCallbackData(fmt.Sprintf("shop_no %d", o.Id)),
+			),
+		)
+		bot.SendMsgToTgbotAdmins(fmt.Sprintf(
+			"⏰ <b>订单 #%d 还在等你确认</b>（已等 %d 分钟）\n\n%s\n\n"+
+				"如果买家其实没付，点「拒绝」就行，他那边会收到说明；买家也可以自己取消。",
+			o.Id, waitMin, orderText(o)), kb)
+	}
 }
