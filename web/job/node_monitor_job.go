@@ -19,4 +19,6 @@ func NewNodeMonitorJob() *NodeMonitorJob {
 func (j *NodeMonitorJob) Run() {
 	tgBot := j.tgbotService.NewTgbot()
 	j.inboundService.RunNodeMonitor(tgBot)
+	// 顺带做一轮「真实可用」实测（10 分钟节流，单节点单次）
+	j.inboundService.RunNodeProbes()
 }

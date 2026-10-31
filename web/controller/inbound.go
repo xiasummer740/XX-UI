@@ -69,6 +69,7 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/vpsUsage", a.vpsUsage)
 	// 入站体检：一次性查出「为什么连不上」，并支持按项修复
 	g.POST("/audit", a.auditInbounds)
+	g.POST("/probeState", a.probeState)
 	g.POST("/auditFix", a.auditFix)
 	g.POST("/applyTrafficReset", a.applyTrafficReset)
 	g.GET("/trafficHistory", a.getTrafficHistory)
@@ -675,6 +676,11 @@ func (a *InboundController) vpsUsage(c *gin.Context) {
 }
 
 // auditInbounds 对全部入站做体检（启用/监听/防火墙/REALITY 公钥/链接字段/subId/运行时配置/偷站目标）。
+// probeState 返回各节点最近一次「真实可用」实测结果。
+func (a *InboundController) probeState(c *gin.Context) {
+	jsonObj(c, a.inboundService.NodeProbeSnapshot(), nil)
+}
+
 func (a *InboundController) auditInbounds(c *gin.Context) {
 	result, err := a.inboundService.CheckInboundsHealth()
 	jsonObj(c, result, err)

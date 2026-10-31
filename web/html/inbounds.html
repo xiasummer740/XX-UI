@@ -585,7 +585,17 @@
                             <div v-if="healthStatus[dbInbound.id] && healthStatus[dbInbound.id].expiryTime > 0">
                               {{ i18n "pages.inbounds.expireDate" }}: [[ fmtDate(healthStatus[dbInbound.id].expiryTime) ]]
                             </div>
+                            <div v-if="probeState[dbInbound.id]">
+                              服务端实测:
+                              <strong :style="{ color: probeState[dbInbound.id].ok ? '#3f8600' : '#cf1322' }">
+                                [[ probeState[dbInbound.id].ok ? '可上网 ' + probeState[dbInbound.id].delayMs + ' ms' : '不可用' ]]
+                              </strong>
+                              <div v-if="!probeState[dbInbound.id].ok" style="color: #cf1322; font-size: 12px;">[[ probeState[dbInbound.id].error ]]</div>
+                              <div style="font-size: 12px; opacity: .7;">目标 [[ probeState[dbInbound.id].address ]] · [[ relTime(probeState[dbInbound.id].at) ]]</div>
+                            </div>
+                            <div v-else style="opacity: .7;">服务端实测: 待测（每 10 分钟自动跑一次）</div>
                             <div>{{ i18n "pages.inbounds.healthLinkRtt" }}: <strong>[[ linkRtt === null ? '-' : linkRtt + ' ms' ]]</strong></div>
+                            <div style="opacity: .65; font-size: 12px;">绿勾+毫秒 = 服务端真起客户端拉过 204，别人拿到这个节点就能用</div>
                             <div>{{ i18n "pages.inbounds.healthChecked" }}: [[ healthCheckedAt ? fmtDate(healthCheckedAt) : '-' ]]</div>
                             <div style="opacity: .65; font-size: 12px; margin-top: 4px;">{{ i18n "pages.inbounds.healthRttHint" }}</div>
                             <div style="opacity: .65; font-size: 12px;">{{ i18n "pages.inbounds.healthRefresh" }}</div>
@@ -597,8 +607,12 @@
                             :type="healthMeta(healthState(healthStatus[dbInbound.id])).type"
                             :theme="healthMeta(healthState(healthStatus[dbInbound.id])).theme"
                             :style="{ fontSize: '16px', color: healthMeta(healthState(healthStatus[dbInbound.id])).color }"></a-icon>
-                          <span v-if="linkRtt !== null" :style="{ fontSize: '12px', color: rttColor() }">[[ linkRtt ]]</span>
-                          <span v-else style="font-size: 12px; color: #bfbfbf;">--</span>
+                          <template v-if="probeState[dbInbound.id]">
+                            <span :style="{ fontSize: '12px', fontWeight: 600, color: probeState[dbInbound.id].ok ? '#3f8600' : '#cf1322' }">
+                              [[ probeState[dbInbound.id].ok ? probeState[dbInbound.id].delayMs + ' ms' : '不可用' ]]
+                            </span>
+                          </template>
+                          <span v-else style="font-size: 12px; color: #bfbfbf;">待测</span>
                         </span>
                       </a-tooltip>
                     </template>
@@ -1431,9 +1445,9 @@ function subLinkToken(subId) {
     width: 40,
     scopedSlots: { customRender: 'chainProxyStatus' },
   }, {
-    title: '{{ i18n "pages.inbounds.ping" }}',
+    title: '实测可用',
     align: 'center',
-    width: 60,
+    width: 76,
     scopedSlots: { customRender: 'ping' },
   }, {
     title: '{{ i18n "pages.inbounds.connFamily" }}',
@@ -1530,6 +1544,7 @@ function subLinkToken(subId) {
       webDomain: '',
       pageSize: 0,
       healthStatus: {},
+      probeState: {},
       healthLoading: false,
       healthCheckedAt: 0,
       linkRtt: null,
@@ -1626,6 +1641,10 @@ function subLinkToken(subId) {
           }
           this.linkRtt = isFinite(best) ? Math.round(best) : null;
           this.healthCheckedAt = Date.now();
+          try {
+            const ps = await HttpUtil.post('/panel/api/inbounds/probeState', {});
+            if (ps && ps.success && ps.obj) this.probeState = ps.obj;
+          } catch (e) { /* 实测状态拿不到不影响健康检查 */ }
         } finally {
           this.healthLoading = false;
         }
