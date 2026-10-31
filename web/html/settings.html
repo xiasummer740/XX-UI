@@ -377,16 +377,29 @@
           if (!Array.isArray(arr) || !arr.length) return JSON.parse(JSON.stringify(defaults));
           return arr.map(p => ({
             gb: Number(p.gb) || 0,
-            month: Number(p.month) || 0,
-            quarter: Number(p.quarter) || 0,
-            year: Number(p.year) || 0,
+            month: Number(p.month) || null,
+            quarter: Number(p.quarter) || null,
+            year: Number(p.year) || null,
           }));
         } catch (e) {
           return JSON.parse(JSON.stringify(defaults));
         }
       },
       syncShopPlans() {
-        this.allSetting.shopPlans = JSON.stringify(this.shopPlansTable);
+        const clean = this.shopPlansTable.map((r) => ({
+          gb: Number(r.gb) || 0,
+          month: Number(r.month) || 0,
+          quarter: Number(r.quarter) || 0,
+          year: Number(r.year) || 0,
+        }));
+        const s = JSON.stringify(clean);
+        if (this.allSetting.shopPlans !== s) {
+          this.allSetting.shopPlans = s;
+        }
+      },
+      async saveShopSettings() {
+        this.syncShopPlans();
+        await this.updateAllSetting();
       },
       addShopPlan() {
         this.shopPlansTable.push({ gb: 0, month: 0, quarter: 0, year: 0 });
