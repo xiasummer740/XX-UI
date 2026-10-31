@@ -151,6 +151,13 @@ func (t *Tgbot) sendShopMenu(chatId int64) {
 		t.SendMsgToTgbot(chatId, "🛒 商店暂未开放。")
 		return
 	}
+	if ok, why := shop.ShopReady(); !ok {
+		// 入站丢了就别让买家付钱，否则付了也开不出号
+		t.SendMsgToTgbot(chatId, "🛠 <b>店铺正在维护</b>\n\n"+why+"，暂时没法开通，先别付款 🙏\n"+
+			"已经付过款的朋友不用急，管理员处理完会补发给你。")
+		shop.WarnShopBroken(fmt.Sprintf("有买家准备下单，但店铺不可用：%s", why))
+		return
+	}
 	plans := shop.GetShopPlans()
 	if len(plans) == 0 {
 		t.SendMsgToTgbot(chatId, "🛒 暂时没有在售套餐，请稍后再来。")
@@ -831,6 +838,12 @@ func (t *Tgbot) sendShopBufPayQR(chatId int64, from *telego.User, gb int, cycle,
 		if from.Username != "" {
 			name += "(@" + from.Username + ")"
 		}
+	}
+
+	if ok, why := shop.ShopReady(); !ok {
+		t.SendMsgToTgbot(chatId, "🛠 <b>店铺正在维护</b>\n\n"+why+"，暂时没法开通，先别付款 🙏")
+		shop.WarnShopBroken(fmt.Sprintf("有买家准备付款，但店铺不可用：%s", why))
+		return true
 	}
 
 	order, err := shop.CreateOrder(chatId, name, gb, cycle, methodLabel)

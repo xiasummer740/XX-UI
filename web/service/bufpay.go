@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/XiaSummer740/XX-UI/logger"
 )
 
 // BufPay 个人免签收款：买家扫你自己的微信/支付宝收款码付款，
@@ -49,6 +51,9 @@ func (s *BufPayService) sign(params ...string) string {
 }
 
 // CreatePayment 向 BufPay 发起一笔支付请求，返回收款二维码等信息。
+//
+// 这台机器到 bufpay.com 的 HTTPS 偶尔会握手卡住（明文 HTTP 反而稳定），
+// 所以先走 HTTPS，失败自动重试一次，再失败就回落到 HTTP，尽量不让买家看到报错。
 func (s *BufPayService) CreatePayment(aid, secret, name, payType, price, orderId, orderUid, notifyUrl string) (*BufPayPayment, error) {
 	aid = strings.TrimSpace(aid)
 	secret = strings.TrimSpace(secret)
@@ -61,7 +66,6 @@ func (s *BufPayService) CreatePayment(aid, secret, name, payType, price, orderId
 
 	returnUrl := ""
 	feedbackUrl := ""
-	// 签名：name + pay_type + price + order_id + order_uid + notify_url + return_url + feedback_url + secret
 	sign := s.sign(name, payType, price, orderId, orderUid, notifyUrl, returnUrl, feedbackUrl, secret)
 
 	form := url.Values{}
@@ -75,26 +79,53 @@ func (s *BufPayService) CreatePayment(aid, secret, name, payType, price, orderId
 	form.Set("feedback_url", feedbackUrl)
 	form.Set("sign", sign)
 
-	client := &http.Client{Timeout: 25 * time.Second}
-	resp, err := client.PostForm(fmt.Sprintf("https://bufpay.com/api/pay/%s", aid), form)
+	endpoints := []string{
+		"https://bufpay.com/api/pay/" + aid,
+		"https://bufpay.com/api/pay/" + aid,
+		"http://bufpay.com/api/pay/" + aid,
+	}
+
+	var lastErr error
+	for i, endpoint := range endpoints {
+		pay, apiErr, transportErr := s.doPay(endpoint, form)
+		if transportErr != nil {
+			// 网络层失败（握手卡住/超时）：换下一个端点重试
+			lastErr = transportErr
+			logger.Warning("[bufpay] 第", i+1, "次下单请求失败: ", transportErr)
+			time.Sleep(700 * time.Millisecond)
+			continue
+		}
+		if apiErr != nil {
+			// 接口明确拒绝了（签名错/额度用完等），重试也没用
+			return nil, apiErr
+		}
+		return pay, nil
+	}
+	return nil, fmt.Errorf("连不上 BufPay：%v", lastErr)
+}
+
+// doPay 发一次下单请求，区分「网络失败」和「接口拒绝」。
+func (s *BufPayService) doPay(endpoint string, form url.Values) (pay *BufPayPayment, apiErr error, transportErr error) {
+	client := &http.Client{Timeout: 20 * time.Second}
+	resp, err := client.PostForm(endpoint, form)
 	if err != nil {
-		return nil, fmt.Errorf("请求 BufPay 失败: %w", err)
+		return nil, nil, fmt.Errorf("请求 BufPay 失败: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return nil, fmt.Errorf("读取 BufPay 响应失败: %w", err)
+		return nil, nil, fmt.Errorf("读取 BufPay 响应失败: %w", err)
 	}
 
-	pay := &BufPayPayment{}
-	if err := json.Unmarshal(body, pay); err != nil {
-		return nil, fmt.Errorf("BufPay 返回了非预期内容: %s", strings.TrimSpace(string(body)))
+	result := &BufPayPayment{}
+	if err := json.Unmarshal(body, result); err != nil {
+		return nil, nil, fmt.Errorf("BufPay 返回了非预期内容: %s", strings.TrimSpace(string(body)))
 	}
-	if pay.Status != "ok" {
-		return nil, fmt.Errorf("bufpay 返回: %s", bufPayErrorText(pay.Status))
+	if result.Status != "ok" {
+		return nil, fmt.Errorf("bufpay 返回: %s", bufPayErrorText(result.Status)), nil
 	}
-	return pay, nil
+	return result, nil, nil
 }
 
 // VerifyNotify 校验支付回调的签名。

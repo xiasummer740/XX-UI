@@ -798,3 +798,33 @@ func (s *ShopService) CheckShopHealth(bot *Tgbot) {
 			"买家还能看到套餐，但付款后开通会失败。\n"+
 			"请到面板「设置 → 流量商店 → 基础设置」重新选择投放设备。", problem))
 }
+
+// ShopReady 判断店铺现在能不能正常卖（投放的入站还在不在）。
+// 返回 false 时不要收钱，避免买家付了款却开不了号。
+func (s *ShopService) ShopReady() (bool, string) {
+	inboundId := s.GetShopInboundID()
+	if inboundId <= 0 {
+		return false, "管理员还没设置投放设备"
+	}
+	if _, err := s.inboundService.GetInbound(inboundId); err != nil {
+		return false, fmt.Sprintf("投放的入站 #%d 已经不存在了", inboundId)
+	}
+	return true, ""
+}
+
+var shopBrokenMu sync.Mutex
+var shopBrokenLastWarn int64
+
+// WarnShopBroken 店铺不可用时提醒管理员，10 分钟内最多一次，避免买家狂点刷屏。
+func (s *ShopService) WarnShopBroken(reason string) {
+	shopBrokenMu.Lock()
+	defer shopBrokenMu.Unlock()
+	now := time.Now().Unix()
+	if now-shopBrokenLastWarn < 600 {
+		return
+	}
+	shopBrokenLastWarn = now
+	var bot Tgbot
+	bot.NewTgbot().SendMsgToTgbotAdmins("⚠️ <b>流量商店当前不可用</b>\n\n" + reason +
+		"\n\n请到面板「设置 → 流量商店 → 基础设置」重新选择投放设备。买家已被拦下，没有产生扣款。")
+}
