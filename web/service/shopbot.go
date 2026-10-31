@@ -515,7 +515,7 @@ func (t *Tgbot) fetchClientLinks(email string) ([]string, error) {
 // buildClashURL 生成 Clash/Mihomo 订阅地址（面板里 /clash/ 路径）。
 func (t *Tgbot) buildClashURL(email string) (string, error) {
 	if enable, _ := t.settingService.GetSubClashEnable(); !enable {
-		return "", fmt.Errorf("Clash 订阅未开启")
+		return "", fmt.Errorf("clash 订阅未开启")
 	}
 	traffic, client, err := t.inboundService.GetClientByEmail(email)
 	_ = traffic
