@@ -179,6 +179,9 @@ type Client struct {
 	Enable     bool   `json:"enable" form:"enable"`         // Whether the client is enabled
 	TgID       int64  `json:"tgId" form:"tgId"`             // Telegram user ID for notifications
 	SubID      string `json:"subId" form:"subId"`           // Subscription identifier
+	// PrevSubIDs 保存该客户端用过的历史订阅 ID。改订阅 ID 后，
+	// 老链接 .../sub/<旧ID> 依旧能命中同一个客户端，已经发出去的订阅不会失效。
+	PrevSubIDs []string `json:"prevSubIds,omitempty" form:"prevSubIds"` // Historical subscription identifiers
 	Comment    string `json:"comment" form:"comment"`       // Client comment
 	Reset      int    `json:"reset" form:"reset"`           // Reset period in days
 	CreatedAt  int64  `json:"created_at,omitempty"`         // Creation timestamp

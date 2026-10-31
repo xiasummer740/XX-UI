@@ -107,6 +107,12 @@
       </a-tooltip>
     </template>
     <a-input v-model.trim="client.subId"></a-input>
+    <div style="margin-top: 4px; color: #999; font-size: 12px;">
+      改这里不会让旧订阅链接失效：历史 ID 会保留
+      <span v-if="client.prevSubIds && client.prevSubIds.length">
+        （已有 [[ client.prevSubIds.length ]] 个历史 ID）
+      </span>
+    </div>
   </a-form-item>
   <a-form-item v-if="client.email && app.tgBotEnable">
     <template slot="label">

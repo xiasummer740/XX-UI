@@ -1,6 +1,10 @@
 package service
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/XiaSummer740/XX-UI/database/model"
+)
 
 func TestEncodeSubIDToken(t *testing.T) {
 	cases := []struct{ in, want string }{
@@ -54,5 +58,47 @@ func TestIsSubIDURLSafe(t *testing.T) {
 		if IsSubIDURLSafe(s) {
 			t.Errorf("%q 不应判定为安全", s)
 		}
+	}
+}
+
+// 改订阅 ID 之后，旧 ID 必须仍然命中同一个客户端。
+func TestMergePrevSubIDs(t *testing.T) {
+	got := MergePrevSubIDs(nil, "old-one")
+	if len(got) != 1 || got[0] != "old-one" {
+		t.Fatalf("MergePrevSubIDs(nil, old-one) = %v", got)
+	}
+
+	// 重复追加要去重，且空值被忽略
+	got = MergePrevSubIDs([]string{"a", "", "old-one"}, "old-one")
+	if len(got) != 2 || got[0] != "a" || got[1] != "old-one" {
+		t.Fatalf("MergePrevSubIDs 去重失败: %v", got)
+	}
+
+	// 空旧值不应写入
+	if got := MergePrevSubIDs([]string{"a"}, "  "); len(got) != 1 || got[0] != "a" {
+		t.Fatalf("空旧订阅 ID 不应写入: %v", got)
+	}
+
+	// 超过上限时保留最近的
+	var many []string
+	for i := 0; i < MaxPrevSubIDs+5; i++ {
+		many = append(many, string(rune('a'+i%26))+string(rune('0'+i%10)))
+	}
+	many = MergePrevSubIDs(many, "last-one")
+	if len(many) != MaxPrevSubIDs || many[len(many)-1] != "last-one" {
+		t.Fatalf("历史长度应被截断到 %d，实际 %d", MaxPrevSubIDs, len(many))
+	}
+}
+
+func TestClientMatchesSubID(t *testing.T) {
+	c := model.Client{SubID: "new-id", PrevSubIDs: []string{"old-id", "older-id"}}
+	if !ClientMatchesSubID(c, "new-id") {
+		t.Fatal("当前 ID 应命中")
+	}
+	if !ClientMatchesSubID(c, "old-id") {
+		t.Fatal("历史 ID 应命中")
+	}
+	if ClientMatchesSubID(c, "someone-else") {
+		t.Fatal("陌生 ID 不应命中")
 	}
 }

@@ -120,7 +120,7 @@ func (s *SubJsonService) GetJson(subId string, host string) (string, string, err
 
 		jsonMatchCount := 0
 		for _, client := range clients {
-			if client.Enable && client.SubID == subId {
+			if client.Enable && service.ClientMatchesSubID(client, subId) {
 				jsonMatchCount++
 				clientTraffics = append(clientTraffics, s.SubService.getClientTraffics(inbound.ClientStats, client.Email))
 				newConfigs := s.getConfig(inbound, client, host)

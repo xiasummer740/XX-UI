@@ -98,7 +98,7 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.C
 			}
 		}
 		for _, client := range clients {
-			if client.Enable && client.SubID == subId {
+			if client.Enable && service.ClientMatchesSubID(client, subId) {
 				matchedCount++
 				link := s.getLink(inbound, client.Email)
 				result = append(result, link)
@@ -180,8 +180,15 @@ func (s *SubService) queryInboundsBySubId(subId string) ([]*model.Inbound, error
 		FROM inbounds,
 			JSON_EACH(JSON_EXTRACT(inbounds.settings, '$.clients')) AS client
 		WHERE
-			JSON_EXTRACT(client.value, '$.subId') = ? AND enable = ?
-	)`, subId, true).Find(&inbounds).Error
+			enable = ? AND (
+				JSON_EXTRACT(client.value, '$.subId') = ?
+				OR EXISTS (
+					SELECT 1 FROM JSON_EACH(
+						COALESCE(JSON_EXTRACT(client.value, '$.prevSubIds'), '[]')
+					) AS prev WHERE prev.value = ?
+				)
+			)
+	)`, true, subId, subId).Find(&inbounds).Error
 	if err != nil {
 		return nil, err
 	}

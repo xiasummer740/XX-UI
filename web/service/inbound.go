@@ -583,12 +583,14 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 		var oldSettings map[string]any
 		_ = json.Unmarshal([]byte(oldInbound.Settings), &oldSettings)
 		emailToCreated := map[string]int64{}
+		emailToOldClient := map[string]map[string]any{}
 		emailToUpdated := map[string]int64{}
 		if oldSettings != nil {
 			if oc, ok := oldSettings["clients"].([]any); ok {
 				for _, it := range oc {
 					if m, ok2 := it.(map[string]any); ok2 {
 						if email, ok3 := m["email"].(string); ok3 {
+							emailToOldClient[email] = m
 							switch v := m["created_at"].(type) {
 							case float64:
 								emailToCreated[email] = int64(v)
@@ -613,6 +615,8 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 				for i := range nSlice {
 					if m, ok2 := nSlice[i].(map[string]any); ok2 {
 						email, _ := m["email"].(string)
+						// 订阅 ID 变更 → 旧 ID 进历史，保证已发出的订阅链接继续可用
+						RecordSubIDHistory(emailToOldClient[email], m)
 						if _, ok3 := m["created_at"]; !ok3 {
 							if v, ok4 := emailToCreated[email]; ok4 && v > 0 {
 								m["created_at"] = v
@@ -1379,6 +1383,10 @@ func (s *InboundService) UpdateInboundClient(data *model.Inbound, clientId strin
 			}
 			newMap["created_at"] = preservedCreated
 			newMap["updated_at"] = time.Now().Unix() * 1000
+			// 订阅 ID 改了就把旧 ID 记进历史，保证老订阅链接继续可用
+			if oldMap, okOld := settingsClients[clientIndex].(map[string]any); okOld {
+				RecordSubIDHistory(oldMap, newMap)
+			}
 			// 持久化 speedLimit 字段
 			if clients[0].SpeedLimit > 0 {
 				newMap["speedLimit"] = clients[0].SpeedLimit
