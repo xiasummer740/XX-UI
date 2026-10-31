@@ -210,7 +210,7 @@ func (s *ShopService) FindPlan(gb int) (ShopPlan, bool) {
 }
 
 // CreateOrder 下单（pending 状态，等管理员确认收款）。
-func (s *ShopService) CreateOrder(chatId int64, tgName string, gb int, cycle string) (*model.Order, error) {
+func (s *ShopService) CreateOrder(chatId int64, tgName string, gb int, cycle string, payMethod string) (*model.Order, error) {
 	if _, ok := s.FindPlan(gb); !ok {
 		return nil, fmt.Errorf("没有这个套餐")
 	}
@@ -245,6 +245,7 @@ func (s *ShopService) CreateOrder(chatId int64, tgName string, gb int, cycle str
 		Days:      cycleDays(cycle),
 		Price:     price,
 		Status:    orderPending,
+		Remark:    payMethod,
 		CreatedAt: now,
 	}
 	if err := db.Create(order).Error; err != nil {
@@ -431,8 +432,12 @@ func (s *ShopService) RejectOrder(id int, adminId int64, reason string) (*model.
 
 // OrderText 把订单渲染成一段可读文字（给 telegram 用）。
 func orderText(o *model.Order) string {
-	return fmt.Sprintf("#%d｜%d GB｜%s（%d 天）｜¥%.2f\n买家：%s（%d）",
+	txt := fmt.Sprintf("#%d｜%d GB｜%s（%d 天）｜¥%.2f\n买家：%s（%d）",
 		o.Id, o.PlanGb, cycleLabel(o.Cycle), o.Days, o.Price, o.TgName, o.ChatId)
+	if o.Remark != "" {
+		txt += "\n支付方式：" + o.Remark
+	}
+	return txt
 }
 
 // PlanPriceText 生成「100 GB 月付 ¥10 / 季付 ¥27 / 年付 ¥96」这样的文案。

@@ -52,12 +52,22 @@ func (t *Tgbot) handleShopCallback(callbackQuery *telego.CallbackQuery, chatId i
 		}
 		gb, _ := strconv.Atoi(args[1])
 		t.sendShopConfirm(chatId, gb, args[2])
+	case "pay":
+		if len(args) < 4 {
+			return true
+		}
+		gb, _ := strconv.Atoi(args[1])
+		t.sendShopPayQR(chatId, gb, args[2], args[3])
 	case "paid":
 		if len(args) < 3 {
 			return true
 		}
 		gb, _ := strconv.Atoi(args[1])
-		t.createShopOrder(chatId, &callbackQuery.From, gb, args[2])
+		method := ""
+		if len(args) >= 4 {
+			method = args[3]
+		}
+		t.createShopOrder(chatId, &callbackQuery.From, gb, args[2], method)
 	case "ok":
 		if !isAdmin || len(args) < 2 {
 			t.sendCallbackAnswerTgBot(callbackQuery.ID, "只有管理员能确认订单")
@@ -83,6 +93,14 @@ func (t *Tgbot) handleShopCallback(callbackQuery *telego.CallbackQuery, chatId i
 	return true
 }
 
+// methodLine 把支付方式渲染成「　·　微信支付」这样的一段。
+func methodLine(method string) string {
+	if method == "" {
+		return ""
+	}
+	return "　·　" + method
+}
+
 // sendShopMenu 是 /buy 的入口：列出所有档位。
 func (t *Tgbot) sendShopMenu(chatId int64) {
 	shop := ShopService{}
@@ -97,11 +115,11 @@ func (t *Tgbot) sendShopMenu(chatId int64) {
 		return
 	}
 
-	msg := "🎁 <b>挑一个适合你的套餐</b>\n\n"
+	msg := "🎁 <b>挑一个适合你的套餐</b>  <i>(第 1 步 / 共 4 步)</i>\n\n"
 	for _, p := range plans {
 		msg += fmt.Sprintf("▫️ <b>%d GB</b>  ·  %s\n", p.Gb, planPriceText(p))
 	}
-	msg += "\n点下面的按钮选流量，随时可以反悔 👇"
+	msg += "\n点下面的按钮选流量 👇"
 
 	var buttons []telego.InlineKeyboardButton
 	for _, p := range plans {
@@ -146,56 +164,109 @@ func (t *Tgbot) sendShopCyclePicker(chatId int64, gb int) {
 	rows = append(rows, tu.InlineKeyboardRow(
 		tu.InlineKeyboardButton("⬅️ 返回套餐").WithCallbackData("shop_back"),
 	))
-	t.SendMsgToTgbot(chatId, fmt.Sprintf("已选 <b>%d GB</b> ✨\n想按哪种方式付款？\n\n<i>季付、年付更划算，用得久就更省一点。</i>", gb), tu.InlineKeyboard(rows...))
+	t.SendMsgToTgbot(chatId, fmt.Sprintf("✨ 已选 <b>%d GB</b>\n\n<b>第 2 步</b>：选付款周期\n\n<i>季付、年付更划算，用得久就更省一点。</i>", gb), tu.InlineKeyboard(rows...))
 }
 
-// sendShopConfirm 展示订单确认页（金额 + 收款说明 + 我已付款）。
+// sendShopConfirm 第 3 步：确认订单并让买家选支付方式。
 func (t *Tgbot) sendShopConfirm(chatId int64, gb int, cycle string) {
 	shop := ShopService{}
 	price, ok := shop.PriceOf(gb, cycle)
 	if !ok {
-		t.SendMsgToTgbot(chatId, "这个组合暂时不可购买。")
+		t.SendMsgToTgbot(chatId, "这个组合暂时不可购买，回套餐里重新选一个吧 🙏")
 		return
 	}
 	days := cycleDays(cycle)
-	msg := fmt.Sprintf("🧾 <b>订单确认</b>\n\n"+
+	msg := fmt.Sprintf("🧾 <b>订单确认</b>  <i>(第 3 步 / 共 4 步)</i>\n\n"+
 		"套餐：<b>%d GB</b>\n"+
 		"周期：%s（%d 天）\n"+
 		"金额：<b>¥%s</b>\n",
 		gb, cycleLabel(cycle), days, formatPrice(price))
 
-	note := shop.GetShopPayNote()
-	if note != "" {
-		msg += "\n" + note
+	qrWechat := shop.GetShopQrURL()
+	qrAlipay := shop.GetShopQrURL2()
+
+	switch {
+	case qrWechat != "" && qrAlipay != "":
+		// 两个码都有 → 让买家自己选
+		msg += "\n💳 用哪个付？点下面的按钮，我把收款码发给你："
+		kb := tu.InlineKeyboard(
+			tu.InlineKeyboardRow(
+				tu.InlineKeyboardButton("💚 微信支付").WithCallbackData(fmt.Sprintf("shop_pay %d %s wechat", gb, cycle)),
+				tu.InlineKeyboardButton("💙 支付宝").WithCallbackData(fmt.Sprintf("shop_pay %d %s alipay", gb, cycle)),
+			),
+			tu.InlineKeyboardRow(
+				tu.InlineKeyboardButton("⬅️ 返回套餐").WithCallbackData("shop_back"),
+			),
+		)
+		t.SendMsgToTgbot(chatId, msg, kb)
+	case qrWechat != "":
+		t.sendShopPayQR(chatId, gb, cycle, "wechat")
+	case qrAlipay != "":
+		t.sendShopPayQR(chatId, gb, cycle, "alipay")
+	default:
+		// 没配收款码 → 只发文字说明 + 我已付款
+		note := shop.GetShopPayNote()
+		if note != "" {
+			msg += "\n" + note + "\n"
+		}
+		msg += "\n💛 付完点下面的「✅ 我已付款」，我看到就立刻给你开通。"
+		kb := tu.InlineKeyboard(
+			tu.InlineKeyboardRow(
+				tu.InlineKeyboardButton("✅ 我已付款").WithCallbackData(fmt.Sprintf("shop_paid %d %s", gb, cycle)),
+			),
+			tu.InlineKeyboardRow(
+				tu.InlineKeyboardButton("⬅️ 返回套餐").WithCallbackData("shop_back"),
+			),
+		)
+		t.SendMsgToTgbot(chatId, msg, kb)
 	}
-	msg += "\n\n💛 付完记得回来点下面的「✅ 我已付款」，我看到就立刻给你开通。"
+}
+
+// sendShopPayQR 第 4 步：发对应收款码 + 「我已付款」按钮。
+func (t *Tgbot) sendShopPayQR(chatId int64, gb int, cycle string, method string) {
+	shop := ShopService{}
+	price, ok := shop.PriceOf(gb, cycle)
+	if !ok {
+		t.SendMsgToTgbot(chatId, "这个组合暂时不可购买，回套餐里重新选一个吧 🙏")
+		return
+	}
 
 	qrWechat := shop.GetShopQrURL()
 	qrAlipay := shop.GetShopQrURL2()
-	keyboard := tu.InlineKeyboard(
-		tu.InlineKeyboardRow(
-			tu.InlineKeyboardButton("✅ 我已付款").WithCallbackData(fmt.Sprintf("shop_paid %d %s", gb, cycle)),
-		),
-		tu.InlineKeyboardRow(
-			tu.InlineKeyboardButton("⬅️ 返回套餐").WithCallbackData("shop_back"),
-		),
-	)
 
-	// 收款码：微信 / 支付宝 两个都发，买家任选
-	sentQR := false
-	if qrWechat != "" {
-		t.sendShopQrPhoto(chatId, qrWechat, "💚 <b>微信支付</b> 扫这个")
-		sentQR = true
+	qr := qrWechat
+	label := "💚 <b>微信支付</b>"
+	otherMethod, otherLabel, otherQR := "alipay", "🔄 换用支付宝", qrAlipay
+	if method == "alipay" {
+		qr = qrAlipay
+		label = "💙 <b>支付宝</b>"
+		otherMethod, otherLabel, otherQR = "wechat", "🔄 换用微信", qrWechat
 	}
-	if qrAlipay != "" {
-		t.sendShopQrPhoto(chatId, qrAlipay, "💙 <b>支付宝</b> 扫这个")
-		sentQR = true
+
+	caption := fmt.Sprintf("%s\n\n金额：<b>¥%s</b>　（%d GB · %s）\n\n"+
+		"<b>第 4 步</b>：扫码付 ¥%s，付完点下面的「✅ 我已付款」👇",
+		label, formatPrice(price), gb, cycleLabel(cycle), formatPrice(price))
+
+	rows := [][]telego.InlineKeyboardButton{
+		tu.InlineKeyboardRow(
+			tu.InlineKeyboardButton("✅ 我已付款").WithCallbackData(fmt.Sprintf("shop_paid %d %s %s", gb, cycle, method)),
+		),
 	}
-	if sentQR {
-		t.SendMsgToTgbot(chatId, msg+"\n\n☝️ 上面两个收款码，哪个方便扫哪个。", keyboard)
+	if otherQR != "" {
+		rows = append(rows, tu.InlineKeyboardRow(
+			tu.InlineKeyboardButton(otherLabel).WithCallbackData(fmt.Sprintf("shop_pay %d %s %s", gb, cycle, otherMethod)),
+		))
+	}
+	rows = append(rows, tu.InlineKeyboardRow(
+		tu.InlineKeyboardButton("⬅️ 返回套餐").WithCallbackData("shop_back"),
+	))
+
+	if qr != "" {
+		t.sendShopQrPhoto(chatId, qr, strings.Replace(caption, "<b>第 4 步</b>：", "", 1))
+		t.SendMsgToTgbot(chatId, "☝️ 上面是收款码，付完点下面按钮就完成了 ✅", tu.InlineKeyboard(rows...))
 		return
 	}
-	t.SendMsgToTgbot(chatId, msg, keyboard)
+	t.SendMsgToTgbot(chatId, caption, tu.InlineKeyboard(rows...))
 }
 
 // sendShopQrPhoto 发送收款码：既支持 http 图片地址，也支持面板里直接上传的 base64（data:image/...）。
@@ -247,25 +318,32 @@ func (t *Tgbot) sendContentQR(chatId int64, content string, caption string) {
 }
 
 // createShopOrder 买家点「我已付款」：落单并通知管理员。
-func (t *Tgbot) createShopOrder(chatId int64, from *telego.User, gb int, cycle string) {
+func (t *Tgbot) createShopOrder(chatId int64, from *telego.User, gb int, cycle string, payMethod string) {
 	shop := ShopService{}
 	name := from.FirstName
 	if from.Username != "" {
 		name += "(@" + from.Username + ")"
 	}
-	order, err := shop.CreateOrder(chatId, name, gb, cycle)
+	methodLabel := ""
+	switch payMethod {
+	case "wechat":
+		methodLabel = "微信支付"
+	case "alipay":
+		methodLabel = "支付宝"
+	}
+	order, err := shop.CreateOrder(chatId, name, gb, cycle, methodLabel)
 	if err != nil {
 		t.SendMsgToTgbot(chatId, "❌ "+err.Error())
 		return
 	}
 
 	t.SendMsgToTgbot(chatId, fmt.Sprintf(
-		"💌 <b>收到啦，订单 #%d 已登记</b>\n\n"+
+		"💌 <b>收到啦，订单 #%d 已登记</b>  <i>(4/4 完成)</i>\n\n"+
 			"套餐：<b>%d GB</b>　%s\n"+
-			"金额：<b>¥%s</b>\n\n"+
+			"金额：<b>¥%s</b>%s\n\n"+
 			"我核对到账后马上开通，订阅链接和二维码会直接发到这里，你不用守着刷 ⏳\n"+
 			"<i>一般几分钟内就好，夜里可能慢一点点。</i>",
-		order.Id, order.PlanGb, cycleLabel(order.Cycle), formatPrice(order.Price)))
+		order.Id, order.PlanGb, cycleLabel(order.Cycle), formatPrice(order.Price), methodLine(order.Remark)))
 
 	kb := tu.InlineKeyboard(
 		tu.InlineKeyboardRow(
