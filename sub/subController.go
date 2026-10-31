@@ -26,6 +26,10 @@ type SUBController struct {
 	jsonEnabled      bool
 	clashEnabled     bool
 	subEncrypt       bool
+	guardEnable      bool
+	guardStrictUA    bool
+	guardRPM         int
+	guardBlockMin    int
 	updateInterval   string
 
 	subService      *SubService
@@ -57,6 +61,10 @@ func NewSUBController(
 	subRoutingRules string,
 	inboundService service.InboundService,
 	settingService service.SettingService,
+	guardEnable bool,
+	guardStrictUA bool,
+	guardRPM int,
+	guardBlockMin int,
 ) *SUBController {
 	sub := NewSubService(showInfo, rModel, inboundService, settingService)
 	a := &SUBController{
@@ -72,6 +80,10 @@ func NewSUBController(
 		jsonEnabled:      jsonEnabled,
 		clashEnabled:     clashEnabled,
 		subEncrypt:       encrypt,
+		guardEnable:      guardEnable,
+		guardStrictUA:    guardStrictUA,
+		guardRPM:         guardRPM,
+		guardBlockMin:    guardBlockMin,
 		updateInterval:   update,
 
 		subService:      sub,
@@ -85,14 +97,16 @@ func NewSUBController(
 // initRouter registers HTTP routes for subscription links and JSON endpoints
 // on the provided router group.
 func (a *SUBController) initRouter(g *gin.RouterGroup) {
-	gLink := g.Group(a.subPath)
+	// 订阅防泄漏中间件：只作用于订阅相关路径，不影响页面与静态资源
+	guard := NewSubGuard().Guard(a.guardEnable, a.guardStrictUA, a.guardRPM, a.guardBlockMin)
+	gLink := g.Group(a.subPath, guard)
 	gLink.GET(":subid", a.subs)
 	if a.jsonEnabled {
-		gJson := g.Group(a.subJsonPath)
+		gJson := g.Group(a.subJsonPath, guard)
 		gJson.GET(":subid", a.subJsons)
 	}
 	if a.clashEnabled {
-		gClash := g.Group(a.subClashPath)
+		gClash := g.Group(a.subClashPath, guard)
 		gClash.GET(":subid", a.subClashs)
 	}
 }

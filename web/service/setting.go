@@ -127,7 +127,16 @@ var defaultValueMap = map[string]string{
 
 	"vpsQuotaNotify": "80,95",
 
-	"vpsQuotaNotified":      "",
+	"vpsQuotaNotified": "",
+
+	"subGuardEnable": "false",
+
+	"subGuardStrictUA": "false",
+
+	"subGuardRPM": "30",
+
+	"subGuardBlockMin": "30",
+
 	"ldapAutoDelete":        "false",
 	"ldapDefaultTotalGB":    "0",
 	"ldapDefaultExpiryDays": "0",
@@ -523,6 +532,18 @@ func (s *SettingService) GetSubEnable() (bool, error) {
 func (s *SettingService) GetSubJsonEnable() (bool, error) {
 	return s.getBool("subJsonEnable")
 }
+
+// GetSubGuardEnable 返回是否启用订阅防泄漏。
+func (s *SettingService) GetSubGuardEnable() (bool, error) { return s.getBool("subGuardEnable") }
+
+// GetSubGuardStrictUA 返回是否启用 UA 白名单（严格模式）。
+func (s *SettingService) GetSubGuardStrictUA() (bool, error) { return s.getBool("subGuardStrictUA") }
+
+// GetSubGuardRPM 返回每 IP 每分钟允许的订阅请求数。
+func (s *SettingService) GetSubGuardRPM() (int, error) { return s.getInt("subGuardRPM") }
+
+// GetSubGuardBlockMin 返回违规 IP 的封禁时长（分钟）。
+func (s *SettingService) GetSubGuardBlockMin() (int, error) { return s.getInt("subGuardBlockMin") }
 
 // GetVPSQuotaGB 返回套餐总流量（GB），0 表示未配置。
 func (s *SettingService) GetVPSQuotaGB() (int, error) {

@@ -174,6 +174,35 @@
                     :style="{ width: '100%' }"></a-input-number>
             </template>
         </a-setting-list-item>
+    <a-collapse-panel key="5" header='订阅防泄漏（防止订阅链接被转发滥用）'>
+        <a-setting-list-item paddings="small">
+            <template #title>启用防泄漏</template>
+            <template #description>开启后对订阅请求做 UA 校验、频率限制与违规拉黑</template>
+            <template #control>
+                <a-switch v-model="allSetting.subGuardEnable"></a-switch>
+            </template>
+        </a-setting-list-item>
+        <a-setting-list-item paddings="small">
+            <template #title>UA 白名单（严格模式）</template>
+            <template #description>只允许 Shadowrocket / Clash / v2rayN / sing-box 等常见客户端抓取</template>
+            <template #control>
+                <a-switch v-model="allSetting.subGuardStrictUA"></a-switch>
+            </template>
+        </a-setting-list-item>
+        <a-setting-list-item paddings="small">
+            <template #title>每 IP 每分钟请求上限</template>
+            <template #description>超过就返回 429；正常客户端更新订阅远低于这个值</template>
+            <template #control>
+                <a-input-number :min="1" v-model="allSetting.subGuardRPM" :style="{ width: '100%' }"></a-input-number>
+            </template>
+        </a-setting-list-item>
+        <a-setting-list-item paddings="small">
+            <template #title>违规封禁时长（分钟）</template>
+            <template #description>短时间内多次违规的 IP 会被临时拉黑</template>
+            <template #control>
+                <a-input-number :min="1" v-model="allSetting.subGuardBlockMin" :style="{ width: '100%' }"></a-input-number>
+            </template>
+        </a-setting-list-item>
     </a-collapse-panel>
 </a-collapse>
 {{end}}

@@ -265,11 +265,23 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 
 	inboundService := service.InboundService{}
 
+	// 订阅防泄漏配置（UA 白名单 / 限流 / 拉黑）
+	guardEnable, _ := s.settingService.GetSubGuardEnable()
+	guardStrictUA, _ := s.settingService.GetSubGuardStrictUA()
+	guardRPM, _ := s.settingService.GetSubGuardRPM()
+	guardBlockMin, _ := s.settingService.GetSubGuardBlockMin()
+	if guardRPM <= 0 {
+		guardRPM = 30
+	}
+	if guardBlockMin <= 0 {
+		guardBlockMin = 30
+	}
+
 	s.sub = NewSUBController(
 		g, LinksPath, JsonPath, ClashPath, subJsonEnable, subClashEnable, Encrypt, ShowInfo, RemarkModel, SubUpdates,
 		SubJsonFragment, SubJsonNoises, SubJsonMux, SubJsonRules, SubTitle, SubSupportUrl,
 		SubProfileUrl, SubAnnounce, SubEnableRouting, SubRoutingRules,
-		inboundService, s.settingService)
+		inboundService, s.settingService, guardEnable, guardStrictUA, guardRPM, guardBlockMin)
 
 	return engine, nil
 }

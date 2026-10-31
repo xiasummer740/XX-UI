@@ -138,6 +138,12 @@ type AllSetting struct {
 	VpsQuotaGB       int    `json:"vpsQuotaGB" form:"vpsQuotaGB"`             // VPS 套餐总流量（GB），0 表示未配置
 	VpsQuotaNotify   string `json:"vpsQuotaNotify" form:"vpsQuotaNotify"`     // 流量提醒阈值，如 "80,95"
 	VpsQuotaNotified string `json:"vpsQuotaNotified" form:"vpsQuotaNotified"` // 本周期已提醒过的阈值（内部状态）
+
+	// 订阅防泄漏：UA 白名单 / 每 IP 限流 / 违规拉黑
+	SubGuardEnable   bool `json:"subGuardEnable" form:"subGuardEnable"`     // 总开关
+	SubGuardStrictUA bool `json:"subGuardStrictUA" form:"subGuardStrictUA"` // 只允许常见客户端的 UA
+	SubGuardRPM      int  `json:"subGuardRPM" form:"subGuardRPM"`           // 每 IP 每分钟订阅请求上限
+	SubGuardBlockMin int  `json:"subGuardBlockMin" form:"subGuardBlockMin"` // 违规 IP 封禁分钟数
 }
 
 // CheckValid validates all settings in the AllSetting struct, checking IP addresses, ports, SSL certificates, and other configuration values.
