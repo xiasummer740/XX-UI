@@ -576,6 +576,9 @@ func (s *ShopService) ListOrdersForPanel(limit int) ([]model.Order, error) {
 // orderRevoked 是「已撤销」状态：误点确认后可以撤回。
 const orderRevoked = "revoked"
 
+// orderExpired 是「超时没付款、自动关闭」的状态。
+const orderExpired = "expired"
+
 // RevokeOrder 撤销一笔已开通的订单：停用该订单开通的客户端，并把订单标记为 revoked。
 // 用于「买家其实没付款，管理员误点了确认」的场景。
 func (s *ShopService) RevokeOrder(id int, adminId int64) (*model.Order, error) {
@@ -910,6 +913,9 @@ func (s *ShopService) SaveOrderAoid(id int, aoid string) error {
 
 // ReconcilePendingOrders 主动向 BufPay 查单：已经付了款但回调没送到的订单，
 // 在这里自动补开通。每单查一次，不依赖 BufPay 的回调（回调经常丢）。
+//
+// 除了「待确认」，也会复查最近 24 小时「已超时关闭」的订单：
+// 万一买家在关单后才付款，钱真到了就得给人家开通。
 func (s *ShopService) ReconcilePendingOrders(bot *Tgbot) {
 	if bot == nil {
 		return
@@ -919,7 +925,7 @@ func (s *ShopService) ReconcilePendingOrders(bot *Tgbot) {
 	}
 	orders := make([]*model.Order, 0)
 	err := database.GetDB().
-		Where("status = ? AND aoid <> '' AND created_at > ?", orderPending, time.Now().Unix()-24*3600).
+		Where("status IN (?, ?) AND aoid <> '' AND created_at > ?", orderPending, orderExpired, time.Now().Unix()-24*3600).
 		Order("id asc").Limit(20).Find(&orders).Error
 	if err != nil || len(orders) == 0 {
 		return
@@ -929,15 +935,114 @@ func (s *ShopService) ReconcilePendingOrders(bot *Tgbot) {
 	for _, o := range orders {
 		status, qerr := buf.QueryOrder(o.Aoid)
 		if qerr != nil {
-			logger.Debugf("[shop] 查单失败 #%d: %v", o.Id, qerr)
+			s.noteQueryFailure(qerr)
 			continue
 		}
+		s.noteQuerySuccess()
 		if !IsPayedStatus(status) {
 			continue
 		}
 		logger.Info("[shop] 主动查单发现订单 #", o.Id, " 已付款（", status, "），自动开通")
 		bot.AutoApproveShopOrder(o.Id)
 	}
+}
+
+// PendingTTL 返回未付款订单的自动关闭时长，默认 3 分钟（面板可调）。
+func (s *ShopService) PendingTTL() time.Duration {
+	v, err := s.settingService.getString("shopPendingTTL")
+	if err != nil {
+		return 3 * time.Minute
+	}
+	return parsePendingTTL(v)
+}
+
+// parsePendingTTL 把面板里填的分钟数解析成时长，非法值回落到 3 分钟。
+func parsePendingTTL(raw string) time.Duration {
+	n, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || n <= 0 || n > 240 {
+		return 3 * time.Minute
+	}
+	return time.Duration(n) * time.Minute
+}
+
+// ExpirePendingOrder 关掉一笔超时未付款的订单，释放「每人只能有 1 个待确认订单」的名额。
+func (s *ShopService) ExpirePendingOrder(id int) error {
+	return database.GetDB().Model(&model.Order{}).
+		Where("id = ? AND status = ?", id, orderPending).
+		Updates(map[string]any{
+			"status":     orderExpired,
+			"remark":     "超时未付款，自动关闭",
+			"handled_at": time.Now().Unix(),
+		}).Error
+}
+
+// ExpireStalePendingOrders 把超过 TTL 还没付款的 BufPay 订单自动关闭。
+// 关之前一定先查一次单：万一人家刚好付了，就直接开通 —— 绝不能把付了钱的单作废。
+func (s *ShopService) ExpireStalePendingOrders(bot *Tgbot) {
+	if bot == nil || s.GetPayMode() != "auto" {
+		return
+	}
+	ttl := s.PendingTTL()
+	deadline := time.Now().Add(-ttl).Unix()
+	orders := make([]*model.Order, 0)
+	err := database.GetDB().
+		Where("status = ? AND aoid <> '' AND created_at < ?", orderPending, deadline).
+		Order("id asc").Limit(20).Find(&orders).Error
+	if err != nil || len(orders) == 0 {
+		return
+	}
+
+	var buf BufPayService
+	for _, o := range orders {
+		status, qerr := buf.QueryOrder(o.Aoid)
+		if qerr != nil {
+			// 查不到就别乱关，下一轮再试
+			s.noteQueryFailure(qerr)
+			continue
+		}
+		s.noteQuerySuccess()
+		if IsPayedStatus(status) {
+			logger.Info("[shop] 超时单 #", o.Id, " 其实已付款（", status, "），直接开通")
+			bot.AutoApproveShopOrder(o.Id)
+			continue
+		}
+		if err := s.ExpirePendingOrder(o.Id); err != nil {
+			logger.Warning("[shop] 关闭超时订单失败 #", o.Id, ": ", err)
+			continue
+		}
+		logger.Info("[shop] 订单 #", o.Id, " 超过 ", ttl, " 未付款，已自动关闭")
+		bot.NotifyShopOrderExpired(o)
+	}
+}
+
+// 查单连续失败计数：BufPay 抽风时能及时告诉管理员，而不是让订单一直卡着。
+var (
+	shopQueryMu      sync.Mutex
+	shopQueryFails   int
+	shopQueryLastErr string
+)
+
+func (s *ShopService) noteQueryFailure(err error) {
+	shopQueryMu.Lock()
+	shopQueryFails++
+	n := shopQueryFails
+	if err != nil {
+		shopQueryLastErr = err.Error()
+	}
+	last := shopQueryLastErr
+	shopQueryMu.Unlock()
+
+	logger.Debugf("[shop] 查单失败（连续 %d 次）: %s", n, last)
+	if n == 5 && last != "" {
+		s.WarnShopBroken("BufPay 查单连续失败 5 次（订单可能开通不了）：" + last)
+	}
+}
+
+func (s *ShopService) noteQuerySuccess() {
+	shopQueryMu.Lock()
+	shopQueryFails = 0
+	shopQueryLastErr = ""
+	shopQueryMu.Unlock()
 }
 
 // GetOrderByAoid 按 BufPay 的订单号查本地订单。

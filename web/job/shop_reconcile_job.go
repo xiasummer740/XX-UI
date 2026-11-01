@@ -19,5 +19,8 @@ func NewShopReconcileJob() *ShopReconcileJob {
 
 // Run 执行一轮查单。
 func (j *ShopReconcileJob) Run() {
-	j.shopService.ReconcilePendingOrders(j.tgbotService.NewTgbot())
+	bot := j.tgbotService.NewTgbot()
+	// 先补开通（已付款但回调没到的），再关超时没付款的
+	j.shopService.ReconcilePendingOrders(bot)
+	j.shopService.ExpireStalePendingOrders(bot)
 }

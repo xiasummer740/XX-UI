@@ -137,6 +137,13 @@
           <a-input-number v-model="allSetting.shopDailyLimit" :min="1" :max="20"></a-input-number>
         </template>
       </a-setting-list-item>
+      <a-setting-list-item paddings="small">
+        <template #title>未付款多久自动关闭</template>
+        <template #description>默认 3 分钟。超时没收到到账就自动关单，免得占着买家「一人只能有一单在等」的名额；关单前会先查一次单，真付了就直接开通。</template>
+        <template #control>
+          <a-input-number v-model="allSetting.shopPendingTTL" :min="1" :max="60" addon-after="分钟"></a-input-number>
+        </template>
+      </a-setting-list-item>
     </a-collapse-panel>
 
     <a-collapse-panel key="2" header="收款方式（微信 / 支付宝，两个码买家任选）">

@@ -808,6 +808,8 @@ func shopStatusLabel(status string) string {
 		return "已拒绝"
 	case "revoked":
 		return "已撤销"
+	case "expired":
+		return "已超时关闭"
 	default:
 		return "待确认"
 	}
@@ -997,4 +999,23 @@ func (t *Tgbot) PingAdminsPendingOrder(order *model.Order) {
 			"去微信/支付宝看一下有没有这笔进账，有就点开通 👇",
 		order.Id, order.PlanGb, cycleLabel(order.Cycle), formatPrice(order.Price),
 		order.Remark, order.TgName), kb)
+}
+
+// NotifyShopOrderExpired 告诉买家这单因为一直没收到到账，已经自动关了。
+func (t *Tgbot) NotifyShopOrderExpired(order *model.Order) {
+	if order == nil {
+		return
+	}
+	mins := 3
+	if shop := (ShopService{}); true {
+		if d := shop.PendingTTL(); d > 0 {
+			mins = int(d.Minutes())
+		}
+	}
+	t.SendMsgToTgbot(order.ChatId, fmt.Sprintf(
+		"⏳ <b>订单 #%d 已自动关闭</b>\n\n"+
+			"%d 分钟没收到到账通知，我先把它关掉了，免得占着你「一人只能有一单在等」的名额。\n\n"+
+			"▫️ <b>确实还没付</b>：发 <b>/buy</b> 重新下一单就好 🛒\n"+
+			"▫️ <b>其实已经付了</b>：把付款截图发我，我核对后立刻给你开通 🙏",
+		order.Id, mins))
 }

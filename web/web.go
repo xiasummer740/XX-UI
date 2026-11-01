@@ -233,8 +233,15 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	engine.Use(func(c *gin.Context) {
 		uri := c.Request.RequestURI
 		if strings.HasPrefix(uri, assetsBasePath) {
+			// 静态资源（js/css/图片）可以长时间缓存
 			c.Header("Cache-Control", "max-age=31536000")
+			return
 		}
+		// 页面和接口一律不缓存：面板升级后用户刷新就能看到新界面，
+		// 不会出现「功能明明上线了但页面还是旧的」。
+		c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
+		c.Header("Pragma", "no-cache")
+		c.Header("Expires", "0")
 	})
 
 	// init i18n

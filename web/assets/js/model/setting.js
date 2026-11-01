@@ -91,6 +91,7 @@ class AllSetting {
         this.shopBufAid = "";
         this.shopBufSecret = "";
     this.shopNotifyHTTPPort = 0;
+    this.shopPendingTTL = 3;
         this.shopInboundId = 0;
         this.shopDailyLimit = 3;
         this.shopLimitIp = 2;
