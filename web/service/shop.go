@@ -579,7 +579,53 @@ const orderRevoked = "revoked"
 // orderExpired 是「超时没付款、自动关闭」的状态。
 const orderExpired = "expired"
 
-// RevokeOrder 撤销一笔已开通的订单：停用该订单开通的客户端，并把订单标记为 revoked。
+// bytesPerGB 是 1GB 的字节数，撤销时用来换算流量。
+const bytesPerGB = int64(1024) * 1024 * 1024
+
+// msPerDay 是一天的毫秒数。
+const msPerDay = int64(24) * 60 * 60 * 1000
+
+// revokeAdjustment 计算撤销某笔订单后，客户端应有的流量上限和到期时间。
+//
+// 设计原则（精确扣回）：
+//  1. 只扣回「这一单」赠送的额度，买家之前订单买到的流量一天都不能少；
+//  2. 这一单已经用掉的流量收不回来，所以要把总配额压到「已用量」，
+//     让剩余额度归零，买家必须重新购买才能继续用，不能白用；
+//  3. totalGB 在 3x-ui 里等于 0 表示「不限流量」，所以最低只能给 1 字节；
+//  4. 到期时间同步减去这一单的天数，扣不到负数（最多就是立刻到期）。
+//
+// 返回：新的总配额、新的到期时间、是否应该停用客户端。
+func revokeAdjustment(totalGB, used, expiry int64, planGb, days int, nowMs int64) (int64, int64, bool) {
+	planBytes := int64(planGb) * bytesPerGB
+
+	// 1) 扣回本单授予的流量
+	newTotal := totalGB - planBytes
+	if newTotal < 0 {
+		newTotal = 0
+	}
+
+	// 2) 已用掉的部分不能白送：总配额不允许低于已用量
+	if newTotal < used {
+		newTotal = used
+	}
+
+	// 3) 0 表示不限流量，必须避开
+	if newTotal <= 0 {
+		newTotal = 1
+	}
+
+	// 4) 扣回本单增加的天数
+	newExpiry := expiry - int64(days)*msPerDay
+	if newExpiry < nowMs {
+		newExpiry = nowMs
+	}
+
+	// 剩余额度为 0，或者已经到期，就停用
+	disable := newTotal <= used || newExpiry <= nowMs
+	return newTotal, newExpiry, disable
+}
+
+// RevokeOrder 撤销一笔已开通的订单：精确扣回该订单赠送的流量和时长，并把订单标记为 revoked。
 // 用于「买家其实没付款，管理员误点了确认」的场景。
 func (s *ShopService) RevokeOrder(id int, adminId int64) (*model.Order, error) {
 	order, err := s.GetOrder(id)
@@ -590,51 +636,86 @@ func (s *ShopService) RevokeOrder(id int, adminId int64) (*model.Order, error) {
 		return nil, fmt.Errorf("只有已开通的订单可以撤销")
 	}
 
-	// 停用客户端（不删，保留数据，方便再次开通）
+	summary := "该订单没有开通客户端，只更新订单状态"
 	if order.ClientEmail != "" {
 		traffic, client, cerr := s.inboundService.GetClientByEmail(order.ClientEmail)
-		if cerr == nil && client != nil && traffic != nil {
-			client.Enable = false
-			if bs, merr := json.Marshal(client); merr == nil {
-				stub := &model.Inbound{
-					Id:       traffic.InboundId,
-					Settings: fmt.Sprintf(`{"clients":[%s]}`, string(bs)),
+		switch {
+		case cerr != nil || client == nil || traffic == nil:
+			summary = "客户端已不存在，只更新订单状态"
+		default:
+			nowMs := time.Now().UnixMilli()
+			used := traffic.Up + traffic.Down
+			oldTotal, oldExpiry := client.TotalGB, client.ExpiryTime
+
+			newTotal, newExpiry, disable := revokeAdjustment(
+				oldTotal, used, oldExpiry, order.PlanGb, order.Days, nowMs)
+
+			client.TotalGB = newTotal
+			client.ExpiryTime = newExpiry
+			client.Enable = !disable
+
+			bs, merr := json.Marshal(client)
+			if merr != nil {
+				return nil, merr
+			}
+			stub := &model.Inbound{
+				Id:       traffic.InboundId,
+				Settings: fmt.Sprintf(`{"clients":[%s]}`, string(bs)),
+			}
+			var clientId string
+			if inbound, ierr := s.inboundService.GetInbound(traffic.InboundId); ierr == nil && inbound != nil {
+				switch inbound.Protocol {
+				case "trojan":
+					clientId = client.Password
+				case "shadowsocks":
+					clientId = client.Email
+				case "hysteria", "hysteria2":
+					clientId = client.Auth
+				default:
+					clientId = client.ID
 				}
-				var clientId string
-				if inbound, ierr := s.inboundService.GetInbound(traffic.InboundId); ierr == nil && inbound != nil {
-					switch inbound.Protocol {
-					case "trojan":
-						clientId = client.Password
-					case "shadowsocks":
-						clientId = client.Email
-					case "hysteria", "hysteria2":
-						clientId = client.Auth
-					default:
-						clientId = client.ID
-					}
-					if needRestart, uerr := s.inboundService.UpdateInboundClient(stub, clientId); uerr == nil {
-						if needRestart {
-							var xrayService XrayService
-							xrayService.SetToNeedRestart()
-						}
-					}
+				if needRestart, uerr := s.inboundService.UpdateInboundClient(stub, clientId); uerr != nil {
+					return nil, fmt.Errorf("扣回流量失败: %v", uerr)
+				} else if needRestart {
+					var xrayService XrayService
+					xrayService.SetToNeedRestart()
 				}
 			}
+
+			// 剩余额度 = 新上限 - 已用（不会为负）
+			left := newTotal - used
+			if left < 0 {
+				left = 0
+			}
+			summary = fmt.Sprintf("扣回 %dGB / %d 天；该客户端已用 %s，撤销后上限 %s、剩余 %s%s",
+				order.PlanGb, order.Days, humanBytes(used), humanBytes(newTotal), humanBytes(left),
+				map[bool]string{true: "，已停用（额度已扣净）", false: "，仍可正常使用"}[disable])
 		}
 	}
 
 	order.Status = orderRevoked
 	order.HandledAt = time.Now().Unix()
 	order.HandledBy = adminId
-	if order.Remark == "" {
-		order.Remark = "已撤销"
-	} else {
-		order.Remark += "（已撤销）"
-	}
+	order.Remark = summary
 	if err := database.GetDB().Save(order).Error; err != nil {
 		return nil, err
 	}
 	return order, nil
+}
+
+// humanBytes 把字节数变成 12.3GB 这样的可读文本。
+func humanBytes(n int64) string {
+	if n <= 0 {
+		return "0GB"
+	}
+	switch {
+	case n >= bytesPerGB:
+		return fmt.Sprintf("%.1fGB", float64(n)/float64(bytesPerGB))
+	case n >= 1024*1024:
+		return fmt.Sprintf("%.1fMB", float64(n)/float64(1024*1024))
+	default:
+		return fmt.Sprintf("%dB", n)
+	}
 }
 
 // ---- BufPay 自动到账 ----

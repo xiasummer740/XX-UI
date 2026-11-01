@@ -770,9 +770,13 @@ func (t *Tgbot) confirmShopRevoke(chatId int64, orderId int) {
 		return
 	}
 	msg := fmt.Sprintf("↩️ <b>要撤销订单 #%d 吗？</b>\n\n%s\n\n"+
-		"撤销后会<b>停用</b>该订单开通的客户端（数据保留，可以再手动开启），\n"+
-		"并通知买家。买家如果其实付了款，可以让你恢复。",
-		order.Id, orderText(order))
+		"撤销时会<b>精确扣回</b>这一单给的 %dGB / %d 天：\n"+
+		"• 没用完的额度 → 收回\n"+
+		"• 已经用掉的流量 → 不白送（剩余额度直接归零）\n"+
+		"• 他之前买过的其它套餐 → 不受影响\n"+
+		"• 额度扣净后客户端会被停用，并通知买家\n\n"+
+		"买家如果其实付了款，可以再确认一次把他恢复。",
+		order.Id, orderText(order), order.PlanGb, order.Days)
 	kb := tu.InlineKeyboard(
 		tu.InlineKeyboardRow(
 			tu.InlineKeyboardButton("↩️ 确认撤销").WithCallbackData(fmt.Sprintf("shop_revoke2 %d", order.Id)),
@@ -792,11 +796,11 @@ func (t *Tgbot) revokeShopOrder(chatId int64, adminId int64, orderId int) {
 		t.SendMsgToTgbot(chatId, "撤销失败："+err.Error())
 		return
 	}
-	t.SendMsgToTgbot(chatId, fmt.Sprintf("↩️ 订单 #%d 已撤销，开通的客户端已停用（%s）。",
-		order.Id, order.ClientEmail))
+	t.SendMsgToTgbot(chatId, fmt.Sprintf("↩️ 订单 #%d 已撤销。\n\n👤 %s\n📉 %s",
+		order.Id, order.ClientEmail, order.Remark))
 	t.SendMsgToTgbot(order.ChatId, fmt.Sprintf(
-		"🥺 <b>订单 #%d 已被撤销</b>\n\n我们这边没查到对应的到账，所以先把你停用了，抱歉。\n"+
-			"如果你确实付了款，把付款截图发给我，我核对后马上给你恢复 🙏", order.Id))
+		"🥺 <b>订单 #%d 已被撤销</b>\n\n我们这边没查到对应的到账，这一单开通的流量已经收回。\n"+
+			"如果你确实付了款，把付款截图发给我，我核对后马上给你补回来 🙏", order.Id))
 }
 
 // shopStatusLabel 把订单状态翻成中文。
