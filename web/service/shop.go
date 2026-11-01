@@ -939,3 +939,16 @@ func (s *ShopService) ReconcilePendingOrders(bot *Tgbot) {
 		bot.AutoApproveShopOrder(o.Id)
 	}
 }
+
+// GetOrderByAoid 按 BufPay 的订单号查本地订单。
+func (s *ShopService) GetOrderByAoid(aoid string) (*model.Order, error) {
+	aoid = strings.TrimSpace(aoid)
+	if aoid == "" {
+		return nil, fmt.Errorf("aoid 为空")
+	}
+	order := &model.Order{}
+	if err := database.GetDB().Where("aoid = ?", aoid).First(order).Error; err != nil {
+		return nil, err
+	}
+	return order, nil
+}

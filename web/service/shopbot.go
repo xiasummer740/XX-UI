@@ -858,7 +858,8 @@ func (t *Tgbot) sendShopBufPayQR(chatId int64, from *telego.User, gb int, cycle,
 		shop.GetBufAid(), shop.GetBufSecret(),
 		fmt.Sprintf("%dGB %s", gb, cycleLabel(cycle)),
 		payType, NormalizePrice(price),
-		strconv.Itoa(order.Id), strconv.FormatInt(chatId, 10),
+		// 订单号带项目前缀：同一 BufPay 账号上还挂着 xnow 项目，避免订单号撞车
+		"xxui-"+strconv.Itoa(order.Id), strconv.FormatInt(chatId, 10),
 		notifyURL,
 	)
 	if err != nil {
