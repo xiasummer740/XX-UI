@@ -228,6 +228,7 @@
 
       <div style="margin-top: 14px;">
         <a-button type="primary" icon="save" @click="saveShopSettings">保存收款设置</a-button>
+        <a-button icon="api" style="margin-left: 8px;" :loading="shopTestLoading" @click="testShopBufpay">测试连接</a-button>
       </div>
     </a-collapse-panel>
 

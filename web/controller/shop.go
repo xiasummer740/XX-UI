@@ -30,6 +30,7 @@ func (a *ShopController) initRouter(g *gin.RouterGroup) {
 	g.GET("/stats", a.getStats)
 	g.GET("/orders", a.getOrders)
 	g.POST("/clear-orders", a.clearOrders)
+	g.POST("/test-bufpay", a.testBufPay)
 }
 
 // getStats 返回经营看板数据。
@@ -52,6 +53,16 @@ func (a *ShopController) clearOrders(c *gin.Context) {
 		return
 	}
 	jsonObj(c, gin.H{"deleted": n}, nil)
+}
+
+// testBufPay 用当前的 aid/secret 做一次真实探测（会创建一笔 0.01 元的测试单）。
+func (a *ShopController) testBufPay(c *gin.Context) {
+	res, err := a.shopService.TestBufPayConnection(c.PostForm("aid"), c.PostForm("secret"))
+	if err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	jsonObj(c, res, nil)
 }
 
 // BufPayNotify 是 BufPay 的到账回调（公网访问，不能要求登录，靠签名校验）。

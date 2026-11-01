@@ -157,6 +157,7 @@
       qrPasteTarget: 'wechat',
       shopStats: null,
       shopOrders: [],
+      shopTestLoading: false,
       shopOrderColumns: [
         { title: '订单', dataIndex: 'id', width: 70 },
         { title: '买家', dataIndex: 'tgName', width: 150, scopedSlots: { customRender: 'buyer' } },
@@ -443,6 +444,25 @@
         if (status === "rejected") return "已拒绝";
         if (status === "revoked") return "已撤销";
         return "待确认";
+      },
+      async testShopBufpay() {
+        this.shopTestLoading = true;
+        try {
+          const form = new URLSearchParams();
+          form.append("aid", this.allSetting.shopBufAid || "");
+          form.append("secret", this.allSetting.shopBufSecret || "");
+          const msg = await HttpUtil.post("/panel/api/shop/test-bufpay", form, {
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          });
+          if (msg.success) {
+            const o = msg.obj || {};
+            this.$message.success("连接正常：能拿到二维码（测试单 " + (o.aoid || "-").slice(0, 8) + "…）");
+          } else {
+            this.$notification.error({ message: "连接失败", description: msg.msg || "未知错误", duration: 8 });
+          }
+        } finally {
+          this.shopTestLoading = false;
+        }
       },
       async clearShopOrders() {
         const msg = await HttpUtil.post("/panel/api/shop/clear-orders", {});

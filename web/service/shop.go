@@ -952,3 +952,43 @@ func (s *ShopService) GetOrderByAoid(aoid string) (*model.Order, error) {
 	}
 	return order, nil
 }
+
+// TestBufPayConnection 用给定的 aid/secret 做一次真实探测：
+// 先看网络能不能到 BufPay，再试着下一笔 0.01 元的测试单，验证签名/额度/二维码是否正常。
+func (s *ShopService) TestBufPayConnection(aid, secret string) (map[string]string, error) {
+	aid = strings.TrimSpace(aid)
+	secret = strings.TrimSpace(secret)
+	if aid == "" {
+		aid = s.GetBufAid()
+	}
+	if secret == "" {
+		secret = s.GetBufSecret()
+	}
+	if aid == "" || secret == "" {
+		return nil, fmt.Errorf("请先填写应用 aid 和 app secret")
+	}
+
+	var buf BufPayService
+	result := map[string]string{"aid": aid}
+
+	// 第 1 步：网络连通性（查一个不存在的单，正常会返回 not_exist）
+	if _, err := buf.QueryOrder("00000000000000000000000000000000"); err != nil {
+		return nil, fmt.Errorf("连不上 BufPay：%v（先检查服务器 DNS 和出网）", err)
+	}
+	result["network"] = "ok"
+
+	// 第 2 步：真实下单验证签名
+	testId := fmt.Sprintf("xxui-test-%d", time.Now().Unix())
+	pay, err := buf.CreatePayment(aid, secret, "连接测试", "alipay", "0.01", testId, "0", s.GetNotifyURL())
+	if err != nil {
+		return nil, fmt.Errorf("下单失败：%v", err)
+	}
+	result["order"] = testId
+	result["aoid"] = pay.Aoid
+	if pay.QrImg != "" || pay.Qr != "" {
+		result["qr"] = "ok"
+	} else {
+		result["qr"] = "missing"
+	}
+	return result, nil
+}
