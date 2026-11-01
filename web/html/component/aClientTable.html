@@ -66,6 +66,17 @@
         </a-tooltip>
         <span v-else class="client-comment">[[ client.comment ]]</span>
       </template>
+      <!-- 这个客户端最近走的是 IPv4 还是 IPv6（依据面板记录的 IP 日志） -->
+      <a-tooltip v-if="clientIpFamilyLabel(client.email)"
+                 :overlay-class-name="themeSwitcher.currentTheme">
+        <template slot="title">
+          [[ clientIpFamilyTip(client.email) ]]
+        </template>
+        <a-tag :color="clientIpFamily(client.email).family === 'v6' ? 'blue' : clientIpFamily(client.email).family === 'both' ? 'purple' : 'green'"
+               style="margin:0;font-size:11px;line-height:16px;transform:scale(0.92);transform-origin:left center">
+          [[ clientIpFamilyLabel(client.email) ]]
+        </a-tag>
+      </a-tooltip>
     </a-space>
   </a-space>
 </template>

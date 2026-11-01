@@ -56,6 +56,7 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/generateProtocol", a.generateProtocol)
 	g.POST("/onlines", a.onlines)
 	g.POST("/lastOnline", a.lastOnline)
+	g.POST("/clientIpFamily", a.clientIpFamily)
 	g.POST("/updateClientTraffic/:email", a.updateClientTraffic)
 	g.POST("/:id/delClientByEmail/:email", a.delInboundClientByEmail)
 	g.POST("/checkPort", a.checkPort)
@@ -933,4 +934,10 @@ func (a *InboundController) delInboundClientByEmail(c *gin.Context) {
 	if needRestart {
 		a.xrayService.SetToNeedRestart()
 	}
+}
+
+// clientIpFamily 返回每个客户端最近走的是 IPv4 还是 IPv6（依据面板记录的 IP 日志）。
+func (a *InboundController) clientIpFamily(c *gin.Context) {
+	data, err := a.inboundService.GetClientsIPFamily()
+	jsonObj(c, data, err)
 }

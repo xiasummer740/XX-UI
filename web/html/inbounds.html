@@ -1529,6 +1529,7 @@ function subLinkToken(subId) {
       clientCount: [],
       onlineClients: [],
       lastOnlineMap: {},
+      clientIpFamilyMap: {},
       isRefreshEnabled: localStorage.getItem("isRefreshEnabled") === "true" ? true : false,
       refreshing: false,
       refreshInterval: Number(localStorage.getItem("refreshInterval")) || 5000,
@@ -1730,6 +1731,7 @@ function subLinkToken(subId) {
         }
 
         await this.getLastOnlineMap();
+      await this.getClientIpFamilyMap();
         await this.getOnlineUsers();
 
         this.setInbounds(msg.obj);
@@ -1748,6 +1750,26 @@ function subLinkToken(subId) {
         const msg = await HttpUtil.post('/panel/api/inbounds/lastOnline');
         if (!msg.success || !msg.obj) return;
         this.lastOnlineMap = msg.obj || {}
+      },
+      async getClientIpFamilyMap() {
+        const msg = await HttpUtil.post('/panel/api/inbounds/clientIpFamily');
+        if (!msg.success || !msg.obj) return;
+        this.clientIpFamilyMap = msg.obj || {}
+      },
+      // 客户端走 v4 还是 v6（依据面板记录的 IP 日志）
+      clientIpFamily(email) {
+        return (this.clientIpFamilyMap && this.clientIpFamilyMap[email]) || null
+      },
+      clientIpFamilyLabel(email) {
+        const f = this.clientIpFamily(email)
+        if (!f || !f.family) return ''
+        return f.family === 'both' ? 'v4+v6' : f.family
+      },
+      clientIpFamilyTip(email) {
+        const f = this.clientIpFamily(email)
+        if (!f || !f.family) return ''
+        const at = f.lastAt ? new Date(f.lastAt * 1000).toLocaleString() : ''
+        return `最近连接：${f.lastIp || '-'}（${at}）｜IPv4 ${f.v4} 个地址 / IPv6 ${f.v6} 个地址`
       },
       async getDefaultSettings() {
         const msg = await HttpUtil.post('/panel/setting/defaultSettings');
