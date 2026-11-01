@@ -680,7 +680,36 @@ func (s *ShopService) GetNotifyURL() string {
 		basePath = "/" + basePath
 	}
 	basePath = strings.TrimSuffix(basePath, "/")
+
+	// 如果开了回调兜底端口（默认 80），优先用它：
+	// 部分支付平台的回调服务器只肯往 80/443 发，非标准端口根本连不上。
+	if httpPort := s.notifyHTTPPort(); httpPort > 0 {
+		hostPort := domain
+		if httpPort != 80 {
+			hostPort = fmt.Sprintf("%s:%d", domain, httpPort)
+		}
+		return fmt.Sprintf("http://%s%s/panel/api/shop/bufpay/notify", hostPort, basePath)
+	}
+
 	return fmt.Sprintf("https://%s:%d%s/panel/api/shop/bufpay/notify", domain, port, basePath)
+}
+
+// notifyHTTPPort 返回回调兜底端口（0 表示关闭）。
+func (s *ShopService) notifyHTTPPort() int {
+	v, err := s.settingService.getString("shopNotifyHTTPPort")
+	if err != nil {
+		return 0
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || n < 0 || n > 65535 {
+		return 0
+	}
+	return n
+}
+
+// GetNotifyHTTPPort 供 Web 层启动纯 HTTP 回调入口使用。
+func (s *ShopService) GetNotifyHTTPPort() int {
+	return s.notifyHTTPPort()
 }
 
 // VerifyBufPayNotify 校验 BufPay 回调（签名 + 金额），返回对应订单。
@@ -871,4 +900,42 @@ func (s *ShopService) PingAdminsAboutPendingOrder(order *model.Order) {
 
 	var bot Tgbot
 	bot.PingAdminsPendingOrder(order)
+}
+
+// SaveOrderAoid 记录 BufPay 的订单号，便于主动查单对账。
+func (s *ShopService) SaveOrderAoid(id int, aoid string) error {
+	return database.GetDB().Model(&model.Order{}).Where("id = ?", id).
+		Update("aoid", strings.TrimSpace(aoid)).Error
+}
+
+// ReconcilePendingOrders 主动向 BufPay 查单：已经付了款但回调没送到的订单，
+// 在这里自动补开通。每单查一次，不依赖 BufPay 的回调（回调经常丢）。
+func (s *ShopService) ReconcilePendingOrders(bot *Tgbot) {
+	if bot == nil {
+		return
+	}
+	if s.GetPayMode() != "auto" {
+		return
+	}
+	orders := make([]*model.Order, 0)
+	err := database.GetDB().
+		Where("status = ? AND aoid <> '' AND created_at > ?", orderPending, time.Now().Unix()-24*3600).
+		Order("id asc").Limit(20).Find(&orders).Error
+	if err != nil || len(orders) == 0 {
+		return
+	}
+
+	var buf BufPayService
+	for _, o := range orders {
+		status, qerr := buf.QueryOrder(o.Aoid)
+		if qerr != nil {
+			logger.Debugf("[shop] 查单失败 #%d: %v", o.Id, qerr)
+			continue
+		}
+		if !IsPayedStatus(status) {
+			continue
+		}
+		logger.Info("[shop] 主动查单发现订单 #", o.Id, " 已付款（", status, "），自动开通")
+		bot.AutoApproveShopOrder(o.Id)
+	}
 }

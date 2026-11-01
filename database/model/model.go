@@ -216,5 +216,6 @@ type Order struct {
 	Remark      string  `json:"remark" form:"remark"`              // 备注（拒绝原因等）
 	CreatedAt   int64   `json:"createdAt" form:"createdAt"`
 	HandledAt   int64   `json:"handledAt" form:"handledAt"`
-	HandledBy   int64   `json:"handledBy" form:"handledBy"` // 处理该订单的管理员
+	HandledBy   int64   `json:"handledBy" form:"handledBy"`    // 处理该订单的管理员
+	Aoid        string  `json:"aoid" form:"aoid" gorm:"index"` // BufPay 订单号，用于主动查单对账
 }

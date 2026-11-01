@@ -21,4 +21,6 @@ func (j *ShopPendingJob) Run() {
 	bot := j.tgbotService.NewTgbot()
 	j.shopService.RemindPendingOrders(bot)
 	j.shopService.CheckShopHealth(bot)
+	// 主动查单：付了款但回调没到的订单，这里补开通
+	j.shopService.ReconcilePendingOrders(bot)
 }

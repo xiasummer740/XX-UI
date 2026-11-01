@@ -145,6 +145,8 @@ var defaultValueMap = map[string]string{
 	"shopBufAid":    "",
 	"shopBufSecret": "",
 
+	"shopNotifyHTTPPort": "0",
+
 	"shopInboundId": "0",
 
 	"shopDailyLimit": "3",

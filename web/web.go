@@ -373,6 +373,9 @@ func (s *Server) startTask() {
 	// 流量商店：买家点了「我已付款」但迟迟没人确认时，再提醒一次管理员
 	s.cron.AddJob("@every 5m", job.NewShopPendingJob())
 
+	// 流量商店：每 20 秒主动查单，回调丢了也能自动开通
+	s.cron.AddJob("@every 20s", job.NewShopReconcileJob())
+
 	// Xray periodic restart scheduling
 	if xrayRestartEnabled, _ := s.settingService.GetXrayRestartEnabled(); xrayRestartEnabled {
 		xrayRestartCron, err := s.settingService.GetXrayRestartCron()
@@ -547,6 +550,9 @@ func (s *Server) Start() (err error) {
 	go func() {
 		s.httpServer.Serve(listener)
 	}()
+
+	// 流量商店：在标准端口开一个纯 HTTP 回调入口（BufPay 这类平台只肯往 80/443 发）
+	s.startShopNotifyProxy()
 
 	s.startTask()
 

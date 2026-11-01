@@ -146,17 +146,18 @@ type AllSetting struct {
 	SubGuardBlockMin int  `json:"subGuardBlockMin" form:"subGuardBlockMin"` // 违规 IP 封禁分钟数
 
 	// 流量商店：朋友在 Telegram 里自助下单
-	ShopEnable     bool   `json:"shopEnable" form:"shopEnable"`         // 总开关
-	ShopPlans      string `json:"shopPlans" form:"shopPlans"`           // 套餐/价格 JSON
-	ShopPayNote    string `json:"shopPayNote" form:"shopPayNote"`       // 付款说明
-	ShopQrUrl      string `json:"shopQrUrl" form:"shopQrUrl"`           // 微信收款码图片
-	ShopQrUrl2     string `json:"shopQrUrl2" form:"shopQrUrl2"`         // 支付宝收款码图片
-	ShopPayMode    string `json:"shopPayMode" form:"shopPayMode"`       // manual=人工确认 / auto=BufPay 自动到账
-	ShopBufAid     string `json:"shopBufAid" form:"shopBufAid"`         // BufPay 应用 aid
-	ShopBufSecret  string `json:"shopBufSecret" form:"shopBufSecret"`   // BufPay 应用 secret
-	ShopInboundId  int    `json:"shopInboundId" form:"shopInboundId"`   // 开通时投放到哪个入站
-	ShopDailyLimit int    `json:"shopDailyLimit" form:"shopDailyLimit"` // 每人每天最多下几单
-	ShopLimitIp    int    `json:"shopLimitIp" form:"shopLimitIp"`       // 每个客户端限几台设备
+	ShopEnable         bool   `json:"shopEnable" form:"shopEnable"`                 // 总开关
+	ShopPlans          string `json:"shopPlans" form:"shopPlans"`                   // 套餐/价格 JSON
+	ShopPayNote        string `json:"shopPayNote" form:"shopPayNote"`               // 付款说明
+	ShopQrUrl          string `json:"shopQrUrl" form:"shopQrUrl"`                   // 微信收款码图片
+	ShopQrUrl2         string `json:"shopQrUrl2" form:"shopQrUrl2"`                 // 支付宝收款码图片
+	ShopPayMode        string `json:"shopPayMode" form:"shopPayMode"`               // manual=人工确认 / auto=BufPay 自动到账
+	ShopBufAid         string `json:"shopBufAid" form:"shopBufAid"`                 // BufPay 应用 aid
+	ShopBufSecret      string `json:"shopBufSecret" form:"shopBufSecret"`           // BufPay 应用 secret
+	ShopNotifyHTTPPort int    `json:"shopNotifyHTTPPort" form:"shopNotifyHTTPPort"` // 回调兜底端口（默认 80，0=关闭）
+	ShopInboundId      int    `json:"shopInboundId" form:"shopInboundId"`           // 开通时投放到哪个入站
+	ShopDailyLimit     int    `json:"shopDailyLimit" form:"shopDailyLimit"`         // 每人每天最多下几单
+	ShopLimitIp        int    `json:"shopLimitIp" form:"shopLimitIp"`               // 每个客户端限几台设备
 }
 
 // CheckValid validates all settings in the AllSetting struct, checking IP addresses, ports, SSL certificates, and other configuration values.

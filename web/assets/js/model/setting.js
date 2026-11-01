@@ -90,6 +90,7 @@ class AllSetting {
         this.shopPayMode = "manual";
         this.shopBufAid = "";
         this.shopBufSecret = "";
+    this.shopNotifyHTTPPort = 0;
         this.shopInboundId = 0;
         this.shopDailyLimit = 3;
         this.shopLimitIp = 2;

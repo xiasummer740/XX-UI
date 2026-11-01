@@ -143,6 +143,7 @@ var (
 	reBufPayQRImage  = regexp.MustCompile(`(?s)id="qr"[^>]*src="(data:image/[a-zA-Z]+;base64,[^"]{500,})"`)
 	reBufPayAnyImage = regexp.MustCompile(`(data:image/(?:jpeg|jpg|png);base64,[A-Za-z0-9+/=]{800,})`)
 	reBufPayExpires  = regexp.MustCompile(`expires_in\s*[:=]\s*(\d+)`)
+	reBufPayAoid     = regexp.MustCompile(`/api/query/([0-9a-fA-F]{16,64})`)
 )
 
 // parseBufPayPage 从 BufPay 的支付页里提取二维码。
@@ -153,6 +154,9 @@ func parseBufPayPage(text string) (pay *BufPayPayment, apiErr error, transportEr
 		result.QrImg = m[1]
 	} else if m := reBufPayAnyImage.FindStringSubmatch(text); m != nil {
 		result.QrImg = m[1]
+	}
+	if m := reBufPayAoid.FindStringSubmatch(text); m != nil {
+		result.Aoid = m[1]
 	}
 	if m := reBufPayExpires.FindStringSubmatch(text); m != nil {
 		if n, err := strconv.Atoi(m[1]); err == nil {
@@ -304,4 +308,39 @@ func (s *BufPayService) DiagnoseBufPaySign(secret, aoid, orderId, orderUid, pric
 		b.WriteString(fmt.Sprintf("\n  %s -> %s%s", cand.name, h, mark))
 	}
 	return b.String()
+}
+
+// QueryOrder 主动查一单的状态（BufPay 的查单接口不需要密钥）。
+// 返回 new / payed / expired / not_exist 等原始状态字符串。
+func (s *BufPayService) QueryOrder(aoid string) (string, error) {
+	aoid = strings.TrimSpace(aoid)
+	if aoid == "" {
+		return "", fmt.Errorf("aoid 为空")
+	}
+	client := &http.Client{Timeout: 12 * time.Second}
+	resp, err := client.Get("https://bufpay.com/api/query/" + aoid)
+	if err != nil {
+		return "", fmt.Errorf("查单请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	if err != nil {
+		return "", fmt.Errorf("读取查单响应失败: %w", err)
+	}
+	var out struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return "", fmt.Errorf("查单返回非预期内容: %s", trimForLog(string(body), 120))
+	}
+	return out.Status, nil
+}
+
+// IsPayedStatus 判断查单返回的状态是否代表「已经付款」。
+func IsPayedStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "payed", "paid", "success", "order_payed":
+		return true
+	}
+	return false
 }

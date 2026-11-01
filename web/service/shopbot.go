@@ -868,6 +868,17 @@ func (t *Tgbot) sendShopBufPayQR(chatId int64, from *telego.User, gb int, cycle,
 		return false
 	}
 
+	// 记下 BufPay 的订单号：万一回调丢了，后台可以主动查单把订单开通
+	if pay.Aoid != "" {
+		order.Aoid = pay.Aoid
+		if e := shop.SaveOrderAoid(order.Id, pay.Aoid); e != nil {
+			logger.Warning("[shop] 保存 aoid 失败: ", e)
+		}
+	}
+	if pay.Aoid == "" {
+		logger.Warning("[shop] BufPay 返回里没解析到 aoid，这单只能靠回调")
+	}
+
 	caption := fmt.Sprintf("%s <b>%s</b>\n\n金额：<b>¥%s</b>　（%d GB · %s）\n订单号：#%d\n\n"+
 		"<b>第 4 步</b>：扫码付款，付完我会<b>自动</b>给你开通并发送节点 ✅\n"+
 		"<i>一般 5~20 秒，不用等我确认。</i>\n\n"+
