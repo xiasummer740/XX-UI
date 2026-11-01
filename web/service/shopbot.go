@@ -970,3 +970,19 @@ func (t *Tgbot) NotifyShopSuspiciousNotify(order *model.Order, detail string) {
 		order.Id, order.PlanGb, cycleLabel(order.Cycle),
 		formatPrice(order.Price), "", order.TgName, detail), kb)
 }
+
+// PingAdminsPendingOrder 把「买家说付好了但还没到账」的订单推给管理员，一键开通。
+func (t *Tgbot) PingAdminsPendingOrder(order *model.Order) {
+	kb := tu.InlineKeyboard(
+		tu.InlineKeyboardRow(
+			tu.InlineKeyboardButton("✅ 已收到款，开通").WithCallbackData(fmt.Sprintf("shop_ok %d", order.Id)),
+			tu.InlineKeyboardButton("❌ 没收到，拒绝").WithCallbackData(fmt.Sprintf("shop_no %d", order.Id)),
+		),
+	)
+	t.SendMsgToTgbotAdmins(fmt.Sprintf(
+		"🔔 <b>买家说已经付好了，但系统还没收到到账通知</b>\n\n"+
+			"订单 #%d　%d GB · %s\n金额：¥%s　方式：%s\n买家：%s\n\n"+
+			"去微信/支付宝看一下有没有这笔进账，有就点开通 👇",
+		order.Id, order.PlanGb, cycleLabel(order.Cycle), formatPrice(order.Price),
+		order.Remark, order.TgName), kb)
+}

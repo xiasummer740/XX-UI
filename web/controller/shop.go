@@ -56,6 +56,8 @@ func (a *ShopController) clearOrders(c *gin.Context) {
 
 // BufPayNotify 是 BufPay 的到账回调（公网访问，不能要求登录，靠签名校验）。
 func (a *ShopController) BufPayNotify(c *gin.Context) {
+	// 入口先记一笔，方便确认 BufPay 的回调到底有没有到达
+	logger.Info("[bufpay] 收到回调 from ", c.ClientIP(), " ua=", c.GetHeader("User-Agent"))
 	aoid := c.PostForm("aoid")
 	orderId := c.PostForm("order_id")
 	orderUid := c.PostForm("order_uid")

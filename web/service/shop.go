@@ -849,3 +849,26 @@ func (s *ShopService) ClearOrders() (int64, error) {
 	db.Exec("DELETE FROM sqlite_sequence WHERE name = 'orders'")
 	return total, nil
 }
+
+var shopPingMu sync.Mutex
+var shopPingAt = map[int]int64{}
+
+// PingAdminsAboutPendingOrder 买家点「付好了，查一下」但订单还没开通时，
+// 给管理员推一条带一键开通按钮的消息（每单 10 分钟最多一次）。
+func (s *ShopService) PingAdminsAboutPendingOrder(order *model.Order) {
+	if order == nil {
+		return
+	}
+	shopPingMu.Lock()
+	now := time.Now().Unix()
+	last, seen := shopPingAt[order.Id]
+	if seen && now-last < 600 {
+		shopPingMu.Unlock()
+		return
+	}
+	shopPingAt[order.Id] = now
+	shopPingMu.Unlock()
+
+	var bot Tgbot
+	bot.PingAdminsPendingOrder(order)
+}
