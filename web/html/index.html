@@ -1489,7 +1489,7 @@
       importDatabase() {
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
-        fileInput.accept = '.db';
+        fileInput.accept = '.db,.gz,.db.gz';
         fileInput.addEventListener('change', async (event) => {
           const dbFile = event.target.files[0];
           if (dbFile) {

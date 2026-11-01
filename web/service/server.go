@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -915,8 +916,20 @@ func (s *ServerService) GetDb() ([]byte, error) {
 }
 
 func (s *ServerService) ImportDB(file multipart.File) error {
+	// 邮件备份可能是 .db（默认）也可能是 .db.gz，两种都接受：
+	// 先整个读进来，认出 gzip 头就自动解压，用户不用再手动解压。
+	raw, err := io.ReadAll(io.LimitReader(file, 1<<30)) // 最多 1GB，防止恶意大文件
+	if err != nil {
+		return common.NewErrorf("Error reading db file: %v", err)
+	}
+	raw, err = decompressIfGzip(raw)
+	if err != nil {
+		return err
+	}
+	reader := bytes.NewReader(raw)
+
 	// Check if the file is a SQLite database
-	isValidDb, err := database.IsSQLiteDB(file)
+	isValidDb, err := database.IsSQLiteDB(reader)
 	if err != nil {
 		return common.NewErrorf("Error checking db file format: %v", err)
 	}
@@ -925,7 +938,7 @@ func (s *ServerService) ImportDB(file multipart.File) error {
 	}
 
 	// Reset the file reader to the beginning
-	_, err = file.Seek(0, 0)
+	_, err = reader.Seek(0, 0)
 	if err != nil {
 		return common.NewErrorf("Error resetting file reader: %v", err)
 	}
@@ -961,7 +974,7 @@ func (s *ServerService) ImportDB(file multipart.File) error {
 	}()
 
 	// Save uploaded file to temporary file
-	if _, err = io.Copy(tempFile, file); err != nil {
+	if _, err = io.Copy(tempFile, reader); err != nil {
 		return common.NewErrorf("Error saving db: %v", err)
 	}
 
@@ -1483,4 +1496,21 @@ func (s *ServerService) GetRemoteInbounds(server *model.RemoteServer) ([]map[str
 	}
 
 	return inbounds, nil
+}
+
+// decompressIfGzip 如果数据是 gzip（邮件备份 .db.gz），解压成原始数据库字节。
+func decompressIfGzip(data []byte) ([]byte, error) {
+	if len(data) < 2 || data[0] != 0x1f || data[1] != 0x8b {
+		return data, nil
+	}
+	zr, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, common.NewErrorf("Error opening gzip backup: %v", err)
+	}
+	defer zr.Close()
+	out, err := io.ReadAll(io.LimitReader(zr, 1<<30))
+	if err != nil {
+		return nil, common.NewErrorf("Error decompressing gzip backup: %v", err)
+	}
+	return out, nil
 }
