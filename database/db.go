@@ -44,6 +44,7 @@ func initModels() error {
 		&model.RemoteServer{},
 		&model.TrafficHistory{},
 		&model.Order{},
+		&model.ShopNotice{},
 	}
 	for _, model := range models {
 		if err := db.AutoMigrate(model); err != nil {

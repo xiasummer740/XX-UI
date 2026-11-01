@@ -383,6 +383,9 @@ func (s *Server) startTask() {
 	// 流量商店：每 20 秒主动查单，回调丢了也能自动开通
 	s.cron.AddJob("@every 20s", job.NewShopReconcileJob())
 
+	// 流量商店：每 30 分钟检查用量/到期，提醒买家续费
+	s.cron.AddJob("@every 30m", job.NewShopUsageJob())
+
 	// Xray periodic restart scheduling
 	if xrayRestartEnabled, _ := s.settingService.GetXrayRestartEnabled(); xrayRestartEnabled {
 		xrayRestartCron, err := s.settingService.GetXrayRestartCron()

@@ -219,3 +219,11 @@ type Order struct {
 	HandledBy   int64   `json:"handledBy" form:"handledBy"`    // 处理该订单的管理员
 	Aoid        string  `json:"aoid" form:"aoid" gorm:"index"` // BufPay 订单号，用于主动查单对账
 }
+
+// ShopNotice 记录已经给买家发过的提醒（流量快用完 / 快到期），避免重复轰炸。
+type ShopNotice struct {
+	Id     int    `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
+	Email  string `json:"email" form:"email" gorm:"index"` // 客户端 email（tg<用户ID>）
+	Kind   string `json:"kind" form:"kind"`                // usage80 / usage100 / expiring / expired
+	SentAt int64  `json:"sentAt" form:"sentAt"`
+}

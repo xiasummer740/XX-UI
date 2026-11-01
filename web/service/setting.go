@@ -149,6 +149,8 @@ var defaultValueMap = map[string]string{
 
 	"shopPendingTTL": "3",
 
+	"shopUsageNotify": "true",
+
 	"shopInboundId": "0",
 
 	"shopDailyLimit": "3",
