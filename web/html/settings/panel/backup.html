@@ -67,6 +67,23 @@
         </a-setting-list-item>
 
         <a-setting-list-item paddings="small">
+            <template #title>压缩附件</template>
+            <template #description>关闭（推荐）= 附件就是 .db，下载后能直接上传恢复，不用解压。开启后体积约小 3 倍，但恢复前要手动解压。数据库超过 20MB 时会自动压缩。</template>
+            <template #control>
+                <a-switch v-model="allSetting.mailBackupCompress"></a-switch>
+            </template>
+        </a-setting-list-item>
+
+        <a-setting-list-item paddings="small">
+            <template #title>发送频率</template>
+            <template #description>每几天发一封。邮箱里的旧备份我们删不掉（只能你在邮箱里设自动清理规则），所以用降低频率来控制占用。</template>
+            <template #control>
+                <a-input-number v-model="allSetting.mailBackupEveryDays" :min="1" :max="30" style="width: 100px; margin-right: 8px;"></a-input-number>
+                <span style="color:#8c8c8c">天一次（1 = 每天）</span>
+            </template>
+        </a-setting-list-item>
+
+        <a-setting-list-item paddings="small">
             <template #title>立即测试</template>
             <template #description>点一下马上备份一份并发邮件，验证配置对不对（不用等到凌晨 3 点）。</template>
             <template #control>

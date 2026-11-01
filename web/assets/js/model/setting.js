@@ -101,6 +101,8 @@ class AllSetting {
     this.mailSMTPPass = "";
     this.mailSMTPFrom = "";
     this.mailSMTPInsecure = false;
+    this.mailBackupCompress = false;
+    this.mailBackupEveryDays = 1;
         this.shopInboundId = 0;
         this.shopDailyLimit = 3;
         this.shopLimitIp = 2;

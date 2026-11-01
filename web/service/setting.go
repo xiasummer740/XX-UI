@@ -167,6 +167,10 @@ var defaultValueMap = map[string]string{
 
 	"mailSMTPInsecure": "false",
 
+	"mailBackupCompress": "false",
+
+	"mailBackupEveryDays": "1",
+
 	"shopInboundId": "0",
 
 	"shopDailyLimit": "3",

@@ -22,6 +22,10 @@ func (j *DbEmailBackupJob) Run() {
 	if !j.mailBackupService.IsEnabled() {
 		return
 	}
+	// 按「每 N 天发一次」的配置跳过，避免邮箱里堆太多同一份数据
+	if !j.mailBackupService.ShouldSendNow() {
+		return
+	}
 	msg, err := j.mailBackupService.SendBackupByEmail()
 	if err != nil {
 		logger.Warning("[backup] 每日邮箱备份失败: ", err)

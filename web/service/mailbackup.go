@@ -90,10 +90,10 @@ func (s *MailBackupService) SendBackupByEmail() (string, error) {
 大小：%.1f KB
 邮件：  发到 %s
 
-恢复方法：
-1. 登录面板 → 首页右上角「备份」→「导入数据库」→ 选这个压缩包解压出来的 .db 文件
-   （也可以直接解压得到 .db，重命名为 XX-UI.db 覆盖 /etc/x-ui/XX-UI.db，再重启面板）
-2. 面板会自动重启，入站、客户端、设置全部回来
+恢复方法（附件能直接上传，不用解压）：
+1. 登录面板 → 首页 →「备份」→ 恢复（上传）→ 选这个 .db 文件
+2. 上传后面板自动重启，入站、客户端、套餐、设置全部回来
+   命令行恢复：systemctl stop x-ui && cp 备份.db /etc/x-ui/XX-UI.db && systemctl start x-ui
 
 ⚠️ 这个文件里含面板密码、各种密钥，请勿转发或放到公开位置。
 `, now.Format("2006-01-02 15:04:05"), filename, float64(len(data))/1024, cfg.To)
@@ -101,10 +101,12 @@ func (s *MailBackupService) SendBackupByEmail() (string, error) {
 	if err := sendMailWithAttachment(cfg, subject, body, filename, data); err != nil {
 		return "", err
 	}
+	s.MarkSent()
 	return fmt.Sprintf("已发送到 %s（%s，%.1f KB）", cfg.To, filename, float64(len(data))/1024), nil
 }
 
-// buildBackup 用 SQLite 的 VACUUM INTO 做一致性快照，再 gzip 压缩。
+// buildBackup 用 SQLite 的 VACUUM INTO 做一致性快照。
+// 默认发原始 .db，收到就能直接上传恢复；库太大时才自动压缩，免得被邮件服务器拒收。
 func (s *MailBackupService) buildBackup() ([]byte, string, error) {
 	tmpDir, err := os.MkdirTemp("", "xxui-mailbackup-*")
 	if err != nil {
@@ -122,6 +124,17 @@ func (s *MailBackupService) buildBackup() ([]byte, string, error) {
 		return nil, "", fmt.Errorf("读取快照失败: %w", err)
 	}
 
+	wantCompress, _ := s.settingService.getBool("mailBackupCompress")
+	// 超过 20MB 必须压缩，否则多数邮箱会直接拒收
+	if len(raw) > 20*1024*1024 {
+		wantCompress = true
+	}
+	ts := time.Now().Format("20060102-150405")
+
+	if !wantCompress {
+		return raw, fmt.Sprintf("xxui-backup-%s.db", ts), nil
+	}
+
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
 	if _, err := gz.Write(raw); err != nil {
@@ -131,9 +144,7 @@ func (s *MailBackupService) buildBackup() ([]byte, string, error) {
 	if err := gz.Close(); err != nil {
 		return nil, "", fmt.Errorf("压缩失败: %w", err)
 	}
-
-	filename := fmt.Sprintf("xxui-backup-%s.db.gz", time.Now().Format("20060102-150405"))
-	return buf.Bytes(), filename, nil
+	return buf.Bytes(), fmt.Sprintf("xxui-backup-%s.db.gz", ts), nil
 }
 
 // 每次发送都用当天的备份文件挂在邮件里；失败会写日志（调用方决定要不要告警）。
@@ -263,4 +274,38 @@ func (s *MailBackupService) TestConfig() (string, error) {
 		return "", err
 	}
 	return cfg.DescribeTarget(), nil
+}
+
+// ShouldSendNow 按「每 N 天发一次」的配置判断今天要不要发（默认每天）。
+func (s *MailBackupService) ShouldSendNow() bool {
+	days := 1
+	if v, err := s.settingService.getInt("mailBackupEveryDays"); err == nil && v > 0 {
+		days = v
+	}
+	lastStr := strings.TrimSpace(s.str("mailBackupLastAt"))
+	if lastStr == "" {
+		return true
+	}
+	last, err := strconv.ParseInt(lastStr, 10, 64)
+	if err != nil || last <= 0 {
+		return true
+	}
+	// 留 1 小时容差，避免 cron 时间点漂移导致跳过一整天
+	return time.Now().Unix()-last >= int64(days)*86400-3600
+}
+
+// MarkSent 记下本次发送时间，用于下次判断间隔。
+func (s *MailBackupService) MarkSent() {
+	if err := s.settingService.setString("mailBackupLastAt", strconv.FormatInt(time.Now().Unix(), 10)); err != nil {
+		logger.Debugf("[backup] 记录发送时间失败: %v", err)
+	}
+}
+
+// LastSentTime 上次成功发送时间（没有则返回零值）。
+func (s *MailBackupService) LastSentTime() time.Time {
+	last, err := strconv.ParseInt(strings.TrimSpace(s.str("mailBackupLastAt")), 10, 64)
+	if err != nil || last <= 0 {
+		return time.Time{}
+	}
+	return time.Unix(last, 0)
 }
