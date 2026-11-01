@@ -23,5 +23,56 @@
             </template>
         </a-setting-list-item>
     </a-collapse-panel>
+
+    <a-collapse-panel key="2" header="每日邮箱备份（防止机器整台挂掉）">
+        <a-setting-list-item paddings="small">
+            <template #title>开启每日邮箱备份</template>
+            <template #description>每天凌晨 3 点把数据库压缩后发到你的邮箱，机器整台挂掉也能从邮件里恢复。</template>
+            <template #control>
+                <a-switch v-model="allSetting.mailBackupEnable"></a-switch>
+            </template>
+        </a-setting-list-item>
+
+        <a-setting-list-item paddings="small">
+            <template #title>收件邮箱</template>
+            <template #description>备份邮件发到哪个地址。</template>
+            <template #control>
+                <a-input v-model="allSetting.mailBackupTo" placeholder="yourname@qq.com"></a-input>
+            </template>
+        </a-setting-list-item>
+
+        <a-setting-list-item paddings="small">
+            <template #title>SMTP 服务器 / 端口</template>
+            <template #description>QQ 邮箱 smtp.qq.com:465　163 邮箱 smtp.163.com:465　Gmail smtp.gmail.com:465　Outlook smtp.office365.com:587</template>
+            <template #control>
+                <a-input v-model="allSetting.mailSMTPHost" placeholder="smtp.qq.com" style="width: 180px; margin-right: 8px;"></a-input>
+                <a-input-number v-model="allSetting.mailSMTPPort" :min="1" :max="65535" style="width: 110px;"></a-input-number>
+            </template>
+        </a-setting-list-item>
+
+        <a-setting-list-item paddings="small">
+            <template #title>SMTP 账号</template>
+            <template #description>一般填完整邮箱地址。</template>
+            <template #control>
+                <a-input v-model="allSetting.mailSMTPUser" placeholder="yourname@qq.com"></a-input>
+            </template>
+        </a-setting-list-item>
+
+        <a-setting-list-item paddings="small">
+            <template #title>SMTP 授权码</template>
+            <template #description>不是邮箱登录密码！QQ / 163 都要在网页版设置里单独生成一个「授权码」。</template>
+            <template #control>
+                <a-input-password v-model="allSetting.mailSMTPPass" placeholder="授权码"></a-input-password>
+            </template>
+        </a-setting-list-item>
+
+        <a-setting-list-item paddings="small">
+            <template #title>立即测试</template>
+            <template #description>点一下马上备份一份并发邮件，验证配置对不对（不用等到凌晨 3 点）。</template>
+            <template #control>
+                <a-button type="primary" :loading="mailBackupTesting" @click="testMailBackup">测试发送</a-button>
+            </template>
+        </a-setting-list-item>
+    </a-collapse-panel>
 </a-collapse>
 {{end}}

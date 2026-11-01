@@ -158,6 +158,18 @@ type AllSetting struct {
 	ShopInboundId      int    `json:"shopInboundId" form:"shopInboundId"`           // 开通时投放到哪个入站
 	ShopDailyLimit     int    `json:"shopDailyLimit" form:"shopDailyLimit"`         // 每人每天最多下几单
 	ShopLimitIp        int    `json:"shopLimitIp" form:"shopLimitIp"`               // 每个客户端限几台设备
+	ShopPendingTTL     int    `json:"shopPendingTTL" form:"shopPendingTTL"`         // 未付款订单自动关闭时长（分钟）
+	ShopUsageNotify    bool   `json:"shopUsageNotify" form:"shopUsageNotify"`       // 是否给买家推用量/到期提醒
+
+	// 每日邮箱备份：机器整台挂掉时数据还在
+	MailBackupEnable bool   `json:"mailBackupEnable" form:"mailBackupEnable"` // 开关
+	MailBackupTo     string `json:"mailBackupTo" form:"mailBackupTo"`         // 收件邮箱
+	MailSMTPHost     string `json:"mailSMTPHost" form:"mailSMTPHost"`         // SMTP 服务器，例如 smtp.qq.com
+	MailSMTPPort     int    `json:"mailSMTPPort" form:"mailSMTPPort"`         // 465（SSL）或 587（STARTTLS）
+	MailSMTPUser     string `json:"mailSMTPUser" form:"mailSMTPUser"`         // SMTP 账号
+	MailSMTPPass     string `json:"mailSMTPPass" form:"mailSMTPPass"`         // SMTP 授权码（不是登录密码）
+	MailSMTPFrom     string `json:"mailSMTPFrom" form:"mailSMTPFrom"`         // 发件人，留空=用账号
+	MailSMTPInsecure bool   `json:"mailSMTPInsecure" form:"mailSMTPInsecure"` // 跳过证书校验（自建服务器才用）
 }
 
 // CheckValid validates all settings in the AllSetting struct, checking IP addresses, ports, SSL certificates, and other configuration values.

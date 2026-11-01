@@ -158,6 +158,7 @@
       shopStats: null,
       shopOrders: [],
       shopTestLoading: false,
+      mailBackupTesting: false,
       shopOrderColumns: [
         { title: '订单', dataIndex: 'id', width: 70 },
         { title: '买家', dataIndex: 'tgName', width: 150, scopedSlots: { customRender: 'buyer' } },
@@ -444,6 +445,19 @@
         if (status === "rejected") return "已拒绝";
         if (status === "revoked") return "已撤销";
         return "待确认";
+      },
+      async testMailBackup() {
+        this.mailBackupTesting = true;
+        try {
+          const msg = await HttpUtil.post("/panel/api/server/mailBackupTest", {});
+          if (msg.success) {
+            this.$message.success("发送成功：" + (msg.obj || "已发出"));
+          } else {
+            this.$notification.error({ message: "发送失败", description: msg.msg || "未知错误", duration: 10 });
+          }
+        } finally {
+          this.mailBackupTesting = false;
+        }
       },
       async testShopBufpay() {
         this.shopTestLoading = true;

@@ -386,6 +386,9 @@ func (s *Server) startTask() {
 	// 流量商店：每 30 分钟检查用量/到期，提醒买家续费
 	s.cron.AddJob("@every 30m", job.NewShopUsageJob())
 
+	// 每天 03:00 把数据库备份发到邮箱（整机挂掉也不丢数据）
+	s.cron.AddJob("0 3 * * *", job.NewDbEmailBackupJob())
+
 	// Xray periodic restart scheduling
 	if xrayRestartEnabled, _ := s.settingService.GetXrayRestartEnabled(); xrayRestartEnabled {
 		xrayRestartCron, err := s.settingService.GetXrayRestartCron()

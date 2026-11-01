@@ -48,6 +48,7 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.GET("/getPanelUpdateInfo", a.getPanelUpdateInfo)
 	g.GET("/getConfigJson", a.getConfigJson)
 	g.GET("/getDb", a.getDb)
+	g.POST("/mailBackupTest", a.mailBackupTest)
 	g.GET("/getNewUUID", a.getNewUUID)
 	g.GET("/getNewX25519Cert", a.getNewX25519Cert)
 	g.GET("/getNewmldsa65", a.getNewmldsa65)
@@ -504,4 +505,15 @@ func (a *ServerController) getRemoteServerInbounds(c *gin.Context) {
 		return
 	}
 	jsonObj(c, inbounds, nil)
+}
+
+// mailBackupTest 立刻发一封测试邮件（点「测试发送」时调用）。
+func (a *ServerController) mailBackupTest(c *gin.Context) {
+	var svc service.MailBackupService
+	msg, err := svc.SendBackupByEmail()
+	if err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	jsonObj(c, msg, nil)
 }

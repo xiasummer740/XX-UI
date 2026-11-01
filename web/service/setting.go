@@ -151,6 +151,22 @@ var defaultValueMap = map[string]string{
 
 	"shopUsageNotify": "true",
 
+	"mailBackupEnable": "false",
+
+	"mailBackupTo": "",
+
+	"mailSMTPHost": "",
+
+	"mailSMTPPort": "465",
+
+	"mailSMTPUser": "",
+
+	"mailSMTPPass": "",
+
+	"mailSMTPFrom": "",
+
+	"mailSMTPInsecure": "false",
+
 	"shopInboundId": "0",
 
 	"shopDailyLimit": "3",

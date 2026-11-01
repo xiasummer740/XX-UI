@@ -93,6 +93,14 @@ class AllSetting {
     this.shopNotifyHTTPPort = 0;
     this.shopPendingTTL = 3;
     this.shopUsageNotify = true;
+    this.mailBackupEnable = false;
+    this.mailBackupTo = "";
+    this.mailSMTPHost = "";
+    this.mailSMTPPort = 465;
+    this.mailSMTPUser = "";
+    this.mailSMTPPass = "";
+    this.mailSMTPFrom = "";
+    this.mailSMTPInsecure = false;
         this.shopInboundId = 0;
         this.shopDailyLimit = 3;
         this.shopLimitIp = 2;
