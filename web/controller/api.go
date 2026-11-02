@@ -47,7 +47,9 @@ func (a *APIController) initRouter(g *gin.RouterGroup, customGeo *service.Custom
 	api := g.Group("/panel/api")
 	api.Use(middleware.SameOrigin())
 	api.Use(a.checkAPIAuth)
-	api.Use(middleware.RateLimiter(500, time.Minute))
+	// 面板是单用户已登录界面，1200 次/分钟足够宽松；
+	// 之前的 500 次/分钟在页面开着几小时后会被限流打到 429。
+	api.Use(middleware.RateLimiter(1200, time.Minute))
 
 	// Inbounds API
 	inbounds := api.Group("/inbounds")

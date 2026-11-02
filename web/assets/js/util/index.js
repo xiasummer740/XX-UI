@@ -7,12 +7,41 @@ class Msg {
 }
 
 class HttpUtil {
+    static _lastError = { text: '', at: 0 };
+
     static _handleMsg(msg) {
         if (!(msg instanceof Msg) || msg.msg === "") {
             return;
         }
+        // 同一个错误 3 秒内只弹一次：几个请求同时失败时不会刷出一排一样的提示
+        const now = Date.now();
+        if (!msg.success && msg.msg === HttpUtil._lastError.text && now - HttpUtil._lastError.at < 3000) {
+            return;
+        }
+        if (!msg.success) {
+            HttpUtil._lastError = { text: msg.msg, at: now };
+        }
         const messageType = msg.success ? 'success' : 'error';
         Vue.prototype.$message[messageType](msg.msg);
+    }
+
+    // 把 HTTP 状态码翻译成人话，避免界面直接甩出 "Request failed with status code 429"
+    static _errorText(error) {
+        const status = error?.response?.status;
+        const data = error?.response?.data;
+        if (status === 429) {
+            return '请求太频繁了，等几秒再刷新就好（面板没有坏）';
+        }
+        if (status === 401) {
+            return '登录状态已失效，请重新登录';
+        }
+        if (status === 403) {
+            return '没有权限执行这个操作';
+        }
+        if (status === 502 || status === 504) {
+            return '面板后端暂时没响应，请稍后重试';
+        }
+        return data?.message || data?.msg || error?.message || 'Request failed';
     }
 
     static _respToMsg(resp) {
@@ -37,7 +66,7 @@ class HttpUtil {
             return msg;
         } catch (error) {
             console.error('GET request failed:', error);
-            const errorMsg = new Msg(false, error.response?.data?.message || error.message || 'Request failed');
+            const errorMsg = new Msg(false, this._errorText(error));
             this._handleMsg(errorMsg);
             return errorMsg;
         }
@@ -51,7 +80,7 @@ class HttpUtil {
             return msg;
         } catch (error) {
             console.error('POST request failed:', error);
-            const errorMsg = new Msg(false, error.response?.data?.message || error.message || 'Request failed');
+            const errorMsg = new Msg(false, this._errorText(error));
             this._handleMsg(errorMsg);
             return errorMsg;
         }
