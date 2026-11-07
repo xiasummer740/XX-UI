@@ -372,6 +372,35 @@ func (s *LatencyService) Prune(retentionDays int) (int64, error) {
 	return res.RowsAffected, res.Error
 }
 
+// LatencyMaxRows 是历史表行数上限。
+// 间隔调到 1 秒时一天就有 100 万行，靠保留天数兜不住，用行数硬上限封顶。
+const LatencyMaxRows = 600000
+
+// TrimToMaxRows 超过上限时按 id 从老到新删，只留最新的 maxRows 行。
+func (s *LatencyService) TrimToMaxRows(maxRows int) (int64, error) {
+	if maxRows <= 0 {
+		return 0, nil
+	}
+	var count int64
+	if err := database.GetDB().Model(&model.LatencySample{}).Count(&count).Error; err != nil {
+		return 0, err
+	}
+	if count <= int64(maxRows) {
+		return 0, nil
+	}
+	excess := count - int64(maxRows)
+	var ids []int64
+	if err := database.GetDB().Model(&model.LatencySample{}).
+		Order("id asc").Limit(int(excess)).Pluck("id", &ids).Error; err != nil {
+		return 0, err
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	res := database.GetDB().Where("id IN ?", ids).Delete(&model.LatencySample{})
+	return res.RowsAffected, res.Error
+}
+
 // Summary 汇总最近 hours 小时的数据。
 func (s *LatencyService) Summary(hours int) (*LatencySummary, error) {
 	enabled, interval, retention, _ := s.settingService.GetLatencyConfig()

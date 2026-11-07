@@ -139,6 +139,7 @@ class AllSetting {
         // 三网延迟监测
         this.latencyEnable = true;
         this.latencyInterval = 5;
+        this.latencyIntervalSec = 300;
         this.latencyRetentionDays = 30;
         this.latencyTargets = "";
         // 订阅防护

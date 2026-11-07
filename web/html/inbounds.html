@@ -147,7 +147,7 @@
                   <a-space :size="6">
                     <a-icon type="dashboard"></a-icon>
                     <span>三网延迟监测</span>
-                    <a-tag v-if="latency.enabled" color="green" style="margin: 0;">[[ latency.interval ]] 分钟</a-tag>
+                    <a-tag v-if="latency.enabled" color="green" style="margin: 0;">[[ latencyIntervalText ]]</a-tag>
                     <a-tag v-else color="red" style="margin: 0;">已停止</a-tag>
                   </a-space>
                 </template>
@@ -1296,14 +1296,27 @@
           关掉后台就不再 ping 国内测点
         </span>
       </a-form-item>
-      <a-form-item label="探测间隔（分钟，1-60）">
-        <a-input-number v-model="latencyCfg.interval" :min="1" :max="60" style="width: 100%;"></a-input-number>
+      <a-form-item label="探测间隔（秒）">
+        <a-radio-group :value="latencyCfg.interval" size="small" button-style="solid"
+          @change="e => latencyCfg.interval = e.target.value" style="margin-bottom: 8px;">
+          <a-radio-button :value="1">1 秒</a-radio-button>
+          <a-radio-button :value="5">5 秒</a-radio-button>
+          <a-radio-button :value="10">10 秒</a-radio-button>
+          <a-radio-button :value="30">30 秒</a-radio-button>
+          <a-radio-button :value="60">1 分钟</a-radio-button>
+          <a-radio-button :value="300">5 分钟</a-radio-button>
+        </a-radio-group>
+        <a-input-number v-model="latencyCfg.interval" :min="1" :max="3600" style="width: 100%;"></a-input-number>
+        <div style="margin-top: 6px; color: #999; font-size: 12px;">
+          单轮探测要 1–6 秒，间隔比这个小就背靠背连着跑。
+          <span :style="{ color: latencyCfg.interval <= 10 ? '#fa8c16' : '#999' }">
+            预计 [[ latencyCfgRowsPerDay ]] 行/天
+          </span>
+          ，超过 60 万行会自动删最老的
+        </div>
       </a-form-item>
       <a-form-item label="保留天数（1-90）">
         <a-input-number v-model="latencyCfg.retentionDays" :min="1" :max="90" style="width: 100%;"></a-input-number>
-        <div style="margin-top: 6px; color: #999; font-size: 12px;">
-          每轮 12 条记录，30 天约 10 万行，占数据库 10MB 左右
-        </div>
       </a-form-item>
       <a-form-item label="自定义测点（JSON，留空使用内置的 4 城 × 三网）">
         <a-textarea v-model="latencyCfg.targetsJson" :rows="7"
@@ -1809,7 +1822,7 @@ function subLinkToken(subId) {
       latencyDashes: ['', '7 4', '2 3', '10 3 2 3'],
       latencyCfg: {
         visible: false, saving: false,
-        enabled: true, interval: 5, retentionDays: 30, targetsJson: '',
+        enabled: true, interval: 300, retentionDays: 30, targetsJson: '',
       },      auditVisible: false,
       auditLoading: false,
       auditRows: [],
@@ -3538,7 +3551,7 @@ function subLinkToken(subId) {
           visible: true,
           saving: false,
           enabled: !!obj.enabled,
-          interval: obj.interval || 5,
+          interval: obj.interval || 300,
           retentionDays: obj.retentionDays || 30,
           targetsJson: obj.targetsJson || '',
         };
@@ -3549,7 +3562,9 @@ function subLinkToken(subId) {
           // 只提交这 4 个字段，后端只会写这几行（不会误伤其它设置）
           const msg = await HttpUtil.post('/panel/setting/update', {
             latencyEnable: this.latencyCfg.enabled,
-            latencyInterval: this.latencyCfg.interval,
+            latencyIntervalSec: this.latencyCfg.interval,
+            // 分钟版同步写一份，兼容老前端/老备份
+            latencyInterval: Math.max(1, Math.round(this.latencyCfg.interval / 60)),
             latencyRetentionDays: this.latencyCfg.retentionDays,
             latencyTargets: this.latencyCfg.targetsJson || '',
           });
@@ -3992,7 +4007,22 @@ function subLinkToken(subId) {
         if (!this.copyClientsModal || !this.copyClientsModal.targetInboundId) return [];
         return this.copyClientsModal.selectedEmails.map(email => `${email}_${this.copyClientsModal.targetInboundId}`);
       },
-      // 小趋势图（默认常驻，96px 高）
+      // 间隔文案：秒 → 「每 5 分钟」/「每 30 秒」
+      latencyIntervalText() {
+        const s = Number(this.latency.interval) || 0;
+        if (s <= 0) return '未启用';
+        if (s < 60) return '每 ' + s + ' 秒';
+        if (s % 60 === 0) return '每 ' + (s / 60) + ' 分钟';
+        return '每 ' + Math.floor(s / 60) + ' 分 ' + (s % 60) + ' 秒';
+      },
+      // 设置弹窗里的数据量预估：12 个测点 × 每天轮数
+      latencyCfgRowsPerDay() {
+        const sec = Math.max(1, Number(this.latencyCfg.interval) || 300);
+        const rounds = Math.ceil(86400 / sec);
+        const rows = rounds * 12;
+        if (rows >= 10000) return (rows / 10000).toFixed(1) + ' 万';
+        return String(rows);
+      },      // 小趋势图（默认常驻，96px 高）
       chartTiny() {
         return this.buildLatencyChart(this.latencyIspSeries(),
           { width: 1000, height: 92, yTicks: 2, xTicks: 5, padLeft: 38, padBottom: 14, padTop: 8 });

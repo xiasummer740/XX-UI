@@ -141,7 +141,8 @@ type AllSetting struct {
 
 	// 三网延迟监测：面板自己 ping 国内三网测点，看这条线对国内用户好不好
 	LatencyEnable        bool   `json:"latencyEnable" form:"latencyEnable"`               // 总开关
-	LatencyInterval      int    `json:"latencyInterval" form:"latencyInterval"`           // 探测间隔（分钟）
+	LatencyInterval      int    `json:"latencyInterval" form:"latencyInterval"`           // 探测间隔（分钟，已弃用，保留兼容）
+	LatencyIntervalSec   int    `json:"latencyIntervalSec" form:"latencyIntervalSec"`     // 探测间隔（秒，支持 1 秒级）
 	LatencyRetentionDays int    `json:"latencyRetentionDays" form:"latencyRetentionDays"` // 保留天数
 	LatencyTargets       string `json:"latencyTargets" form:"latencyTargets"`             // 自定义测点 JSON（留空用内置）
 
@@ -178,6 +179,46 @@ type AllSetting struct {
 	MailSMTPInsecure    bool   `json:"mailSMTPInsecure" form:"mailSMTPInsecure"`       // 跳过证书校验（自建服务器才用）
 	MailBackupCompress  bool   `json:"mailBackupCompress" form:"mailBackupCompress"`   // 附件压缩成 .gz
 	MailBackupEveryDays int    `json:"mailBackupEveryDays" form:"mailBackupEveryDays"` // 每几天发一次（默认 1=每天）
+}
+
+// CheckValidKeys 只校验本次真正提交的字段。
+// 前端「只提交一部分设置」时（例如三网延迟面板只提交 latency* 四项），
+// 没提交的 port/ip 是零值，整份 CheckValid 会误报
+// "web port is not a valid port: 0"。
+func (s *AllSetting) CheckValidKeys(present map[string]bool) error {
+	has := func(k string) bool { return present[k] }
+
+	if has("webListen") && s.WebListen != "" {
+		if net.ParseIP(s.WebListen) == nil {
+			return common.NewError("web listen is not valid ip:", s.WebListen)
+		}
+	}
+	if has("subListen") && s.SubListen != "" {
+		if net.ParseIP(s.SubListen) == nil {
+			return common.NewError("Sub listen is not valid ip:", s.SubListen)
+		}
+	}
+	if has("webPort") && (s.WebPort <= 0 || s.WebPort > math.MaxUint16) {
+		return common.NewError("web port is not a valid port:", s.WebPort)
+	}
+	if has("subPort") && (s.SubPort <= 0 || s.SubPort > math.MaxUint16) {
+		return common.NewError("Sub port is not a valid port:", s.SubPort)
+	}
+	// 只有两边都提交了才可能构成冲突
+	if has("webPort") && has("subPort") && s.SubPort == s.WebPort && s.SubListen == s.WebListen {
+		return common.NewError("Sub and Web could not use same ip:port, ", s.SubListen, ":", s.SubPort, " & ", s.WebListen, ":", s.WebPort)
+	}
+	if (has("webCertFile") || has("webKeyFile")) && (s.WebCertFile != "" || s.WebKeyFile != "") {
+		if _, err := tls.LoadX509KeyPair(s.WebCertFile, s.WebKeyFile); err != nil {
+			return common.NewErrorf("cert file <%v> or key file <%v> invalid: %v", s.WebCertFile, s.WebKeyFile, err)
+		}
+	}
+	if (has("subCertFile") || has("subKeyFile")) && (s.SubCertFile != "" || s.SubKeyFile != "") {
+		if _, err := tls.LoadX509KeyPair(s.SubCertFile, s.SubKeyFile); err != nil {
+			return common.NewErrorf("cert file <%v> or key file <%v> invalid: %v", s.SubCertFile, s.SubKeyFile, err)
+		}
+	}
+	return nil
 }
 
 // CheckValid validates all settings in the AllSetting struct, checking IP addresses, ports, SSL certificates, and other configuration values.

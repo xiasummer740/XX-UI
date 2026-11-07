@@ -132,6 +132,7 @@ var defaultValueMap = map[string]string{
 	// 三网延迟监测
 	"latencyEnable":        "true",
 	"latencyInterval":      "5",
+	"latencyIntervalSec":   "300",
 	"latencyRetentionDays": "30",
 	"latencyTargets":       "",
 
@@ -639,9 +640,13 @@ func (s *SettingService) GetLatencyConfig() (enabled bool, interval int, retenti
 	if v, err := s.getBool("latencyEnable"); err == nil {
 		enabled = v
 	}
-	interval = 5
-	if v, err := s.getInt("latencyInterval"); err == nil && v >= 1 && v <= 60 {
+	// 间隔单位是「秒」，支持 1 秒级。
+	// 老版本存的是分钟（latencyInterval），没写过 latencyIntervalSec 时按分钟换算。
+	interval = 300
+	if v, err := s.getInt("latencyIntervalSec"); err == nil && v >= 1 && v <= 3600 {
 		interval = v
+	} else if v, err := s.getInt("latencyInterval"); err == nil && v >= 1 && v <= 60 {
+		interval = v * 60
 	}
 	retentionDays = 30
 	if v, err := s.getInt("latencyRetentionDays"); err == nil && v >= 1 && v <= 90 {
@@ -965,7 +970,17 @@ func (s *SettingService) SetApiKey(key string) error {
 // 之前是无条件整份覆盖：前端某个页面没声明的字段（历史上漏了 vpsName、dbBackupEnable、
 // subGuard 等 23 个）会被后端按零值写回数据库，表现为「VPS 配置 / 备份设置老是自己清空」。
 func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting, onlyKeys ...string) error {
-	if err := allSetting.CheckValid(); err != nil {
+	// 只提交了部分字段时，按提交的字段校验：没提交的 port/ip 是零值，
+	// 整份 CheckValid 会误报 "web port is not a valid port: 0"。
+	if len(onlyKeys) > 0 {
+		present := make(map[string]bool, len(onlyKeys))
+		for _, k := range onlyKeys {
+			present[k] = true
+		}
+		if err := allSetting.CheckValidKeys(present); err != nil {
+			return err
+		}
+	} else if err := allSetting.CheckValid(); err != nil {
 		return err
 	}
 

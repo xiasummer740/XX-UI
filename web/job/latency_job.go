@@ -34,11 +34,13 @@ func (j *LatencyMonitorJob) Run() {
 		return
 	}
 	if interval <= 0 {
-		interval = 5
+		interval = 300
 	}
 
 	latencyLastRunMu.Lock()
-	due := latencyLastRun.IsZero() || time.Since(latencyLastRun) >= time.Duration(interval)*time.Minute
+	// interval 单位是秒（最小 1 秒）；单轮探测本身要 1-6 秒，
+	// 间隔比这个小时会自动背靠背跑，不会堆任务。
+	due := latencyLastRun.IsZero() || time.Since(latencyLastRun) >= time.Duration(interval)*time.Second
 	if due {
 		latencyLastRun = time.Now()
 	}
@@ -65,6 +67,12 @@ func (j *LatencyMonitorJob) Run() {
 	}
 	if deleted > 0 {
 		logger.Infof("清理三网延迟历史：删除 %d 行（保留 %d 天）", deleted, retention)
+	}
+	// 间隔调到 1 秒时行数会暴涨，超过上限就丢最老的，保证库不会无限长
+	if trimmed, err := j.latencyService.TrimToMaxRows(service.LatencyMaxRows); err != nil {
+		logger.Warning("三网延迟数据裁剪失败:", err)
+	} else if trimmed > 0 {
+		logger.Infof("三网延迟数据超过上限，删除最老的 %d 行", trimmed)
 	}
 }
 
