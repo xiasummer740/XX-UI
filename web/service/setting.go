@@ -933,7 +933,12 @@ func (s *SettingService) SetApiKey(key string) error {
 	return s.setString("apiKey", key)
 }
 
-func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting) error {
+// UpdateAllSetting 保存设置。
+//
+// onlyKeys 非空时（一般是本次请求实际提交上来的 form 字段名）只保存这些字段。
+// 之前是无条件整份覆盖：前端某个页面没声明的字段（历史上漏了 vpsName、dbBackupEnable、
+// subGuard 等 23 个）会被后端按零值写回数据库，表现为「VPS 配置 / 备份设置老是自己清空」。
+func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting, onlyKeys ...string) error {
 	if err := allSetting.CheckValid(); err != nil {
 		return err
 	}
@@ -947,12 +952,25 @@ func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting) error {
 		allSetting.DefaultResetDay = 1
 	}
 
+	allow := make(map[string]bool, len(onlyKeys))
+	for _, k := range onlyKeys {
+		allow[k] = true
+	}
+	// 被夹到合法值的这两项即便请求里没带，也要落库，保持原行为
+	if len(onlyKeys) > 0 {
+		allow["defaultResetMethod"] = true
+		allow["defaultResetDay"] = true
+	}
+
 	v := reflect.ValueOf(allSetting).Elem()
 	t := reflect.TypeFor[entity.AllSetting]()
 	fields := reflect_util.GetFields(t)
 	errs := make([]error, 0)
 	for _, field := range fields {
 		key := field.Tag.Get("json")
+		if len(allow) > 0 && !allow[key] {
+			continue
+		}
 		fieldV := v.FieldByName(field.Name)
 		value := fmt.Sprint(fieldV.Interface())
 		err := s.saveSetting(key, value)

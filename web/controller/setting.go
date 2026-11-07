@@ -74,7 +74,14 @@ func (a *SettingController) updateSetting(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
 		return
 	}
-	err = a.settingService.UpdateAllSetting(allSetting)
+	// 只保存本次真正提交上来的字段：前端页面如果漏掉了某些设置
+	//（例如「设置」页没有声明 vpsName 等字段），整份覆盖会把它们写成空值，
+	// 表现为「VPS 配置老是自己清空」。
+	keys := make([]string, 0, len(c.Request.PostForm))
+	for k := range c.Request.PostForm {
+		keys = append(keys, k)
+	}
+	err = a.settingService.UpdateAllSetting(allSetting, keys...)
 	jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
 }
 
