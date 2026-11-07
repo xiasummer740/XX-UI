@@ -173,32 +173,61 @@
                 </template>
 
                 <a-spin :spinning="latencyLoading">
-                  <!-- 摘要：按运营商分组，4 个城市的当前值 -->
-                  <div class="lat-sum">
-                    <div v-for="g in latencyGroups" :key="'g-' + g.isp" class="lat-grp">
-                      <span class="lat-grp-name" :style="{ color: g.color }">[[ g.isp ]]</span>
-                      <span v-for="c in g.cells" :key="'c-' + c.city" class="lat-pill"
-                        :class="'lat-lv-' + c.level" :title="c.tip">
-                        <em>[[ c.city ]]</em><b>[[ c.ms ]]</b>
-                      </span>
+                  <div class="lat-top">
+                    <!-- 左：趋势（3 条运营商曲线 + 城市区间带） -->
+                    <div class="lat-chart-wrap">
+                      <div class="lat-chart-head">
+                        <span class="lat-chart-title">RTT 到国内三网 <em class="lat-unit">ms</em></span>
+                        <span v-for="s in latencyIspLegend" :key="'isp-' + s.name" class="lat-legend-chip">
+                          <i :style="{ background: s.color }"></i>
+                          <b>[[ s.name ]]</b>
+                          <em>[[ s.ms ]] ms</em>
+                        </span>
+                        <span class="lat-chart-hint">阴影 = 该运营商 4 城市区间</span>
+                      </div>
+                      <svg class="lat-trend" viewBox="0 0 1000 190">
+                        <polygon v-for="b in chartTiny.bands" :key="'bd-' + b.name" :points="b.points"
+                          :fill="b.color" fill-opacity="0.085" stroke="none"></polygon>
+                        <line v-for="t in chartTiny.yTicks" :key="'ty-' + t.label" x1="44" :y1="t.y"
+                          x2="992" :y2="t.y" class="lg-grid"></line>
+                        <line v-for="t in chartTiny.xTicks" :key="'vx-' + t.label" :x1="t.xf" y1="8"
+                          :x2="t.xf" :y2="168" class="lg-grid-v"></line>
+                        <text v-for="t in chartTiny.yTicks" :key="'tyt-' + t.label" x="40"
+                          :y="t.yf + 3" text-anchor="end" class="lg-axis">[[ t.label ]]</text>
+                        <g v-for="s in chartTiny.series" :key="'tl-' + s.name">
+                          <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1.8"
+                            stroke-linejoin="round" stroke-linecap="round"></polyline>
+                          <circle :cx="s.last.x" :cy="s.last.y" r="3" :fill="s.color"
+                            stroke="#fff" stroke-width="1"></circle>
+                        </g>
+                        <text v-for="t in chartTiny.xTicks" :key="'tx-' + t.label" :x="t.xf" y="185"
+                          :text-anchor="t.anchor" class="lg-axis">[[ t.label ]]</text>
+                      </svg>
+                    </div>
+
+                    <!-- 右：状态矩阵（城市 × 运营商，当前值 + P95 + 丢包） -->
+                    <div class="lat-matrix">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th class="lat-th-city"></th>
+                            <th v-for="isp in latencyMatrix.isps" :key="'th-' + isp.name"
+                              :style="{ color: isp.color }">[[ isp.name ]]</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="row in latencyMatrix.rows" :key="'tr-' + row.city">
+                            <td class="lat-td-city">[[ row.city ]]</td>
+                            <td v-for="cell in row.cells" :key="row.city + cell.isp" class="lat-td-val"
+                              :class="'lat-lv-' + cell.level" :title="cell.tip">
+                              <b>[[ cell.ms ]]</b><span class="lat-u">ms</span>
+                              <i v-if="cell.loss > 0" class="lat-loss-tag">[[ cell.loss ]]%</i>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
                   </div>
-
-                  <!-- 紧凑趋势：3 条线（各运营商 4 城市平均），
-                       细节看 pills 与展开图 -->
-                  <svg class="lat-trend" viewBox="0 0 1000 92">
-                    <line v-for="t in chartTiny.yTicks" :key="'ty-' + t.label" x1="38" :y1="t.y"
-                      x2="996" :y2="t.y" class="lg-grid"></line>
-                    <text v-for="t in chartTiny.yTicks" :key="'tyt-' + t.label" x="34"
-                      :y="t.yf + 3" text-anchor="end" class="lg-axis">[[ t.label ]]</text>
-                    <g v-for="s in chartTiny.series" :key="'tl-' + s.name">
-                      <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1.7"
-                        stroke-linejoin="round"></polyline>
-                      <circle :cx="s.last.x" :cy="s.last.y" r="2.6" :fill="s.color"></circle>
-                    </g>
-                    <text v-for="t in chartTiny.xTicks" :key="'tx-' + t.label" :x="t.xf" y="89"
-                      :text-anchor="t.anchor" class="lg-axis">[[ t.label ]]</text>
-                  </svg>
 
                   <!-- 展开区：标签页，高度固定，不再一条条往下堆 -->
                   <template v-if="latencyExpanded">
@@ -291,13 +320,18 @@
                   </template>
 
                   <div class="lat-foot">
-                    更新 [[ latency.updatedAt ? fmtDate(latency.updatedAt * 1000) : '—' ]]
-                    · 保留 [[ latency.retentionDays ]] 天 · [[ latencyTargetCount ]] 个测点
-                    · 数字为 平均/P95/最大
+                    <span>最后采样 <b>[[ latency.updatedAt ? fmtDate(latency.updatedAt * 1000) : '—' ]]</b></span>
+                    <span>采样间隔 <b>[[ latencyIntervalText ]]</b></span>
+                    <span>测点 <b>[[ latencyTargetCount ]]</b></span>
+                    <span>保留 <b>[[ latency.retentionDays ]] 天</b></span>
+                    <span class="lat-thr">
+                      阈值 <b>≤170ms</b> 正常 · <b>170–220ms</b> 关注 · <b>&gt;220ms / 丢包≥5%</b> 告警
+                    </span>
                   </div>
                 </a-spin>
               </a-card>
-            </a-col>            <a-col>
+            </a-col>
+            <a-col>
               <a-card hoverable>
                 <template #title>
                   <div :style="{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '8px' }">
@@ -1816,7 +1850,7 @@ function subLinkToken(subId) {
       latencyTab: 'trend',
       latencyHidden: {},
       // 颜色按运营商分（电信蓝 / 联通绿 / 移动橙），线型按城市分 —— 12 条线才分得清
-      latencyIspColors: { '电信': '#1677ff', '联通': '#52c41a', '移动': '#fa8c16' },
+      latencyIspColors: { '电信': '#1d6ff2', '联通': '#12b76a', '移动': '#f79009' },
       latencyCityDash: { '深圳': '', '北京': '7 4', '上海': '2 3', '成都': '10 3 2 3' },
       latencyPalette: ['#1677ff', '#52c41a', '#fa8c16', '#722ed1', '#13c2c2', '#eb2f96'],
       latencyDashes: ['', '7 4', '2 3', '10 3 2 3'],
@@ -3411,7 +3445,39 @@ function subLinkToken(subId) {
         const groups = {};
         cells.forEach((c, i) => {
           if (!groups[c.isp]) {
-            groups[c.isp] = { order: order.length, color: this.latencyColorOf(c.isp, i), map: {} };
+            groups[c.isp] = { order: order.length, color: this.latencyColorOf(c.isp, i), map: {}, bad: {} };
+            order.push(c.isp);
+          }
+          const name = c.city + c.isp;
+          if (this.latencyHidden[name]) return;
+          const m = groups[c.isp].map;
+          const badMap = groups[c.isp].bad;
+          (c.series || []).forEach(pt => {
+            const v = Number(pt.avgMs) || 0;
+            if (v <= 0) return;
+            if (!m[pt.ts]) m[pt.ts] = [0, 0];
+            m[pt.ts][0] += v;
+            m[pt.ts][1] += 1;
+            if ((Number(pt.lossPct) || 0) > 0) badMap[pt.ts] = true;
+          });
+        });
+        return order.map(isp => {
+          const g = groups[isp];
+          const keys = Object.keys(g.map).map(Number).sort((a, b) => a - b);
+          const data = keys.map(ts => [ts, g.map[ts][0] / g.map[ts][1]]);
+          // 该时刻只要有一个城市丢包，就在图上打红点
+          const bad = keys.filter(ts => g.bad[ts]).map(ts => [ts, g.map[ts][0] / g.map[ts][1]]);
+          return { name: isp, color: g.color, dash: '', data: data, bad: bad };
+        });
+      },
+      // 区间带：每个运营商在 4 个城市上的最小值/最大值，画成阴影看「横向差异」
+      latencyIspBands() {
+        const cells = (this.latency && this.latency.cells) || [];
+        const groups = {};
+        const order = [];
+        cells.forEach((c, i) => {
+          if (!groups[c.isp]) {
+            groups[c.isp] = { color: this.latencyColorOf(c.isp, i), map: {} };
             order.push(c.isp);
           }
           const name = c.city + c.isp;
@@ -3420,20 +3486,23 @@ function subLinkToken(subId) {
           (c.series || []).forEach(pt => {
             const v = Number(pt.avgMs) || 0;
             if (v <= 0) return;
-            if (!m[pt.ts]) m[pt.ts] = [0, 0];
-            m[pt.ts][0] += v;
-            m[pt.ts][1] += 1;
+            if (!m[pt.ts]) m[pt.ts] = [v, v];
+            if (v < m[pt.ts][0]) m[pt.ts][0] = v;
+            if (v > m[pt.ts][1]) m[pt.ts][1] = v;
           });
         });
         return order.map(isp => {
           const g = groups[isp];
-          const data = Object.keys(g.map)
-            .map(k => Number(k))
-            .sort((a, b) => a - b)
-            .map(ts => [ts, g.map[ts][0] / g.map[ts][1]]);
-          return { name: isp, color: g.color, dash: '', data: data };
+          const keys = Object.keys(g.map).map(Number).sort((a, b) => a - b);
+          return {
+            name: isp,
+            color: g.color,
+            min: keys.map(ts => [ts, g.map[ts][0]]),
+            max: keys.map(ts => [ts, g.map[ts][1]]),
+          };
         });
-      },      // 取某个系列的 12 条线（main / jitter / dailyAvg / dailyP95 / dailyP99）
+      },
+      // 取某个系列的 12 条线（main / jitter / dailyAvg / dailyP95 / dailyP99）
       latencySeries(kind) {
         const cells = (this.latency && this.latency.cells) || [];
         return cells.map((c, i) => {
@@ -3464,17 +3533,18 @@ function subLinkToken(subId) {
         const padT = 10;
         const padB = o.padBottom || 22;
         const visible = (list || []).filter(s => s.data && s.data.length > 0);
+        const bandsIn = (o.bands || []).filter(b => b && b.min && b.min.length && b.max && b.max.length);
 
         let lo = Infinity, hi = -Infinity, t0 = Infinity, t1 = -Infinity;
-        visible.forEach(s => {
-          s.data.forEach(pt => {
-            const ts = pt[0], v = pt[1];
-            if (ts < t0) t0 = ts;
-            if (ts > t1) t1 = ts;
-            if (v < lo) lo = v;
-            if (v > hi) hi = v;
-          });
+        const scan = data => data.forEach(pt => {
+          const ts = pt[0], v = pt[1];
+          if (ts < t0) t0 = ts;
+          if (ts > t1) t1 = ts;
+          if (v < lo) lo = v;
+          if (v > hi) hi = v;
         });
+        visible.forEach(s => scan(s.data));
+        bandsIn.forEach(b => { scan(b.min); scan(b.max); });
         if (!isFinite(lo)) { lo = 0; hi = 100; }
         if (hi - lo < 20) { hi = lo + 20; }
         const padY = (hi - lo) * 0.12;
@@ -3496,6 +3566,7 @@ function subLinkToken(subId) {
             color: s.color,
             dash: s.dash || '',
             dots: dots,
+            bad: (s.bad || []).map(pt => ({ x: xOf(pt[0]).toFixed(1), y: yOf(pt[1]).toFixed(1) })),
             last: { x: xOf(s.data[n - 1][0]).toFixed(1), y: yOf(s.data[n - 1][1]).toFixed(1) },
             points: s.data.map(pt => xOf(pt[0]).toFixed(1) + ',' + yOf(pt[1]).toFixed(1)).join(' '),
           };
@@ -3518,7 +3589,14 @@ function subLinkToken(subId) {
             anchor: i === 0 ? 'start' : (i === n - 1 ? 'end' : 'middle'),
           });
         }
-        return { series: series, yTicks: yTicks, xTicks: xTicks };
+        // 区间带：把「4 个城市的最小/最大」之间填成半透明区域
+        const bands = bandsIn.map(b => {
+          const up = b.max.map(pt => xOf(pt[0]).toFixed(1) + ',' + yOf(pt[1]).toFixed(1));
+          const down = b.min.slice().reverse().map(pt => xOf(pt[0]).toFixed(1) + ',' + yOf(pt[1]).toFixed(1));
+          return { name: b.name, color: b.color, points: up.concat(down).join(' ') };
+        });
+
+        return { series: series, bands: bands, yTicks: yTicks, xTicks: xTicks };
       },
       // 横轴刻度：窗口跨天显示 MM/DD，同一天显示 HH:mm
       fmtLatencyAxis(ts, spanSec) {
@@ -4022,10 +4100,65 @@ function subLinkToken(subId) {
         const rows = rounds * 12;
         if (rows >= 10000) return (rows / 10000).toFixed(1) + ' 万';
         return String(rows);
-      },      // 小趋势图（默认常驻，96px 高）
+      },
+      // 常驻趋势图：3 条运营商曲线 + 城市区间带（190px）
       chartTiny() {
-        return this.buildLatencyChart(this.latencyIspSeries(),
-          { width: 1000, height: 92, yTicks: 2, xTicks: 5, padLeft: 38, padBottom: 14, padTop: 8 });
+        return this.buildLatencyChart(this.latencyIspSeries(), {
+          width: 1000, height: 190, yTicks: 4, xTicks: 5,
+          padLeft: 44, padBottom: 22, padTop: 10,
+          bands: this.latencyIspBands(),
+        });
+      },
+      // 图上方的运营商图例（带当前值）
+      latencyIspLegend() {
+        const cells = (this.latency && this.latency.cells) || [];
+        const groups = {};
+        const order = [];
+        cells.forEach((c, i) => {
+          if (!groups[c.isp]) {
+            groups[c.isp] = { name: c.isp, color: this.latencyColorOf(c.isp, i), sum: 0, n: 0 };
+            order.push(c.isp);
+          }
+          const ms = Number(c.lastAvgMs) || 0;
+          if (ms > 0) { groups[c.isp].sum += ms; groups[c.isp].n++; }
+        });
+        return order.map(i => {
+          const g = groups[i];
+          return { name: g.name, color: g.color, ms: g.n ? Math.round(g.sum / g.n) : '—' };
+        });
+      },
+      // 状态矩阵：行为城市，列为运营商
+      latencyMatrix() {
+        const cells = (this.latency && this.latency.cells) || [];
+        const isps = [];
+        const cities = [];
+        const ispSeen = {}, citySeen = {};
+        const byKey = {};
+        cells.forEach((c, i) => {
+          if (!ispSeen[c.isp]) { ispSeen[c.isp] = true; isps.push({ name: c.isp, color: this.latencyColorOf(c.isp, i) }); }
+          if (!citySeen[c.city]) { citySeen[c.city] = true; cities.push(c.city); }
+          byKey[c.city + '|' + c.isp] = c;
+        });
+        const rows = cities.map(city => ({
+          city: city,
+          cells: isps.map(isp => {
+            const c = byKey[city + '|' + isp.name];
+            if (!c) return { isp: isp.name, ms: '—', loss: 0, level: 3, tip: city + isp.name + ' 无数据' };
+            const ms = Math.round(Number(c.lastAvgMs) || 0);
+            const loss = Math.round(Number(c.lastLossPct) || 0);
+            let level = 0;
+            if (ms === 0 || loss >= 5 || ms >= 220) level = 2;
+            else if (loss > 0 || ms >= 170) level = 1;
+            return {
+              isp: isp.name, ms: ms > 0 ? ms : '—', loss: loss, level: level,
+              tip: city + isp.name + ' · 当前 ' + (ms > 0 ? ms + ' ms' : '不通')
+                + ' · P95 ' + Math.round(c.p95Ms || 0) + ' ms'
+                + ' · 丢包 ' + loss + '%'
+                + ' · 测点 ' + (c.target || '—'),
+            };
+          }),
+        }));
+        return { isps: isps, rows: rows };
       },
       // 展开后的主图
       chartMain() {
@@ -4047,32 +4180,6 @@ function subLinkToken(subId) {
           mk('p95', '每日 P95', 'dailyP95'),
           mk('p99', '每日 P99', 'dailyP99'),
         ];
-      },
-      // 摘要：按运营商分组，每组 4 个城市
-      latencyGroups() {
-        const cells = (this.latency && this.latency.cells) || [];
-        const order = [];
-        const map = {};
-        cells.forEach((c, i) => {
-          if (!map[c.isp]) {
-            map[c.isp] = { isp: c.isp, color: this.latencyColorOf(c.isp, i), cells: [] };
-            order.push(c.isp);
-          }
-          const loss = Number(c.lastLossPct) || 0;
-          const ms = Math.round(Number(c.lastAvgMs) || 0);
-          let level = 0;
-          if (ms === 0 || loss >= 5 || ms >= 220) level = 2;
-          else if (loss > 0 || ms >= 170) level = 1;
-          map[c.isp].cells.push({
-            city: c.city,
-            ms: ms > 0 ? ms : '—',
-            level: level,
-            tip: c.city + c.isp + ' · ' + (ms > 0 ? ms + 'ms' : '不通')
-              + ' · 丢包 ' + loss.toFixed(0) + '% · P95 ' + Math.round(c.p95Ms || 0) + 'ms'
-              + ' · 测点 ' + (c.target || '—'),
-          });
-        });
-        return order.map(i => map[i]);
       },
       // 异常项：不通 / 丢包 >=5% / 平均 >=220ms
       latencyAlerts() {
@@ -4228,54 +4335,117 @@ function subLinkToken(subId) {
       left: 50vw !important;
     }
   }
-  /* ===== 三网延迟监测（紧凑版） ===== */
-  .lat-card .ant-card-body { padding: 10px 14px 8px; }
-  .lat-sum { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-bottom: 6px; }
-  .lat-grp { display: inline-flex; align-items: center; gap: 3px; }
-  .lat-grp-name { font-size: 11px; font-weight: 600; margin-right: 1px; }
-  .lat-pill {
-    display: inline-flex; align-items: baseline; gap: 2px; padding: 1px 5px; border-radius: 4px;
-    font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 18px;
-    background: rgba(128, 128, 128, .10); cursor: default;
+  /* ===== 三网延迟监测（运维面板） ===== */
+  .lat-card .ant-card-body { padding: 12px 16px 10px; }
+  .lat-card .ant-card-head { min-height: 40px; }
+  .lat-card .ant-card-head-title { font-size: 14px; font-weight: 600; }
+
+  /* 顶部：图 + 状态矩阵并排 */
+  .lat-top { display: flex; gap: 24px; align-items: stretch; }
+  .lat-chart-wrap { flex: 1 1 auto; min-width: 0; }
+  .lat-chart-head {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 4px 14px;
+    margin-bottom: 2px; font-size: 11px; color: #8c8c8c;
   }
-  .lat-pill em { font-style: normal; font-weight: 400; font-size: 10px; color: #8c8c8c; }
-  .lat-lv-0 { color: #389e0d; background: rgba(82, 196, 26, .12); }
-  .lat-lv-1 { color: #d48806; background: rgba(250, 173, 20, .14); }
-  .lat-lv-2 { color: #cf1322; background: rgba(245, 34, 45, .12); }
-  .lat-health { font-size: 12px; padding: 0 8px; line-height: 20px; border-radius: 10px; }
-  .lat-health-ok { color: #389e0d; background: rgba(82, 196, 26, .12); }
-  .lat-health-bad { color: #cf1322; background: rgba(245, 34, 45, .12); }
+  .lat-chart-title { font-size: 12px; font-weight: 600; color: rgba(0, 0, 0, .72); }
+  .lat-unit { font-style: normal; font-weight: 400; font-size: 10px; color: #bfbfbf; margin-left: 2px; }
+  .lat-legend-chip { display: inline-flex; align-items: center; gap: 4px; }
+  .lat-legend-chip i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+  .lat-legend-chip b { font-weight: 500; color: rgba(0, 0, 0, .65); }
+  .lat-legend-chip em {
+    font-style: normal; font-weight: 600; color: rgba(0, 0, 0, .85);
+    font-variant-numeric: tabular-nums;
+  }
+  .lat-chart-hint { margin-left: auto; font-size: 10px; color: #bfbfbf; }
+
+  .lat-trend { width: 100%; height: auto; display: block; }
+  .lg-grid { stroke: rgba(128, 128, 128, .16); stroke-width: 1; }
+  .lg-grid-v { stroke: rgba(128, 128, 128, .09); stroke-width: 1; stroke-dasharray: 2 3; }
+  .lg-axis { fill: #a6a6a6; font-size: 10px; font-variant-numeric: tabular-nums; }
+
+  /* 状态矩阵：城市 × 运营商 */
+  .lat-matrix { flex: 0 0 auto; align-self: center; }
+  .lat-matrix table { border-collapse: separate; border-spacing: 0; }
+  .lat-matrix th {
+    font-size: 11px; font-weight: 600; padding: 0 0 4px; text-align: right;
+    min-width: 62px; border-bottom: 1px solid rgba(128, 128, 128, .18);
+  }
+  .lat-matrix th.lat-th-city { min-width: 34px; text-align: left; }
+  .lat-matrix td { padding: 4px 0; border-bottom: 1px solid rgba(128, 128, 128, .08); }
+  .lat-matrix tr:last-child td { border-bottom: none; }
+  .lat-td-city {
+    font-size: 11px; color: #8c8c8c; text-align: left; padding-right: 10px;
+    white-space: nowrap;
+  }
+  .lat-td-val {
+    text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap;
+    padding-left: 14px; min-width: 66px; position: relative;
+  }
+  .lat-td-val b { font-size: 13px; font-weight: 600; }
+  .lat-u { font-size: 9px; color: #bfbfbf; margin-left: 1px; }
+  .lat-loss-tag {
+    font-style: normal; font-size: 9px; line-height: 12px; margin-left: 3px;
+    padding: 0 3px; border-radius: 2px; background: rgba(245, 34, 45, .12);
+    color: #cf1322; vertical-align: 1px;
+  }
+  .lat-lv-0 b { color: #237804; }
+  .lat-lv-1 b { color: #ad6800; }
+  .lat-lv-2 b { color: #cf1322; }
+  .lat-lv-3 b { color: #bfbfbf; }
+
+  /* 顶部健康结论 */
+  .lat-health {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; padding: 0 7px; line-height: 19px; border-radius: 3px;
+    font-weight: 500;
+  }
+  .lat-health::before {
+    content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor;
+  }
+  .lat-health-ok { color: #237804; background: rgba(82, 196, 26, .12); }
+  .lat-health-bad { color: #cf1322; background: rgba(245, 34, 45, .10); }
   .lat-gear { cursor: pointer; color: #8c8c8c; font-size: 14px; }
   .lat-gear:hover { color: #1677ff; }
-  .lat-trend { width: 100%; height: auto; display: block; margin: 0 0 2px; }
-  .lat-tabs { margin-top: 6px; }
-  .lat-tabs .ant-tabs-nav { margin-bottom: 4px; }
+
+  /* 展开区 */
+  .lat-tabs { margin-top: 4px; border-top: 1px solid rgba(128, 128, 128, .12); padding-top: 4px; }
+  .lat-tabs .ant-tabs-nav { margin-bottom: 6px; }
   .lat-tabs .ant-tabs-tab { padding: 4px 0; font-size: 12px; }
-  .lat-meta { font-size: 11px; color: #8c8c8c; margin-bottom: 2px; font-variant-numeric: tabular-nums; }
-  .lat-legend { display: flex; flex-wrap: wrap; gap: 2px 10px; margin-top: 4px; }
+  .lat-meta {
+    font-size: 11px; color: #8c8c8c; margin-bottom: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  .lat-legend { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 4px; }
   .lat-legend-item {
-    display: inline-flex; align-items: center; gap: 4px; font-size: 11px; cursor: pointer;
-    user-select: none; color: rgba(0, 0, 0, .6);
+    display: inline-flex; align-items: center; gap: 4px; font-size: 11px;
+    cursor: pointer; user-select: none; color: rgba(0, 0, 0, .6);
   }
   .lat-legend-item b { font-weight: 600; }
   .lat-legend-item em { font-style: normal; color: #8c8c8c; font-variant-numeric: tabular-nums; }
   .lat-legend-item.lat-off { opacity: .3; text-decoration: line-through; }
   .lat-swatch { width: 16px; height: 6px; overflow: visible; }
   .lg-svg { width: 100%; height: auto; display: block; }
-  .lg-grid { stroke: rgba(128, 128, 128, .18); stroke-width: 1; }
-  .lg-axis { fill: #8c8c8c; font-size: 10px; }
   .lg-panel-head { font-size: 12px; font-weight: 600; color: rgba(0, 0, 0, .7); margin-bottom: 2px; }
   .lg-panel-sub { font-weight: 400; font-size: 11px; color: #8c8c8c; margin-left: 6px; }
-  .lat-row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .lat-row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
   .lg-timeline { display: flex; flex-direction: column; gap: 2px; }
   .lg-tl-row { display: flex; align-items: center; gap: 6px; }
   .lg-tl-name { flex: 0 0 66px; font-size: 10px; font-weight: 600; white-space: nowrap; }
-  .lg-tl-bar { flex: 1 1 auto; display: flex; height: 8px; border-radius: 2px; overflow: hidden; background: rgba(128, 128, 128, .10); }
+  .lg-tl-bar {
+    flex: 1 1 auto; display: flex; height: 8px; border-radius: 2px;
+    overflow: hidden; background: rgba(128, 128, 128, .10);
+  }
   .lg-tl-bar i { display: block; min-width: 1px; }
-  .lg-tl-0 { background: #52c41a; } .lg-tl-1 { background: #faad14; }
-  .lg-tl-2 { background: #fa8c16; } .lg-tl-3 { background: #f5222d; }
-  .lat-foot { margin-top: 6px; font-size: 11px; color: #a6a6a6; }
-  @media (max-width: 1200px) { .lat-row3 { grid-template-columns: minmax(0, 1fr); } }  /* 详情里可点击复制的值：悬停轻微高亮并显示手型 */
+  .lg-tl-0 { background: #73d13d; } .lg-tl-1 { background: #ffc53d; }
+  .lg-tl-2 { background: #ff9c6e; } .lg-tl-3 { background: #f5222d; }
+  .lat-foot { margin-top: 8px; font-size: 11px; color: #a6a6a6; display: flex; gap: 14px; flex-wrap: wrap; }
+  .lat-foot b { font-weight: 500; color: #8c8c8c; }
+  @media (max-width: 1100px) {
+    .lat-top { flex-direction: column; }
+    .lat-matrix { align-self: flex-start; width: 100%; }
+    .lat-matrix table { width: 100%; }
+    .lat-row3 { grid-template-columns: minmax(0, 1fr); }
+  }  /* 详情里可点击复制的值：悬停轻微高亮并显示手型 */
   .copy-val {
     cursor: pointer;
     transition: opacity .15s ease, filter .15s ease;
