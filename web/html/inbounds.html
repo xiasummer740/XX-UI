@@ -199,16 +199,20 @@
                           @mousemove="onLatHover($event)" @mouseleave="latHover = null"
                           @touchstart="onLatTouch($event)" @touchmove="onLatTouch($event)" @touchend="latHover = null">
                           <defs>
+                          <linearGradient v-for="s in chartTiny.series" :key="'lg-' + s.name" :id="'latArea-' + s.name" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" :stop-color="s.color" stop-opacity="0.16"></stop>
+                            <stop offset="100%" :stop-color="s.color" stop-opacity="0"></stop>
+                          </linearGradient>
                             <clipPath id="latPlotClip">
                               <rect :x="chartTiny.range.padL" :y="chartTiny.range.padT"
                                 :width="chartTiny.range.plotW" :height="chartTiny.range.plotH"></rect>
                             </clipPath>
                           </defs>
                           <polygon v-for="b in chartTiny.bands" :key="'bd-' + b.name" :points="b.points"
-                            :fill="b.color" fill-opacity="0.085" stroke="none"></polygon>
+                            :fill="b.color" fill-opacity="0.04" stroke="none"></polygon>
                           <!-- 阈值参考线：落在量程内画虚线，超出量程的右上角留标 -->
                           <line v-for="r in chartTiny.refLines" :key="'rf-' + r.v" x1="44" :y1="r.y"
-                            x2="992" :y2="r.y" class="lat-ref-line"></line>
+                            x2="992" :y2="r.y" :stroke="r.color" class="lat-ref-line"></line>
                           <text v-for="r in chartTiny.refLines" :key="'rft-' + r.v" x="990"
                             :y="r.y - 3" text-anchor="end" class="lat-ref-label">[[ r.label ]]</text>
                           <text v-for="(r, ri) in chartTiny.refAway" :key="'rfa-' + r.v" x="990"
@@ -223,7 +227,8 @@
                             :y2="chartTiny.range.lineBottom" class="lat-cross"></line>
                           <g clip-path="url(#latPlotClip)">
                             <g v-for="s in chartTiny.series" :key="'tl-' + s.name">
-                              <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1.6"
+                              <path v-if="chartTiny.series.length <= 3" :d="s.area" :fill="'url(#latArea-' + s.name + ')'" stroke="none"></path>
+                          <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1.15" vector-effect="non-scaling-stroke"
                                 stroke-linejoin="round" stroke-linecap="round"></polyline>
                               <circle :cx="s.last.x" :cy="s.last.y" r="3" :fill="s.color"
                                 stroke="#fff" stroke-width="1"></circle>
@@ -237,10 +242,11 @@
                             </path>
                           </g>
                           <!-- 丢包条带：一格代表一个采样桶，颜色分级 -->
+                          <text v-if="chartTiny.lossStrip.length" x="38" y="194" text-anchor="end" class="lat-loss-label">丢包</text>
                           <g>
                             <rect v-for="(l, li) in chartTiny.lossStrip" :key="'ls-' + li"
                               :x="l.x" :y="l.y" :width="l.w" :height="l.h" :fill="l.color"
-                              :fill-opacity="l.opacity"></rect>
+                              :fill-opacity="l.opacity" rx="1"></rect>
                           </g>
                           <circle v-for="h in (latHover ? latHover.marks : [])" :key="'hk-' + h.name"
                             :cx="h.x" :cy="h.y" r="2.8" fill="#fff" :stroke="h.color"
@@ -286,7 +292,7 @@
                           <text v-for="t in chartMain.yTicks" :key="'myt-' + t.label" x="42"
                             :y="t.yf + 3" text-anchor="end" class="lg-axis">[[ t.label ]]</text>
                           <g v-for="s in chartMain.series" :key="'ml-' + s.name">
-                            <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1.4"
+                            <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1" vector-effect="non-scaling-stroke" vector-effect="non-scaling-stroke"
                               :stroke-dasharray="s.dash" stroke-linejoin="round"></polyline>
                             <circle v-for="(d, di) in s.dots" :key="'md-' + di" :cx="d.x" :cy="d.y"
                               r="2.4" :fill="s.color"></circle>
@@ -331,7 +337,7 @@
                               <text v-for="t in d.chart.yTicks" :key="d.key + '-t-' + t.label" x="34"
                                 :y="t.yf + 3" text-anchor="end" class="lg-axis">[[ t.label ]]</text>
                               <g v-for="s in d.chart.series" :key="d.key + '-l-' + s.name">
-                                <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1.2"
+                                <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1" vector-effect="non-scaling-stroke"
                                   :stroke-dasharray="s.dash" stroke-linejoin="round"></polyline>
                                 <circle v-for="(p2, pi) in s.dots" :key="d.key + '-d-' + pi" :cx="p2.x"
                                   :cy="p2.y" r="2" :fill="s.color"></circle>
@@ -365,7 +371,7 @@
                           <text v-for="t in chartJitter.yTicks" :key="'jyt-' + t.label" x="34"
                             :y="t.yf + 3" text-anchor="end" class="lg-axis">[[ t.label ]]</text>
                           <g v-for="s in chartJitter.series" :key="'jl-' + s.name">
-                            <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1.1"
+                            <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1" vector-effect="non-scaling-stroke"
                               :stroke-dasharray="s.dash" stroke-linejoin="round"></polyline>
                           </g>
                           <text v-for="t in chartJitter.xTicks" :key="'jx-' + t.label" :x="t.xf"
@@ -1938,11 +1944,11 @@ function subLinkToken(subId) {
       latHoverMap: {},
       latencyTab: 'trend',
       latencyHidden: {},
-      latencyIspHidden: {},
+      latencyIspHidden: (() => { try { return JSON.parse(localStorage.getItem('latIspHidden') || '{}') || {}; } catch (e) { return {}; } })(),
       // 颜色按运营商分（电信蓝 / 联通绿 / 移动橙），线型按城市分 —— 12 条线才分得清
-      latencyIspColors: { '电信': '#1d6ff2', '联通': '#12b76a', '移动': '#f79009' },
+      latencyIspColors: { '电信': '#5B8FF9', '联通': '#38C9A6', '移动': '#F6BD16' },
       latencyCityDash: { '深圳': '', '北京': '7 4', '上海': '2 3', '成都': '10 3 2 3' },
-      latencyPalette: ['#1677ff', '#52c41a', '#fa8c16', '#722ed1', '#13c2c2', '#eb2f96'],
+      latencyPalette: ['#5B8FF9', '#38C9A6', '#F6BD16', '#9270CA', '#6DC8EC', '#FF9D4D'],
       latencyDashes: ['', '7 4', '2 3', '10 3 2 3'],
       latencyCfg: {
         visible: false, saving: false,
@@ -3541,6 +3547,7 @@ function subLinkToken(subId) {
         const next = Object.assign({}, this.latencyIspHidden);
         if (next[name]) delete next[name]; else next[name] = true;
         this.latencyIspHidden = next;
+        try { localStorage.setItem('latIspHidden', JSON.stringify(next)); } catch (e) {}
       },
       latencyMetricLabel() {
         if (this.latencyMetric === 'p95') return 'P95';
@@ -3837,6 +3844,13 @@ function subLinkToken(subId) {
             last: { x: xOf(s.data[n - 1][0]).toFixed(1), y: yClamp(s.data[n - 1][1]).toFixed(1) },
             raw: s.data,
             points: s.data.map(pt => xOf(pt[0]).toFixed(1) + ',' + yClamp(pt[1]).toFixed(1)).join(' '),
+            // 面积渐变用（细线 + 极淡的填充，比纯线条更有层次）
+            area: (() => {
+              const pts = s.data.map(pt => xOf(pt[0]).toFixed(1) + ',' + yClamp(pt[1]).toFixed(1));
+              if (pts.length < 2) return '';
+              return 'M' + pts[0].split(',')[0] + ',' + plotBottom + 'L' + pts.join('L') +
+                'L' + pts[pts.length - 1].split(',')[0] + ',' + plotBottom + 'Z';
+            })(),
           };
         });
 
@@ -3858,27 +3872,37 @@ function subLinkToken(subId) {
           });
         }
 
-        // 丢包条带：横轴下方一格一个采样桶，浅黄 = 有丢包，红 = ≥5%
+        // 丢包条带：横轴下方贴一条细带，按采样桶着色，连续同色合并成一段（更像状态条不像点阵）
         const lossStrip = [];
         const lossIn = (o.loss || []).filter(pt => pt && pt[0] >= t0 && pt[0] <= t1);
         if (lossIn.length) {
           const slotW = Math.max(0.8, plotW / Math.max(1, lossIn.length));
-          const stripY = plotBottom + 2;
-          lossIn.forEach(pt => {
+          const stripY = plotBottom + 1;
+          const lvlOf = lv => (lv >= 5 ? 2 : 1);
+          let run = null;
+          lossIn.forEach((pt, idx) => {
             const lv = Number(pt[1]) || 0;
-            if (lv <= 0) return;
-            lossStrip.push({
-              x: xOf(pt[0]).toFixed(1), w: slotW.toFixed(1), y: stripY, h: 5,
-              color: lv >= 5 ? '#f5222d' : '#faad14',
-              opacity: lv >= 5 ? 0.95 : 0.7,
-            });
+            const level = lv > 0 ? lvlOf(lv) : 0;
+            if (level === 0) { if (run) { lossStrip.push(run); run = null; } return; }
+            if (run && run.level === level) { run.w += slotW; return; }
+            if (run) lossStrip.push(run);
+            run = {
+              x: xOf(pt[0]).toFixed(1), w: slotW, y: stripY, h: 4,
+              level: level,
+              color: level === 2 ? '#F4664A' : '#F6BD16',
+              opacity: level === 2 ? 0.9 : 0.6,
+            };
           });
+          if (run) lossStrip.push(run);
         }
 
-        // 阈值参考线：落在量程内的画虚线，超出量程的在右上角留一个小标
+
+
+        // 阈值参考线：量程内画虚线（170 黄、220 红），量程外的在右上角留标
         const refIn = (o.refLines || []).filter(v => v > 0);
         const refLines = refIn.filter(v => v >= lo && v <= hi).map(v => ({
           v: v, y: yOf(v).toFixed(1), label: v,
+          color: v >= 220 ? 'rgba(244,102,74,.5)' : 'rgba(246,189,22,.55)',
         }));
         const refAway = refIn.filter(v => v > hi).map(v => ({ v: v, dir: 'up' }))
           .concat(refIn.filter(v => v < lo).map(v => ({ v: v, dir: 'down' })));
@@ -4714,13 +4738,27 @@ function subLinkToken(subId) {
     height: 180px; color: #bfbfbf; font-size: 12px;
   }
   .lat-empty b { font-weight: 500; color: #8c8c8c; }
-  .lat-ref-line { stroke: rgba(250, 173, 20, .55); stroke-width: 1; stroke-dasharray: 5 4; }
+  /* —— 视觉精修：细线、浅网格、弱化轴线 —— */
+  .lat-trend polyline { stroke-linecap: round; stroke-linejoin: round; }
+  .lg-grid { stroke: rgba(17, 24, 39, .06); stroke-width: 1; shape-rendering: crispEdges; }
+  .lg-grid-v { stroke: rgba(17, 24, 39, .04); stroke-width: 1; stroke-dasharray: none; shape-rendering: crispEdges; }
+  .lg-axis { fill: #b3b3b3; font-size: 9.5px; font-variant-numeric: tabular-nums; letter-spacing: .1px; }
+  .lat-cross { stroke: rgba(17, 24, 39, .2); stroke-width: 1; stroke-dasharray: 2 4; }
+  .lat-legend-chip {
+    padding: 1px 6px; border-radius: 999px; background: rgba(17, 24, 39, .032);
+  }
+  .lat-legend-chip b { font-weight: 500; }
+  .lat-legend-chip em { font-weight: 600; }
+  .lat-ref-line { stroke-width: 1; stroke-dasharray: 4 4; }
+  .lat-ref-label { font-size: 9px; }
+  .lat-loss-label { font-size: 8.5px; fill: #c8c8c8; letter-spacing: .3px; }
+  .lat-stat-line { border-top: 1px solid rgba(17, 24, 39, .05); }  .lat-ref-line { stroke: rgba(246, 189, 22, .5); }
   .lat-ref-label { font-size: 9px; fill: rgba(212, 140, 10, .95); font-variant-numeric: tabular-nums; }
   .lat-ref-away { font-size: 9px; fill: rgba(212, 140, 10, .8); }
   .lat-run-note { font-size: 10px; color: #8c8c8c; font-variant-numeric: tabular-nums; }
   .lat-legend-chip { cursor: pointer; transition: opacity .15s ease; }
   .lat-legend-chip.lat-off { opacity: .35; text-decoration: line-through; }
-  .lat-tip-sm { font-size: 10px; padding: 4px 6px; }  /* 图表容器与悬停提示 */
+  .lat-tip-sm { font-size: 10px; padding: 4px 6px; min-width: 0; max-width: 150px; }  /* 图表容器与悬停提示 */
   .lat-svg-box { position: relative; }
   .lat-cross { stroke: rgba(0, 0, 0, .28); stroke-width: 1; stroke-dasharray: 3 3; }
   .lat-tip {
