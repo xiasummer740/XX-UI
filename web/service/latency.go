@@ -37,7 +37,7 @@ const (
 	// 同时探测的分组数
 	latencyProbeConcurrency = 4
 	// 曲线最多返回多少个点（前端画图用，多了没意义）
-	latencyMaxSeriesPoints = 240
+	latencyMaxSeriesPoints = 600
 )
 
 // LatencyTarget 是一个「城市 + 运营商」以及它的候选测点。
@@ -99,29 +99,50 @@ type LatencyProbeResult struct {
 	Jitter  float64 `json:"jitter"`
 }
 
-// LatencyPoint 是曲线上的一个点。
+// LatencyPoint 是曲线上的一个点（桶内聚合后的值）。
 type LatencyPoint struct {
 	Ts      int64   `json:"ts"`
 	AvgMs   float64 `json:"avgMs"`
+	P95Ms   float64 `json:"p95Ms"`
+	MaxMs   float64 `json:"maxMs"`
 	LossPct float64 `json:"lossPct"`
+	Jitter  float64 `json:"jitter"`
+}
+
+// LatencyDaily 是某一天的统计（按 +08:00 切天）。
+type LatencyDaily struct {
+	Day   string  `json:"day"` // 2026-11-07
+	Ts    int64   `json:"ts"`  // 当天 00:00（unix 秒），画横轴用
+	AvgMs float64 `json:"avgMs"`
+	P95Ms float64 `json:"p95Ms"`
+	P99Ms float64 `json:"p99Ms"`
+	MaxMs float64 `json:"maxMs"`
 }
 
 // LatencyCell 是「某个城市某个运营商」在查询窗口内的汇总。
 type LatencyCell struct {
-	City        string         `json:"city"`
-	Isp         string         `json:"isp"`
-	Target      string         `json:"target"`
-	LastTs      int64          `json:"lastTs"`
-	LastAvgMs   float64        `json:"lastAvgMs"`
-	LastLossPct float64        `json:"lastLossPct"`
-	AvgMs       float64        `json:"avgMs"`
-	P50Ms       float64        `json:"p50Ms"`
-	P95Ms       float64        `json:"p95Ms"`
-	MinMs       float64        `json:"minMs"`
-	MaxMs       float64        `json:"maxMs"`
-	LossPct     float64        `json:"lossPct"`
-	Samples     int            `json:"samples"`
-	Series      []LatencyPoint `json:"series"`
+	City        string  `json:"city"`
+	Isp         string  `json:"isp"`
+	Target      string  `json:"target"`
+	LastTs      int64   `json:"lastTs"`
+	LastAvgMs   float64 `json:"lastAvgMs"`
+	LastLossPct float64 `json:"lastLossPct"`
+	AvgMs       float64 `json:"avgMs"`
+	P50Ms       float64 `json:"p50Ms"`
+	P95Ms       float64 `json:"p95Ms"`
+	P99Ms       float64 `json:"p99Ms"`
+	MinMs       float64 `json:"minMs"`
+	MaxMs       float64 `json:"maxMs"`
+	LossPct     float64 `json:"lossPct"`
+	AvgJitter   float64 `json:"avgJitter"`
+	Samples     int     `json:"samples"`
+	// 探针失败 / 慢请求计数（对应 Grafana 那种 Probe failures / >300ms count 面板）
+	FailCount int            `json:"failCount"`
+	Slow300   int            `json:"slow300"`
+	Slow500   int            `json:"slow500"`
+	Slow1000  int            `json:"slow1000"`
+	Series    []LatencyPoint `json:"series"`
+	Daily     []LatencyDaily `json:"daily"`
 }
 
 // LatencySummary 是整块卡片的数据。
@@ -466,6 +487,29 @@ func (s *LatencyService) Summary(hours int) (*LatencySummary, error) {
 			cell.LossPct = round2(float64(b.sent-b.recv) / float64(b.sent) * 100)
 		}
 
+		// 逐轮统计：失败次数、慢请求计数、抖动均值
+		var jitters []float64
+		for _, r := range b.rows {
+			if r.Recv == 0 {
+				cell.FailCount++
+			}
+			if r.AvgMs > 300 {
+				cell.Slow300++
+			}
+			if r.AvgMs > 500 {
+				cell.Slow500++
+			}
+			if r.AvgMs > 1000 {
+				cell.Slow1000++
+			}
+			if r.Recv > 0 && r.Jitter > 0 {
+				jitters = append(jitters, r.Jitter)
+			}
+		}
+		if len(jitters) > 0 {
+			cell.AvgJitter = round2(avgOf(jitters))
+		}
+
 		if len(b.avg) > 0 {
 			sorted := append([]float64(nil), b.avg...)
 			sort.Float64s(sorted)
@@ -474,24 +518,13 @@ func (s *LatencyService) Summary(hours int) (*LatencySummary, error) {
 			cell.MaxMs = round2(sorted[len(sorted)-1])
 			cell.P50Ms = round2(percentile(sorted, 50))
 			cell.P95Ms = round2(percentile(sorted, 95))
+			cell.P99Ms = round2(percentile(sorted, 99))
 		}
 
-		// 曲线降采样：保持时间顺序，最多 latencyMaxSeriesPoints 个点
-		step := 1
-		if len(b.rows) > latencyMaxSeriesPoints {
-			step = int(math.Ceil(float64(len(b.rows)) / float64(latencyMaxSeriesPoints)))
-		}
-		for i := 0; i < len(b.rows); i += step {
-			r := b.rows[i]
-			cell.Series = append(cell.Series, LatencyPoint{Ts: r.Ts, AvgMs: r.AvgMs, LossPct: r.LossPct})
-		}
-		// 最后一个点始终保留
-		if n := len(cell.Series); n > 0 {
-			lastPoint := cell.Series[n-1]
-			if lastPoint.Ts != last.Ts {
-				cell.Series = append(cell.Series, LatencyPoint{Ts: last.Ts, AvgMs: last.AvgMs, LossPct: last.LossPct})
-			}
-		}
+		// 曲线：按桶聚合（桶内取平均 / P95 / 最大 / 丢包 / 抖动）
+		cell.Series = bucketize(b.rows, seriesBucketCount(len(b.rows), latencyMaxSeriesPoints))
+		// 按天统计（+08:00 切天）
+		cell.Daily = dailyStats(b.rows)
 
 		sum.Cells = append(sum.Cells, cell)
 	}
@@ -499,6 +532,122 @@ func (s *LatencyService) Summary(hours int) (*LatencySummary, error) {
 	return sum, nil
 }
 
+// latencyCST 用固定 +08:00 切天：服务器本身多半是 UTC，
+// 但「每日平均」这种图必须按国内用户看到的日期算。
+var latencyCST = time.FixedZone("CST", 8*3600)
+
+// seriesBucketCount 决定把 N 个样本压成几个点：
+// 样本少就一个不压，样本多就等分成最多 max 个桶。
+func seriesBucketCount(n, max int) int {
+	if n <= max {
+		return n
+	}
+	return max
+}
+
+// bucketize 把样本按时间等分成 buckets 个桶，桶内求平均 / P95 / 最大 / 丢包 / 抖动。
+// 比「每 N 个取一个」好：既不会把尖峰整根丢掉，曲线也不会毛刺。
+func bucketize(rows []model.LatencySample, buckets int) []LatencyPoint {
+	if len(rows) == 0 || buckets <= 0 {
+		return []LatencyPoint{}
+	}
+	if buckets > len(rows) {
+		buckets = len(rows)
+	}
+	points := make([]LatencyPoint, 0, buckets)
+	size := float64(len(rows)) / float64(buckets)
+	for i := 0; i < buckets; i++ {
+		start := int(math.Floor(float64(i) * size))
+		end := int(math.Floor(float64(i+1) * size))
+		if end > len(rows) {
+			end = len(rows)
+		}
+		if start >= end {
+			continue
+		}
+		chunk := rows[start:end]
+
+		avgs := make([]float64, 0, len(chunk))
+		var lossSum, jitterSum float64
+		var jitterN, sent, recv int
+		var maxMs float64
+		for _, r := range chunk {
+			if r.Recv > 0 {
+				avgs = append(avgs, r.AvgMs)
+			}
+			if r.MaxMs > maxMs {
+				maxMs = r.MaxMs
+			}
+			lossSum += r.LossPct
+			if r.Jitter > 0 && r.Recv > 0 {
+				jitterSum += r.Jitter
+				jitterN++
+			}
+			sent += r.Sent
+			recv += r.Recv
+		}
+
+		p := LatencyPoint{
+			Ts:      chunk[len(chunk)-1].Ts,
+			LossPct: 0,
+			MaxMs:   round2(maxMs),
+		}
+		if sent > 0 {
+			p.LossPct = round2(float64(sent-recv) / float64(sent) * 100)
+		}
+		if len(avgs) > 0 {
+			sorted := append([]float64(nil), avgs...)
+			sort.Float64s(sorted)
+			p.AvgMs = round2(avgOf(sorted))
+			p.P95Ms = round2(percentile(sorted, 95))
+		}
+		if jitterN > 0 {
+			p.Jitter = round2(jitterSum / float64(jitterN))
+		}
+		points = append(points, p)
+	}
+	return points
+}
+
+// dailyStats 按 +08:00 切天，算出每天的 平均 / P95 / P99 / 最大。
+func dailyStats(rows []model.LatencySample) []LatencyDaily {
+	if len(rows) == 0 {
+		return []LatencyDaily{}
+	}
+	byDay := map[string][]float64{}
+	maxByDay := map[string]float64{}
+	tsByDay := map[string]int64{}
+	order := make([]string, 0)
+	for _, r := range rows {
+		t := time.Unix(r.Ts, 0).In(latencyCST)
+		day := t.Format("2006-01-02")
+		if _, ok := byDay[day]; !ok {
+			order = append(order, day)
+			midnight := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, latencyCST)
+			tsByDay[day] = midnight.Unix()
+		}
+		if r.Recv > 0 {
+			byDay[day] = append(byDay[day], r.AvgMs)
+		}
+		if r.MaxMs > maxByDay[day] {
+			maxByDay[day] = r.MaxMs
+		}
+	}
+	out := make([]LatencyDaily, 0, len(order))
+	for _, day := range order {
+		vals := byDay[day]
+		d := LatencyDaily{Day: day, Ts: tsByDay[day], MaxMs: round2(maxByDay[day])}
+		if len(vals) > 0 {
+			sorted := append([]float64(nil), vals...)
+			sort.Float64s(sorted)
+			d.AvgMs = round2(avgOf(sorted))
+			d.P95Ms = round2(percentile(sorted, 95))
+			d.P99Ms = round2(percentile(sorted, 99))
+		}
+		out = append(out, d)
+	}
+	return out
+}
 func avgOf(sorted []float64) float64 {
 	if len(sorted) == 0 {
 		return 0
