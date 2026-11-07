@@ -395,6 +395,9 @@ func (s *Server) startTask() {
 	// 流量商店：每 30 分钟检查用量/到期，提醒买家续费
 	s.cron.AddJob("@every 30m", job.NewShopUsageJob())
 
+	// 三网延迟监测：每分钟检查一次是否到点（实际间隔由设置决定，默认 5 分钟）
+	s.cron.AddJob("@every 1m", job.NewLatencyMonitorJob())
+
 	// 每天 03:00 把数据库备份发到邮箱（整机挂掉也不丢数据）
 	s.cron.AddJob("0 3 * * *", job.NewDbEmailBackupJob())
 

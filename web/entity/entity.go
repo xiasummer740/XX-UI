@@ -139,6 +139,12 @@ type AllSetting struct {
 	VpsQuotaNotify   string `json:"vpsQuotaNotify" form:"vpsQuotaNotify"`     // 流量提醒阈值，如 "80,95"
 	VpsQuotaNotified string `json:"vpsQuotaNotified" form:"vpsQuotaNotified"` // 本周期已提醒过的阈值（内部状态）
 
+	// 三网延迟监测：面板自己 ping 国内三网测点，看这条线对国内用户好不好
+	LatencyEnable        bool   `json:"latencyEnable" form:"latencyEnable"`               // 总开关
+	LatencyInterval      int    `json:"latencyInterval" form:"latencyInterval"`           // 探测间隔（分钟）
+	LatencyRetentionDays int    `json:"latencyRetentionDays" form:"latencyRetentionDays"` // 保留天数
+	LatencyTargets       string `json:"latencyTargets" form:"latencyTargets"`             // 自定义测点 JSON（留空用内置）
+
 	// 订阅防泄漏：UA 白名单 / 每 IP 限流 / 违规拉黑
 	SubGuardEnable   bool `json:"subGuardEnable" form:"subGuardEnable"`     // 总开关
 	SubGuardStrictUA bool `json:"subGuardStrictUA" form:"subGuardStrictUA"` // 只允许常见客户端的 UA

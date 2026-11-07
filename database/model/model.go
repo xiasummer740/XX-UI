@@ -227,3 +227,22 @@ type ShopNotice struct {
 	Kind   string `json:"kind" form:"kind"`                // usage80 / usage100 / expiring / expired
 	SentAt int64  `json:"sentAt" form:"sentAt"`
 }
+
+// LatencySample 是三网延迟监测的一轮探测结果：
+// 每个「城市 × 运营商」每轮存一行，保留 30 天（由清理逻辑裁剪）。
+// 用来自检「这条线路对国内哪个城市/哪家运营商好」，
+// 延迟大小、丢包、抖动都能看出来。
+type LatencySample struct {
+	Id      int     `json:"id" gorm:"primaryKey;autoIncrement"`
+	City    string  `json:"city" gorm:"index:idx_lat_cell_ts,priority:1"` // 深圳 / 北京 / 上海 / 成都
+	Isp     string  `json:"isp" gorm:"index:idx_lat_cell_ts,priority:2"`  // 电信 / 联通 / 移动
+	Target  string  `json:"target"`                                       // 实际探测到的测点 IP
+	Ts      int64   `json:"ts" gorm:"index:idx_lat_cell_ts,priority:3"`   // unix 秒
+	Sent    int     `json:"sent"`                                         // 发出的包数
+	Recv    int     `json:"recv"`                                         // 收到的包数
+	LossPct float64 `json:"lossPct"`                                      // 丢包率 %
+	MinMs   float64 `json:"minMs"`
+	AvgMs   float64 `json:"avgMs"`
+	MaxMs   float64 `json:"maxMs"`
+	Jitter  float64 `json:"jitter"` // mdev，抖动
+}

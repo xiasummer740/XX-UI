@@ -136,6 +136,11 @@ class AllSetting {
         this.vpsQuotaNotify = "80,95";
         this.vpsQuotaNotified = "";
 
+        // 三网延迟监测
+        this.latencyEnable = true;
+        this.latencyInterval = 5;
+        this.latencyRetentionDays = 30;
+        this.latencyTargets = "";
         // 订阅防护
         this.subGuardEnable = false;
         this.subGuardStrictUA = false;

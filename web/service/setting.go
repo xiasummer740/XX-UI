@@ -129,6 +129,12 @@ var defaultValueMap = map[string]string{
 
 	"vpsQuotaNotified": "",
 
+	// 三网延迟监测
+	"latencyEnable":        "true",
+	"latencyInterval":      "5",
+	"latencyRetentionDays": "30",
+	"latencyTargets":       "",
+
 	"subGuardEnable": "false",
 
 	"shopEnable": "false",
@@ -625,6 +631,25 @@ func (s *SettingService) GetVPSResetDay() (int, error) {
 	}
 	return s.getInt("defaultResetDay")
 }
+// GetLatencyConfig 返回三网延迟监测的运行参数。
+// interval 单位分钟（1..60），retentionDays 单位天（1..90）。
+func (s *SettingService) GetLatencyConfig() (enabled bool, interval int, retentionDays int, targetsJSON string) {
+	enabled = true
+	if v, err := s.getBool("latencyEnable"); err == nil {
+		enabled = v
+	}
+	interval = 5
+	if v, err := s.getInt("latencyInterval"); err == nil && v >= 1 && v <= 60 {
+		interval = v
+	}
+	retentionDays = 30
+	if v, err := s.getInt("latencyRetentionDays"); err == nil && v >= 1 && v <= 90 {
+		retentionDays = v
+	}
+	targetsJSON, _ = s.getString("latencyTargets")
+	return
+}
+
 func (s *SettingService) GetSubTitle() (string, error) {
 	return s.getString("subTitle")
 }

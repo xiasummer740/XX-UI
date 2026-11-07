@@ -140,6 +140,76 @@
                 </a-row>
               </a-card>
             </a-col>
+            <!-- 三网延迟监测：测的是「这台机器到国内三大运营商的延迟/丢包」 -->
+            <a-col>
+              <a-card size="small" hoverable>
+                <template #title>
+                  <a-space>
+                    <a-icon type="dashboard"></a-icon>
+                    <span>三网延迟监测</span>
+                    <a-tag v-if="latency.enabled" color="green" style="margin-left: 4px;">
+                      每 [[ latency.interval ]] 分钟
+                    </a-tag>
+                    <a-tag v-else color="red" style="margin-left: 4px;">已停止</a-tag>
+                  </a-space>
+                </template>
+                <template #extra>
+                  <a-space>
+                    <a-radio-group v-model="latencyHours" size="small" button-style="solid"
+                      @change="loadLatency">
+                      <a-radio-button :value="1">1h</a-radio-button>
+                      <a-radio-button :value="24">24h</a-radio-button>
+                      <a-radio-button :value="168">7d</a-radio-button>
+                      <a-radio-button :value="720">30d</a-radio-button>
+                    </a-radio-group>
+                    <a-button size="small" icon="thunderbolt" :loading="latencyTesting"
+                      @click="runLatencyNow">立即测</a-button>
+                    <a-button size="small" icon="setting" @click="openLatencyConfig">设置</a-button>
+                  </a-space>
+                </template>
+                <a-spin :spinning="latencyLoading">
+                  <div class="lat-grid">
+                    <div class="lat-row lat-head">
+                      <div class="lat-city">城市 \ 运营商</div>
+                      <div v-for="isp in latency.isps" :key="'h-' + isp" class="lat-cell lat-th">
+                        [[ isp ]]
+                      </div>
+                    </div>
+                    <div v-for="city in latency.cities" :key="'c-' + city" class="lat-row">
+                      <div class="lat-city">[[ city ]]</div>
+                      <div v-for="isp in latency.isps" :key="city + '-' + isp" class="lat-cell"
+                        :class="latencyCellHas(city, isp) ? 'lat-clickable' : ''"
+                        @click="latencyCellHas(city, isp) && openLatencyDetail(city, isp)">
+                        <template v-if="latencyCellHas(city, isp)">
+                          <div class="lat-ms" :style="{ color: latencyCellColor(city, isp) }">
+                            [[ latencyCell(city, isp).lastAvgMs > 0 ?
+                              latencyCell(city, isp).lastAvgMs.toFixed(0) : '—' ]]<span
+                              class="lat-unit">ms</span>
+                          </div>
+                          <div class="lat-loss"
+                            :style="{ color: latencyCell(city, isp).lastLossPct > 5 ? '#ff4d4f' : '#999' }">
+                            丢包 [[ (latencyCell(city, isp).lastLossPct || 0).toFixed(0) ]]%
+                          </div>
+                          <svg class="lat-spark" viewBox="0 0 100 22" preserveAspectRatio="none">
+                            <polyline :points="latencySparkPoints(city, isp)" fill="none"
+                              :stroke="latencyCellColor(city, isp)" stroke-width="1.6"
+                              stroke-linejoin="round" stroke-linecap="round"></polyline>
+                          </svg>
+                        </template>
+                        <template v-else>
+                          <div class="lat-ms" style="color: #c9c9c9;">—</div>
+                          <div class="lat-loss">暂无数据</div>
+                        </template>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="lat-foot">
+                    最近更新 [[ latency.updatedAt ? fmtDate(latency.updatedAt * 1000) : '—' ]]
+                    · 保留 [[ latency.retentionDays ]] 天 · 点格子看曲线
+                  </div>
+                </a-spin>
+              </a-card>
+            </a-col>
             <a-col>
               <a-card hoverable>
                 <template #title>
@@ -1127,6 +1197,86 @@
       </a-form-item>
     </a-form>
   </a-modal>
+  <!-- 三网延迟 · 详情曲线 -->
+  <a-modal :title="'三网延迟 · ' + latencyDetail.city + ' ' + latencyDetail.isp"
+    :visible="latencyDetail.visible" :footer="null" width="760px"
+    :class="themeSwitcher.currentTheme"
+    @cancel="latencyDetail.visible = false">
+    <a-spin :spinning="latencyDetail.loading">
+      <a-row :gutter="12" style="margin-bottom: 12px;">
+        <a-col :span="6">
+          <a-custom-statistic title="最新" :value="latencyDetail.cell ? (latencyDetail.cell.lastAvgMs > 0 ? latencyDetail.cell.lastAvgMs.toFixed(0) + ' ms' : '—') : '—'">
+          </a-custom-statistic>
+        </a-col>
+        <a-col :span="6">
+          <a-custom-statistic title="平均 / P95" :value="latencyDetail.cell ? (latencyDetail.cell.avgMs.toFixed(0) + ' / ' + latencyDetail.cell.p95Ms.toFixed(0) + ' ms') : '—'">
+          </a-custom-statistic>
+        </a-col>
+        <a-col :span="6">
+          <a-custom-statistic title="最低 / 最高" :value="latencyDetail.cell ? (latencyDetail.cell.minMs.toFixed(0) + ' / ' + latencyDetail.cell.maxMs.toFixed(0) + ' ms') : '—'">
+          </a-custom-statistic>
+        </a-col>
+        <a-col :span="6">
+          <a-custom-statistic title="丢包率"
+            :value="latencyDetail.cell ? latencyDetail.cell.lossPct.toFixed(1) + ' %' : '—'"
+            :value-style="{ color: latencyDetail.cell && latencyDetail.cell.lossPct > 5 ? '#ff4d4f' : '' }">
+          </a-custom-statistic>
+        </a-col>
+      </a-row>
+      <svg viewBox="0 0 720 200" style="width: 100%; height: 200px;">
+        <line v-for="n in 4" :key="'g' + n" x1="0" :y1="n * 40" x2="720" :y2="n * 40"
+          stroke="rgba(128,128,128,0.18)" stroke-width="1"></line>
+        <polyline :points="latencyDetailPoints" fill="none" stroke="#1677ff" stroke-width="2"
+          stroke-linejoin="round" stroke-linecap="round"></polyline>
+        <polyline :points="latencyDetailLossPoints" fill="none" stroke="#ff4d4f" stroke-width="1.4"
+          stroke-dasharray="4 3" stroke-linejoin="round"></polyline>
+      </svg>
+      <div style="display: flex; justify-content: space-between; font-size: 12px; color: #999;">
+        <span>[[ latencyDetail.spanText ]]</span>
+        <span>
+          <span style="color: #1677ff;">━ 延迟</span>
+          &nbsp;&nbsp;
+          <span style="color: #ff4d4f;">┅ 丢包</span>
+        </span>
+      </div>
+      <div style="margin-top: 8px; font-size: 12px; color: #999;">
+        测点 [[ latencyDetail.cell ? latencyDetail.cell.target : '—' ]]
+        · 采样 [[ latencyDetail.cell ? latencyDetail.cell.samples : 0 ]] 轮
+        · 窗口内平均丢包 [[ latencyDetail.cell ? latencyDetail.cell.lossPct.toFixed(1) : '0' ]]%
+      </div>
+    </a-spin>
+  </a-modal>
+  <!-- 三网延迟 · 设置 -->
+  <a-modal title="三网延迟监测设置" :visible="latencyCfg.visible" @ok="saveLatencyConfig"
+    :confirm-loading="latencyCfg.saving" ok-text="保存" cancel-text="取消" width="560px"
+    :class="themeSwitcher.currentTheme"
+    @cancel="latencyCfg.visible = false">
+    <a-form layout="vertical">
+      <a-form-item label="启用监测">
+        <a-switch v-model="latencyCfg.enabled"></a-switch>
+        <span style="margin-left: 8px; color: #999; font-size: 12px;">
+          关掉后台就不再 ping 国内测点
+        </span>
+      </a-form-item>
+      <a-form-item label="探测间隔（分钟，1-60）">
+        <a-input-number v-model="latencyCfg.interval" :min="1" :max="60" style="width: 100%;"></a-input-number>
+      </a-form-item>
+      <a-form-item label="保留天数（1-90）">
+        <a-input-number v-model="latencyCfg.retentionDays" :min="1" :max="90" style="width: 100%;"></a-input-number>
+        <div style="margin-top: 6px; color: #999; font-size: 12px;">
+          每轮 12 条记录，30 天约 10 万行，占数据库 10MB 左右
+        </div>
+      </a-form-item>
+      <a-form-item label="自定义测点（JSON，留空使用内置的 4 城 × 三网）">
+        <a-textarea v-model="latencyCfg.targetsJson" :rows="7"
+          placeholder='[{"city":"深圳","isp":"电信","candidates":["202.96.134.133","58.60.188.1"]}]'>
+        </a-textarea>
+        <div style="margin-top: 6px; color: #999; font-size: 12px;">
+          每格可以配多个候选 IP，探测时自动用能通的那个
+        </div>
+      </a-form-item>
+    </a-form>
+  </a-modal>
   <!-- 流量历史弹窗 -->
   <a-modal :title="'流量历史（每月用量）'" :visible="trafficHistoryModal.visible"
     @cancel="trafficHistoryModal.visible = false" :footer="null"
@@ -1570,6 +1720,7 @@ function subLinkToken(subId) {
         dayAgo: '{{ i18n "pages.inbounds.healthDayAgo" }}',
       },
       pingTimer: null,
+      latencyTimer: null,
       allSetting: {},
       chainProxyModal: {
         visible: false,
@@ -1602,7 +1753,19 @@ function subLinkToken(subId) {
         vpsQuotaNotify: '80,95',
       },
       vpsUsage: null,
-      auditVisible: false,
+      // 三网延迟监测
+      latencyHours: 24,
+      latencyLoading: false,
+      latencyTesting: false,
+      latency: {
+        enabled: true, interval: 5, retentionDays: 30,
+        cities: [], isps: [], cells: [], updatedAt: 0,
+      },
+      latencyDetail: { visible: false, loading: false, city: '', isp: '', cell: null, spanText: '' },
+      latencyCfg: {
+        visible: false, saving: false,
+        enabled: true, interval: 5, retentionDays: 30, targetsJson: '',
+      },      auditVisible: false,
       auditLoading: false,
       auditRows: [],
       vpsPurchaseDateMoment: null,
@@ -3147,7 +3310,129 @@ function subLinkToken(subId) {
           this.$message.error('修复失败: ' + (e.message || e));
         }
       },
-      // 拉取整机流量用量（套餐额度 / 本周期已用 / 阈值 / 剩余天数）
+      // ===== 三网延迟监测 =====
+      async loadLatency() {
+        this.latencyLoading = true;
+        try {
+          const msg = await HttpUtil.post('/panel/api/latency/summary', { hours: this.latencyHours });
+          if (msg && msg.success && msg.obj) {
+            this.latency = msg.obj;
+          }
+        } catch (e) {
+          console.error('加载三网延迟失败', e);
+        } finally {
+          this.latencyLoading = false;
+        }
+      },
+      async runLatencyNow() {
+        this.latencyTesting = true;
+        try {
+          const msg = await HttpUtil.post('/panel/api/latency/run', {});
+          if (msg && msg.success && msg.obj && msg.obj.summary) {
+            this.latency = msg.obj.summary;
+            this.$message.success('这一轮测完了（' + msg.obj.count + ' 个测点）');
+          } else {
+            this.$message.error('探测失败：' + ((msg && msg.msg) || '未知错误'));
+          }
+        } catch (e) {
+          this.$message.error('探测失败：' + (e.message || e));
+        } finally {
+          this.latencyTesting = false;
+        }
+      },
+      latencyCell(city, isp) {
+        const cells = (this.latency && this.latency.cells) || [];
+        return cells.find(c => c.city === city && c.isp === isp) || null;
+      },
+      latencyCellHas(city, isp) {
+        const c = this.latencyCell(city, isp);
+        return !!(c && c.samples > 0);
+      },
+      latencyCellColor(city, isp) {
+        const c = this.latencyCell(city, isp);
+        if (!c || !c.lastAvgMs) return '#bfbfbf';
+        if (c.lastLossPct >= 20) return '#ff4d4f';
+        if (c.lastAvgMs < 160) return '#52c41a';
+        if (c.lastAvgMs < 220) return '#faad14';
+        return '#ff4d4f';
+      },
+      latencySparkPoints(city, isp) {
+        const c = this.latencyCell(city, isp);
+        if (!c || !c.series || !c.series.length) return '';
+        const vals = c.series.map(p => Number(p.avgMs) || 0);
+        const valid = vals.filter(v => v > 0);
+        if (!valid.length) return '';
+        const lo = Math.min(...valid) * 0.9;
+        const hi = Math.max(...valid) * 1.05;
+        const span = Math.max(1, hi - lo);
+        const n = vals.length;
+        return vals.map((v, i) => {
+          const x = n === 1 ? 50 : (i / (n - 1)) * 100;
+          // 全丢包的点画在最底下（22），一眼能看出断流
+          const y = v > 0 ? 20 - ((v - lo) / span) * 18 : 21.5;
+          return x.toFixed(1) + ',' + y.toFixed(1);
+        }).join(' ');
+      },
+      latencyHoursLabel() {
+        const h = this.latencyHours;
+        if (h === 1) return '最近 1 小时';
+        if (h === 24) return '最近 24 小时';
+        if (h === 168) return '最近 7 天';
+        if (h === 720) return '最近 30 天';
+        return '最近 ' + h + ' 小时';
+      },
+      openLatencyDetail(city, isp) {
+        const cell = this.latencyCell(city, isp);
+        if (!cell) return;
+        this.latencyDetail = {
+          visible: true,
+          loading: false,
+          city: city,
+          isp: isp,
+          cell: cell,
+          spanText: this.latencyHoursLabel(),
+        };
+      },
+      async openLatencyConfig() {
+        let obj = {};
+        try {
+          const msg = await HttpUtil.post('/panel/api/latency/targets', {});
+          if (msg && msg.success && msg.obj) obj = msg.obj;
+        } catch (e) {
+          console.error('读取三网延迟设置失败', e);
+        }
+        this.latencyCfg = {
+          visible: true,
+          saving: false,
+          enabled: !!obj.enabled,
+          interval: obj.interval || 5,
+          retentionDays: obj.retentionDays || 30,
+          targetsJson: obj.targetsJson || '',
+        };
+      },
+      async saveLatencyConfig() {
+        this.latencyCfg.saving = true;
+        try {
+          // 只提交这 4 个字段，后端只会写这几行（不会误伤其它设置）
+          const msg = await HttpUtil.post('/panel/setting/update', {
+            latencyEnable: this.latencyCfg.enabled,
+            latencyInterval: this.latencyCfg.interval,
+            latencyRetentionDays: this.latencyCfg.retentionDays,
+            latencyTargets: this.latencyCfg.targetsJson || '',
+          });
+          if (msg && msg.success) {
+            this.$message.success('设置已保存');
+            this.latencyCfg.visible = false;
+            await this.loadLatency();
+          } else {
+            this.$message.error('保存失败：' + ((msg && msg.msg) || '未知错误'));
+          }
+        } catch (e) {
+          this.$message.error('保存失败：' + (e.message || e));
+        } finally {
+          this.latencyCfg.saving = false;
+        }
+      },      // 拉取整机流量用量（套餐额度 / 本周期已用 / 阈值 / 剩余天数）
       async loadVpsUsage() {
         try {
           const msg = await HttpUtil.post('/panel/api/inbounds/vpsUsage', {});
@@ -3420,6 +3705,9 @@ function subLinkToken(subId) {
     mounted() {
       // 顶部「套餐用量」卡片：进页面就拉一次，之后跟随刷新
       this.loadVpsUsage();
+      // 三网延迟：进页面拉一次，之后每 60 秒跟一次
+      this.loadLatency();
+      this.latencyTimer = setInterval(() => this.loadLatency(), 60000);
       // Fetch VPS settings for the VPS info card
       HttpUtil.post('/panel/setting/all').then(msg => {
         if (msg.success && msg.obj) {
@@ -3560,6 +3848,10 @@ function subLinkToken(subId) {
         clearInterval(this.pingTimer);
         this.pingTimer = null;
       }
+      if (this.latencyTimer) {
+        clearInterval(this.latencyTimer);
+        this.latencyTimer = null;
+      }
     },
     computed: {
       // 复制客户端弹窗里的「邮箱预览」
@@ -3567,7 +3859,34 @@ function subLinkToken(subId) {
         if (!this.copyClientsModal || !this.copyClientsModal.targetInboundId) return [];
         return this.copyClientsModal.selectedEmails.map(email => `${email}_${this.copyClientsModal.targetInboundId}`);
       },
-      // 顶部套餐用量卡片的标题/图标/颜色
+      // 详情弹窗里的两条线（延迟 / 丢包），viewBox 720x200
+      latencyDetailPoints() {
+        const c = this.latencyDetail.cell;
+        if (!c || !c.series || !c.series.length) return '';
+        const vals = c.series.map(p => Number(p.avgMs) || 0).filter(v => v > 0);
+        if (!vals.length) return '';
+        const lo = Math.min(...vals) * 0.9;
+        const hi = Math.max(...vals) * 1.05;
+        const span = Math.max(1, hi - lo);
+        const n = c.series.length;
+        return c.series.map((p, i) => {
+          const x = n === 1 ? 360 : (i / (n - 1)) * 720;
+          const v = Number(p.avgMs) || 0;
+          const y = v > 0 ? 190 - ((v - lo) / span) * 170 : 196;
+          return x.toFixed(1) + ',' + y.toFixed(1);
+        }).join(' ');
+      },
+      latencyDetailLossPoints() {
+        const c = this.latencyDetail.cell;
+        if (!c || !c.series || !c.series.length) return '';
+        const n = c.series.length;
+        return c.series.map((p, i) => {
+          const x = n === 1 ? 360 : (i / (n - 1)) * 720;
+          const loss = Math.min(100, Number(p.lossPct) || 0);
+          const y = 190 - (loss / 100) * 170;
+          return x.toFixed(1) + ',' + y.toFixed(1);
+        }).join(' ');
+      },      // 顶部套餐用量卡片的标题/图标/颜色
       auditBadTotal() {
         return (this.auditRows || []).reduce((n, r) => n + (r.badCount || 0), 0);
       },
@@ -3645,7 +3964,23 @@ function subLinkToken(subId) {
       left: 50vw !important;
     }
   }
-  /* 详情里可点击复制的值：悬停轻微高亮并显示手型 */
+  /* ===== 三网延迟监测 ===== */
+  .lat-grid { display: flex; flex-direction: column; gap: 6px; }
+  .lat-row { display: grid; grid-template-columns: 104px repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .lat-city { display: flex; align-items: center; font-size: 13px; color: #666; }
+  .lat-cell { border: 1px solid rgba(128, 128, 128, .18); border-radius: 8px; padding: 6px 8px 2px; text-align: center; background: rgba(128, 128, 128, .04); }
+  .lat-th { font-size: 13px; color: #666; border: none; background: transparent; padding: 0; align-self: center; }
+  .lat-clickable { cursor: pointer; transition: transform .12s ease, box-shadow .12s ease; }
+  .lat-clickable:hover { transform: translateY(-1px); box-shadow: 0 2px 10px rgba(0, 0, 0, .12); }
+  .lat-ms { font-size: 18px; font-weight: 600; line-height: 1.2; }
+  .lat-unit { font-size: 11px; font-weight: 400; margin-left: 2px; }
+  .lat-loss { font-size: 11px; }
+  .lat-spark { width: 100%; height: 22px; display: block; }
+  .lat-foot { margin-top: 8px; font-size: 12px; color: #999; }
+  @media (max-width: 768px) {
+    .lat-row { grid-template-columns: 68px repeat(3, minmax(0, 1fr)); gap: 5px; }
+    .lat-ms { font-size: 15px; }
+  }  /* 详情里可点击复制的值：悬停轻微高亮并显示手型 */
   .copy-val {
     cursor: pointer;
     transition: opacity .15s ease, filter .15s ease;
