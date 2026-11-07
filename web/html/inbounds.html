@@ -140,19 +140,22 @@
                 </a-row>
               </a-card>
             </a-col>
-            <!-- 三网延迟监测：Grafana 风格面板（大图 + 每日统计 + 抖动 + 稳定性时间线） -->
+            <!-- 三网延迟监测：默认只占一行摘要 + 96px 趋势，分析面板点「展开」才出来 -->
             <a-col>
-              <a-card size="small" hoverable>
+              <a-card size="small" class="lat-card">
                 <template #title>
-                  <a-space>
-                    <a-icon type="line-chart"></a-icon>
+                  <a-space :size="6">
+                    <a-icon type="dashboard"></a-icon>
                     <span>三网延迟监测</span>
-                    <a-tag v-if="latency.enabled" color="green">[[ latency.interval ]] 分钟一轮</a-tag>
-                    <a-tag v-else color="red">已停止</a-tag>
+                    <a-tag v-if="latency.enabled" color="green" style="margin: 0;">[[ latency.interval ]] 分钟</a-tag>
+                    <a-tag v-else color="red" style="margin: 0;">已停止</a-tag>
                   </a-space>
                 </template>
                 <template #extra>
-                  <a-space>
+                  <a-space :size="6">
+                    <span class="lat-health" :class="latencyAlerts.length ? 'lat-health-bad' : 'lat-health-ok'">
+                      [[ latencyAlerts.length ? latencyAlerts.length + ' 项异常' : '全部正常' ]]
+                    </span>
                     <a-radio-group v-model="latencyHours" size="small" button-style="solid"
                       @change="loadLatency">
                       <a-radio-button :value="1">1h</a-radio-button>
@@ -161,115 +164,136 @@
                       <a-radio-button :value="720">30d</a-radio-button>
                     </a-radio-group>
                     <a-button size="small" icon="thunderbolt" :loading="latencyTesting"
-                      @click="runLatencyNow">立即测</a-button>
-                    <a-button size="small" icon="setting" @click="openLatencyConfig">设置</a-button>
-                    <a-button size="small" type="link" @click="latencyCollapsed = !latencyCollapsed">
-                      [[ latencyCollapsed ? '展开图表' : '收起' ]]
+                      @click="runLatencyNow">测</a-button>
+                    <a-button size="small" @click="latencyExpanded = !latencyExpanded">
+                      [[ latencyExpanded ? '收起' : '展开' ]]
                     </a-button>
+                    <a-icon type="setting" class="lat-gear" title="监测设置" @click="openLatencyConfig"></a-icon>
                   </a-space>
                 </template>
 
                 <a-spin :spinning="latencyLoading">
-                  <!-- 指标条 -->
-                  <div class="lg-stats">
-                    <div v-for="s in latencyStatTiles" :key="'st-' + s.label" class="lg-stat">
-                      <div class="lg-stat-label">[[ s.label ]]</div>
-                      <div class="lg-stat-value" :style="{ color: s.color }">[[ s.value ]]</div>
+                  <!-- 摘要：按运营商分组，4 个城市的当前值 -->
+                  <div class="lat-sum">
+                    <div v-for="g in latencyGroups" :key="'g-' + g.isp" class="lat-grp">
+                      <span class="lat-grp-name" :style="{ color: g.color }">[[ g.isp ]]</span>
+                      <span v-for="c in g.cells" :key="'c-' + c.city" class="lat-pill"
+                        :class="'lat-lv-' + c.level" :title="c.tip">
+                        <em>[[ c.city ]]</em><b>[[ c.ms ]]</b>
+                      </span>
                     </div>
                   </div>
 
-                  <template v-if="!latencyCollapsed">
-                    <!-- 主图：12 条线 -->
-                    <div class="lg-panel">
-                      <div class="lg-panel-head">
-                        延迟趋势 <span class="lg-panel-sub">[[ latencyHoursLabel() ]] · 点图例可隐藏那条线</span>
-                      </div>
-                      <svg class="lg-svg" viewBox="0 0 1000 220">
-                        <line v-for="t in chartMain.yTicks" :key="'my-' + t.label" x1="46" :y1="t.y"
-                          x2="992" :y2="t.y" class="lg-grid"></line>
-                        <text v-for="t in chartMain.yTicks" :key="'myt-' + t.label" x="42"
-                          :y="t.yf + 3" text-anchor="end" class="lg-axis">[[ t.label ]]</text>
-                        <g v-for="s in chartMain.series" :key="'ml-' + s.name">
-                          <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1.3"
-                            stroke-linejoin="round"></polyline>
-                          <circle v-for="(d, di) in s.dots" :key="'md-' + di" :cx="d.x" :cy="d.y" r="2.4"
-                            :fill="s.color"></circle>
-                        </g>
-                        <text v-for="t in chartMain.xTicks" :key="'mx-' + t.label" :x="t.xf" y="216"
-                          :text-anchor="t.anchor" class="lg-axis">[[ t.label ]]</text>
-                      </svg>
-                      <div class="lg-legend">
-                        <span v-for="l in latencyLegend" :key="'lg-' + l.name" class="lg-legend-item"
-                          :class="{ 'lg-off': l.hidden }" :title="l.tip"
-                          @click="toggleLatencySeries(l.name)">
-                          <i :style="{ background: l.color }"></i>
-                          <b>[[ l.name ]]</b>
-                          <em>[[ l.avg ]] · [[ l.p95 ]] · [[ l.max ]] ms</em>
-                        </span>
-                      </div>
-                    </div>
+                  <!-- 紧凑趋势：3 条线（各运营商 4 城市平均），
+                       细节看 pills 与展开图 -->
+                  <svg class="lat-trend" viewBox="0 0 1000 92">
+                    <line v-for="t in chartTiny.yTicks" :key="'ty-' + t.label" x1="38" :y1="t.y"
+                      x2="996" :y2="t.y" class="lg-grid"></line>
+                    <text v-for="t in chartTiny.yTicks" :key="'tyt-' + t.label" x="34"
+                      :y="t.yf + 3" text-anchor="end" class="lg-axis">[[ t.label ]]</text>
+                    <g v-for="s in chartTiny.series" :key="'tl-' + s.name">
+                      <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1.7"
+                        stroke-linejoin="round"></polyline>
+                      <circle :cx="s.last.x" :cy="s.last.y" r="2.6" :fill="s.color"></circle>
+                    </g>
+                    <text v-for="t in chartTiny.xTicks" :key="'tx-' + t.label" :x="t.xf" y="89"
+                      :text-anchor="t.anchor" class="lg-axis">[[ t.label ]]</text>
+                  </svg>
 
-                    <!-- 每日平均 / P95 / P99 -->
-                    <div class="lg-row3">
-                      <div v-for="d in latencyDailyCharts" :key="'dc-' + d.key" class="lg-panel lg-panel-sm">
-                        <div class="lg-panel-head">[[ d.title ]]<span class="lg-panel-sub">[[ d.sub ]]</span></div>
-                        <svg class="lg-svg lg-svg-sm" viewBox="0 0 340 140">
-                          <line v-for="t in d.chart.yTicks" :key="d.key + '-' + t.label" x1="38" :y1="t.y"
-                            x2="336" :y2="t.y" class="lg-grid"></line>
-                          <text v-for="t in d.chart.yTicks" :key="d.key + '-t-' + t.label" x="34"
+                  <!-- 展开区：标签页，高度固定，不再一条条往下堆 -->
+                  <template v-if="latencyExpanded">
+                    <a-tabs size="small" v-model="latencyTab" class="lat-tabs">
+                      <a-tab-pane key="trend" tab="延迟趋势">
+                        <div class="lat-meta">
+                          失败 [[ latencyCounts.fail ]] · &gt;300ms [[ latencyCounts.s300 ]]
+                          · &gt;500ms [[ latencyCounts.s500 ]] · &gt;1000ms [[ latencyCounts.s1000 ]]
+                          · 平均抖动 [[ latencyCounts.jitter ]] ms
+                          · [[ latencySamples ]] 轮/格
+                        </div>
+                        <svg class="lg-svg" viewBox="0 0 1000 210">
+                          <line v-for="t in chartMain.yTicks" :key="'my-' + t.label" x1="46" :y1="t.y"
+                            x2="992" :y2="t.y" class="lg-grid"></line>
+                          <text v-for="t in chartMain.yTicks" :key="'myt-' + t.label" x="42"
                             :y="t.yf + 3" text-anchor="end" class="lg-axis">[[ t.label ]]</text>
-                          <g v-for="s in d.chart.series" :key="d.key + '-l-' + s.name">
-                            <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1.2"
-                              stroke-linejoin="round"></polyline>
-                            <circle v-for="(p2, pi) in s.dots" :key="d.key + '-d-' + pi" :cx="p2.x"
-                              :cy="p2.y" r="2" :fill="s.color"></circle>
+                          <g v-for="s in chartMain.series" :key="'ml-' + s.name">
+                            <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1.4"
+                              :stroke-dasharray="s.dash" stroke-linejoin="round"></polyline>
+                            <circle v-for="(d, di) in s.dots" :key="'md-' + di" :cx="d.x" :cy="d.y"
+                              r="2.4" :fill="s.color"></circle>
                           </g>
-                          <text v-for="t in d.chart.xTicks" :key="d.key + '-x-' + t.label" :x="t.xf"
-                            y="136" :text-anchor="t.anchor" class="lg-axis">[[ t.label ]]</text>
+                          <text v-for="t in chartMain.xTicks" :key="'mx-' + t.label" :x="t.xf" y="206"
+                            :text-anchor="t.anchor" class="lg-axis">[[ t.label ]]</text>
                         </svg>
-                      </div>
-                    </div>
-
-                    <!-- 抖动 + 稳定性时间线 -->
-                    <div class="lg-row2">
-                      <div class="lg-panel lg-panel-sm">
-                        <div class="lg-panel-head">抖动（每轮 ping 的 mdev）
+                        <div class="lat-legend">
+                          <span v-for="l in latencyLegend" :key="'lg-' + l.name" class="lat-legend-item"
+                            :class="{ 'lat-off': l.hidden }" :title="l.tip"
+                            @click="toggleLatencySeries(l.name)">
+                            <svg class="lat-swatch" viewBox="0 0 18 6">
+                              <line x1="1" y1="3" x2="17" y2="3" :stroke="l.color" stroke-width="1.8"
+                                :stroke-dasharray="l.dash"></line>
+                            </svg>
+                            <b>[[ l.name ]]</b>
+                            <em>[[ l.avg ]]/[[ l.p95 ]]/[[ l.max ]]</em>
+                          </span>
+                        </div>
+                      </a-tab-pane>
+                      <a-tab-pane key="daily" tab="每日 P95 / P99">
+                        <div class="lat-row3">
+                          <div v-for="d in latencyDailyCharts" :key="'dc-' + d.key">
+                            <div class="lg-panel-head">[[ d.title ]]</div>
+                            <svg class="lg-svg" viewBox="0 0 340 130">
+                              <line v-for="t in d.chart.yTicks" :key="d.key + '-' + t.label" x1="38"
+                                :y1="t.y" x2="336" :y2="t.y" class="lg-grid"></line>
+                              <text v-for="t in d.chart.yTicks" :key="d.key + '-t-' + t.label" x="34"
+                                :y="t.yf + 3" text-anchor="end" class="lg-axis">[[ t.label ]]</text>
+                              <g v-for="s in d.chart.series" :key="d.key + '-l-' + s.name">
+                                <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1.2"
+                                  :stroke-dasharray="s.dash" stroke-linejoin="round"></polyline>
+                                <circle v-for="(p2, pi) in s.dots" :key="d.key + '-d-' + pi" :cx="p2.x"
+                                  :cy="p2.y" r="2" :fill="s.color"></circle>
+                              </g>
+                              <text v-for="t in d.chart.xTicks" :key="d.key + '-x-' + t.label" :x="t.xf"
+                                y="126" :text-anchor="t.anchor" class="lg-axis">[[ t.label ]]</text>
+                            </svg>
+                          </div>
+                        </div>
+                      </a-tab-pane>
+                      <a-tab-pane key="jitter" tab="抖动">
+                        <div class="lg-panel-head">每轮 ping 的 mdev
                           <span class="lg-panel-sub">越低越稳</span></div>
-                        <svg class="lg-svg lg-svg-sm" viewBox="0 0 480 140">
+                        <svg class="lg-svg" viewBox="0 0 1000 160">
                           <line v-for="t in chartJitter.yTicks" :key="'jy-' + t.label" x1="38" :y1="t.y"
-                            x2="476" :y2="t.y" class="lg-grid"></line>
+                            x2="996" :y2="t.y" class="lg-grid"></line>
                           <text v-for="t in chartJitter.yTicks" :key="'jyt-' + t.label" x="34"
                             :y="t.yf + 3" text-anchor="end" class="lg-axis">[[ t.label ]]</text>
                           <g v-for="s in chartJitter.series" :key="'jl-' + s.name">
-                            <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1.2"
-                              stroke-linejoin="round"></polyline>
-                            <circle v-for="(d, di) in s.dots" :key="'jd-' + di" :cx="d.x" :cy="d.y"
-                              r="2" :fill="s.color"></circle>
+                            <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1.1"
+                              :stroke-dasharray="s.dash" stroke-linejoin="round"></polyline>
                           </g>
                           <text v-for="t in chartJitter.xTicks" :key="'jx-' + t.label" :x="t.xf"
-                            y="136" :text-anchor="t.anchor" class="lg-axis">[[ t.label ]]</text>
+                            y="156" :text-anchor="t.anchor" class="lg-axis">[[ t.label ]]</text>
                         </svg>
-                      </div>
-                      <div class="lg-panel lg-panel-sm">
-                        <div class="lg-panel-head">稳定性时间线
-                          <span class="lg-panel-sub">绿=正常 黄=慢/轻微丢包 红=丢包或超 500ms</span></div>
+                      </a-tab-pane>
+                      <a-tab-pane key="stab" tab="稳定性">
+                        <div class="lg-panel-head">时间线
+                          <span class="lg-panel-sub">绿=正常 黄=慢 橙=轻微丢包 红=丢包或超 500ms</span></div>
                         <div class="lg-timeline">
                           <div v-for="row in latencyTimeline" :key="'tl-' + row.name" class="lg-tl-row">
-                            <span class="lg-tl-name">[[ row.name ]]</span>
+                            <span class="lg-tl-name" :style="{ color: row.color }">[[ row.name ]]</span>
                             <span class="lg-tl-bar">
                               <i v-for="(seg, idx) in row.segs" :key="idx" :class="'lg-tl-' + seg.lvl"
                                 :style="{ flex: seg.w }" :title="seg.tip"></i>
                             </span>
                           </div>
                         </div>
-                      </div>
-                    </div>
+                      </a-tab-pane>
+                    </a-tabs>
                   </template>
 
                   <div class="lat-foot">
-                    最近更新 [[ latency.updatedAt ? fmtDate(latency.updatedAt * 1000) : '—' ]]
-                    · 保留 [[ latency.retentionDays ]] 天 · 测点 [[ latencyTargetCount ]] 个
-                    · 每格 [[ latencySamples ]] 轮
+                    更新 [[ latency.updatedAt ? fmtDate(latency.updatedAt * 1000) : '—' ]]
+                    · 保留 [[ latency.retentionDays ]] 天 · [[ latencyTargetCount ]] 个测点
+                    · 数字为 平均/P95/最大
                   </div>
                 </a-spin>
               </a-card>
@@ -1775,10 +1799,14 @@ function subLinkToken(subId) {
         enabled: true, interval: 5, retentionDays: 30,
         cities: [], isps: [], cells: [], updatedAt: 0,
       },
-      latencyCollapsed: false,
+      latencyExpanded: false,
+      latencyTab: 'trend',
       latencyHidden: {},
-      latencyColors: ['#52c41a', '#1677ff', '#722ed1', '#fa8c16', '#13c2c2', '#eb2f96',
-        '#a0d911', '#2f54eb', '#faad14', '#f5222d', '#08979c', '#c41d7f'],
+      // 颜色按运营商分（电信蓝 / 联通绿 / 移动橙），线型按城市分 —— 12 条线才分得清
+      latencyIspColors: { '电信': '#1677ff', '联通': '#52c41a', '移动': '#fa8c16' },
+      latencyCityDash: { '深圳': '', '北京': '7 4', '上海': '2 3', '成都': '10 3 2 3' },
+      latencyPalette: ['#1677ff', '#52c41a', '#fa8c16', '#722ed1', '#13c2c2', '#eb2f96'],
+      latencyDashes: ['', '7 4', '2 3', '10 3 2 3'],
       latencyCfg: {
         visible: false, saving: false,
         enabled: true, interval: 5, retentionDays: 30, targetsJson: '',
@@ -3357,13 +3385,49 @@ function subLinkToken(subId) {
           this.latencyTesting = false;
         }
       },
-      // 取某个系列的 12 条线（main / jitter / dailyAvg / dailyP95 / dailyP99）
+      latencyColorOf(isp, idx) {
+        return this.latencyIspColors[isp] || this.latencyPalette[idx % this.latencyPalette.length];
+      },
+      latencyDashOf(city, idx) {
+        const d = this.latencyCityDash[city];
+        return d === undefined ? this.latencyDashes[idx % this.latencyDashes.length] : d;
+      },      // 紧凑图只画 3 条线（各运营商 4 城市平均），细节留给 pills 和展开图
+      latencyIspSeries() {
+        const cells = (this.latency && this.latency.cells) || [];
+        const order = [];
+        const groups = {};
+        cells.forEach((c, i) => {
+          if (!groups[c.isp]) {
+            groups[c.isp] = { order: order.length, color: this.latencyColorOf(c.isp, i), map: {} };
+            order.push(c.isp);
+          }
+          const name = c.city + c.isp;
+          if (this.latencyHidden[name]) return;
+          const m = groups[c.isp].map;
+          (c.series || []).forEach(pt => {
+            const v = Number(pt.avgMs) || 0;
+            if (v <= 0) return;
+            if (!m[pt.ts]) m[pt.ts] = [0, 0];
+            m[pt.ts][0] += v;
+            m[pt.ts][1] += 1;
+          });
+        });
+        return order.map(isp => {
+          const g = groups[isp];
+          const data = Object.keys(g.map)
+            .map(k => Number(k))
+            .sort((a, b) => a - b)
+            .map(ts => [ts, g.map[ts][0] / g.map[ts][1]]);
+          return { name: isp, color: g.color, dash: '', data: data };
+        });
+      },      // 取某个系列的 12 条线（main / jitter / dailyAvg / dailyP95 / dailyP99）
       latencySeries(kind) {
         const cells = (this.latency && this.latency.cells) || [];
         return cells.map((c, i) => {
           const name = c.city + c.isp;
-          const color = this.latencyColors[i % this.latencyColors.length];
-          if (this.latencyHidden[name]) return { name: name, color: color, data: [] };
+          const color = this.latencyColorOf(c.isp, i);
+          const dash = this.latencyDashOf(c.city, i);
+          if (this.latencyHidden[name]) return { name: name, color: color, dash: dash, data: [] };
           let data = [];
           if (kind === 'main') {
             data = (c.series || []).map(p => [p.ts, Number(p.avgMs) || 0]);
@@ -3374,7 +3438,7 @@ function subLinkToken(subId) {
             data = (c.daily || []).map(d => [d.ts, Number(d[key]) || 0]);
           }
           // 0 = 那一轮全丢包/没数据，不连线（留着会把曲线拽到 0）
-          return { name: name, color: color, data: data.filter(p => p[1] > 0) };
+          return { name: name, color: color, dash: dash, data: data.filter(p => p[1] > 0) };
         });
       },
       // 把 N 条 [ts, value] 折成 SVG 坐标（viewBox 固定，等比缩放）
@@ -3410,13 +3474,16 @@ function subLinkToken(subId) {
         const yOf = v => padT + (H - padT - padB) * (1 - (v - lo) / (hi - lo));
 
         const series = visible.map(s => {
-          const dots = s.data.length <= 3
+          const n = s.data.length;
+          const dots = n <= 3
             ? s.data.map(pt => ({ x: xOf(pt[0]).toFixed(1), y: yOf(pt[1]).toFixed(1) }))
             : [];
           return {
             name: s.name,
             color: s.color,
+            dash: s.dash || '',
             dots: dots,
+            last: { x: xOf(s.data[n - 1][0]).toFixed(1), y: yOf(s.data[n - 1][1]).toFixed(1) },
             points: s.data.map(pt => xOf(pt[0]).toFixed(1) + ',' + yOf(pt[1]).toFixed(1)).join(' '),
           };
         });
@@ -3454,7 +3521,8 @@ function subLinkToken(subId) {
         if (h === 168) return '最近 7 天';
         if (h === 720) return '最近 30 天';
         return '最近 ' + h + ' 小时';
-      },      toggleLatencySeries(name) {
+      },
+      toggleLatencySeries(name) {
         const next = Object.assign({}, this.latencyHidden);
         if (next[name]) { delete next[name]; } else { next[name] = true; }
         this.latencyHidden = next;
@@ -3924,68 +3992,105 @@ function subLinkToken(subId) {
         if (!this.copyClientsModal || !this.copyClientsModal.targetInboundId) return [];
         return this.copyClientsModal.selectedEmails.map(email => `${email}_${this.copyClientsModal.targetInboundId}`);
       },
-      // 主图：12 条延迟曲线
+      // 小趋势图（默认常驻，96px 高）
+      chartTiny() {
+        return this.buildLatencyChart(this.latencyIspSeries(),
+          { width: 1000, height: 92, yTicks: 2, xTicks: 5, padLeft: 38, padBottom: 14, padTop: 8 });
+      },
+      // 展开后的主图
       chartMain() {
-        return this.buildLatencyChart(this.latencySeries('main'), { width: 1000, height: 220, yTicks: 4, xTicks: 5 });
+        return this.buildLatencyChart(this.latencySeries('main'),
+          { width: 1000, height: 210, yTicks: 4, xTicks: 5, padBottom: 18 });
       },
-      // 抖动图
       chartJitter() {
-        return this.buildLatencyChart(this.latencySeries('jitter'), { width: 480, height: 140, yTicks: 3, xTicks: 4, padLeft: 38, padBottom: 20 });
+        return this.buildLatencyChart(this.latencySeries('jitter'),
+          { width: 1000, height: 160, yTicks: 3, xTicks: 5, padLeft: 38, padBottom: 16 });
       },
-      // 每日平均 / P95 / P99 三张小图
       latencyDailyCharts() {
-        const mk = (key, title, kind, sub) => ({
-          key: key, title: title, sub: sub || '',
-          chart: this.buildLatencyChart(this.latencySeries(kind), { width: 340, height: 140, yTicks: 3, xTicks: 4, padLeft: 38, padBottom: 20 }),
+        const mk = (key, title, kind) => ({
+          key: key, title: title,
+          chart: this.buildLatencyChart(this.latencySeries(kind),
+            { width: 340, height: 130, yTicks: 3, xTicks: 4, padLeft: 38, padBottom: 16 }),
         });
         return [
-          mk('avg', '每日平均延迟', 'dailyAvg', '按天'),
-          mk('p95', '每日 P95', 'dailyP95', '95% 的轮次低于此值'),
-          mk('p99', '每日 P99', 'dailyP99', '尖峰'),
+          mk('avg', '每日平均', 'dailyAvg'),
+          mk('p95', '每日 P95', 'dailyP95'),
+          mk('p99', '每日 P99', 'dailyP99'),
         ];
       },
-      // 图例：颜色 + 名称 + 平均/P95/最大（单位 ms）
-      latencyLegend() {
+      // 摘要：按运营商分组，每组 4 个城市
+      latencyGroups() {
         const cells = (this.latency && this.latency.cells) || [];
-        return cells.map((c, i) => {
-          const name = c.city + c.isp;
-          return {
-            name: name,
-            color: this.latencyColors[i % this.latencyColors.length],
-            hidden: !!this.latencyHidden[name],
-            avg: Math.round(c.avgMs || 0),
-            p95: Math.round(c.p95Ms || 0),
-            max: Math.round(c.maxMs || 0),
-            tip: name + ' · 最新 ' + Math.round(c.lastAvgMs || 0) + 'ms · 丢包 ' + (c.lastLossPct || 0).toFixed(0) + '% · 测点 ' + (c.target || '—'),
-          };
+        const order = [];
+        const map = {};
+        cells.forEach((c, i) => {
+          if (!map[c.isp]) {
+            map[c.isp] = { isp: c.isp, color: this.latencyColorOf(c.isp, i), cells: [] };
+            order.push(c.isp);
+          }
+          const loss = Number(c.lastLossPct) || 0;
+          const ms = Math.round(Number(c.lastAvgMs) || 0);
+          let level = 0;
+          if (ms === 0 || loss >= 5 || ms >= 220) level = 2;
+          else if (loss > 0 || ms >= 170) level = 1;
+          map[c.isp].cells.push({
+            city: c.city,
+            ms: ms > 0 ? ms : '—',
+            level: level,
+            tip: c.city + c.isp + ' · ' + (ms > 0 ? ms + 'ms' : '不通')
+              + ' · 丢包 ' + loss.toFixed(0) + '% · P95 ' + Math.round(c.p95Ms || 0) + 'ms'
+              + ' · 测点 ' + (c.target || '—'),
+          });
         });
+        return order.map(i => map[i]);
       },
-      // 顶部指标条（合计）
-      latencyStatTiles() {
+      // 异常项：不通 / 丢包 >=5% / 平均 >=220ms
+      latencyAlerts() {
         const cells = (this.latency && this.latency.cells) || [];
-        let fail = 0, s300 = 0, s500 = 0, s1000 = 0, jitSum = 0, jitN = 0, n = 0;
+        const out = [];
+        cells.forEach(c => {
+          const ms = Number(c.lastAvgMs) || 0;
+          const loss = Number(c.lastLossPct) || 0;
+          if (ms === 0) out.push(c.city + c.isp + ' 不通');
+          else if (loss >= 5) out.push(c.city + c.isp + ' 丢包 ' + loss.toFixed(0) + '%');
+          else if (ms >= 220) out.push(c.city + c.isp + ' ' + Math.round(ms) + 'ms');
+        });
+        return out;
+      },
+      latencyCounts() {
+        const cells = (this.latency && this.latency.cells) || [];
+        let fail = 0, s300 = 0, s500 = 0, s1000 = 0, jitSum = 0, jitN = 0;
         cells.forEach(c => {
           fail += c.failCount || 0;
           s300 += c.slow300 || 0;
           s500 += c.slow500 || 0;
           s1000 += c.slow1000 || 0;
           if (c.avgJitter) { jitSum += c.avgJitter; jitN++; }
-          n += c.samples || 0;
         });
-        const jit = jitN ? (jitSum / jitN).toFixed(1) : '0.0';
-        return [
-          { label: '探针失败', value: fail, color: fail > 0 ? '#ff4d4f' : '#52c41a' },
-          { label: '> 300ms', value: s300, color: s300 > 0 ? '#faad14' : '#52c41a' },
-          { label: '> 500ms', value: s500, color: s500 > 0 ? '#fa8c16' : '#52c41a' },
-          { label: '> 1000ms', value: s1000, color: s1000 > 0 ? '#ff4d4f' : '#52c41a' },
-          { label: '平均抖动', value: jit + ' ms', color: '#1677ff' },
-          { label: '采样总数', value: n, color: '#8c8c8c' },
-        ];
+        return {
+          fail: fail, s300: s300, s500: s500, s1000: s1000,
+          jitter: jitN ? (jitSum / jitN).toFixed(1) : '0.0',
+        };
       },
-      // 稳定性时间线：每条线一行，按每轮的丢包/延迟分档上色
+      latencyLegend() {
+        const cells = (this.latency && this.latency.cells) || [];
+        return cells.map((c, i) => {
+          const name = c.city + c.isp;
+          return {
+            name: name,
+            color: this.latencyColorOf(c.isp, i),
+            dash: this.latencyDashOf(c.city, i),
+            hidden: !!this.latencyHidden[name],
+            avg: Math.round(c.avgMs || 0),
+            p95: Math.round(c.p95Ms || 0),
+            max: Math.round(c.maxMs || 0),
+            tip: name + ' · 平均/P95/最大(ms) · 测点 ' + (c.target || '—'),
+          };
+        });
+      },
       latencyTimeline() {
         const cells = (this.latency && this.latency.cells) || [];
-        return cells.map(c => {
+        return cells.map((c, i) => {
           const pts = (c.series || []).slice(-80);
           const segs = pts.map(p => {
             const loss = Number(p.lossPct) || 0;
@@ -3996,15 +4101,17 @@ function subLinkToken(subId) {
             else if (loss > 0 || avg > 300) lvl = 1;
             const when = new Date(p.ts * 1000).toLocaleTimeString('zh-CN', { hour12: false });
             return {
-              lvl: lvl,
-              w: '1',
+              lvl: lvl, w: '1',
               tip: when + ' · ' + (avg > 0 ? Math.round(avg) + 'ms' : '不通') + ' · 丢包 ' + loss.toFixed(0) + '%',
             };
           });
-          return { name: c.city + c.isp, segs: segs.length ? segs : [{ lvl: 0, w: '1', tip: '暂无数据' }] };
+          return {
+            name: c.city + c.isp,
+            color: this.latencyColorOf(c.isp, i),
+            segs: segs.length ? segs : [{ lvl: 0, w: '1', tip: '暂无数据' }],
+          };
         });
-      },
-      // 窗口内总采样轮数 / 测点个数
+      },      // 窗口内总采样轮数 / 测点个数
       latencySamples() {
         const cells = (this.latency && this.latency.cells) || [];
         let max = 0;
@@ -4091,44 +4198,54 @@ function subLinkToken(subId) {
       left: 50vw !important;
     }
   }
-  /* ===== 三网延迟监测：Grafana 风格面板 ===== */
-  .lg-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-  .lg-stat {
-    flex: 1 1 120px; min-width: 96px; padding: 6px 10px; border-radius: 8px;
-    border: 1px solid rgba(128, 128, 128, .18); background: rgba(128, 128, 128, .05);
+  /* ===== 三网延迟监测（紧凑版） ===== */
+  .lat-card .ant-card-body { padding: 10px 14px 8px; }
+  .lat-sum { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-bottom: 6px; }
+  .lat-grp { display: inline-flex; align-items: center; gap: 3px; }
+  .lat-grp-name { font-size: 11px; font-weight: 600; margin-right: 1px; }
+  .lat-pill {
+    display: inline-flex; align-items: baseline; gap: 2px; padding: 1px 5px; border-radius: 4px;
+    font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 18px;
+    background: rgba(128, 128, 128, .10); cursor: default;
   }
-  .lg-stat-label { font-size: 12px; color: #8c8c8c; }
-  .lg-stat-value { font-size: 17px; font-weight: 600; line-height: 1.3; }
-  .lg-panel {
-    border: 1px solid rgba(128, 128, 128, .18); border-radius: 8px; padding: 8px 10px 6px;
-    background: rgba(128, 128, 128, .04); margin-bottom: 10px;
+  .lat-pill em { font-style: normal; font-weight: 400; font-size: 10px; color: #8c8c8c; }
+  .lat-lv-0 { color: #389e0d; background: rgba(82, 196, 26, .12); }
+  .lat-lv-1 { color: #d48806; background: rgba(250, 173, 20, .14); }
+  .lat-lv-2 { color: #cf1322; background: rgba(245, 34, 45, .12); }
+  .lat-health { font-size: 12px; padding: 0 8px; line-height: 20px; border-radius: 10px; }
+  .lat-health-ok { color: #389e0d; background: rgba(82, 196, 26, .12); }
+  .lat-health-bad { color: #cf1322; background: rgba(245, 34, 45, .12); }
+  .lat-gear { cursor: pointer; color: #8c8c8c; font-size: 14px; }
+  .lat-gear:hover { color: #1677ff; }
+  .lat-trend { width: 100%; height: auto; display: block; margin: 0 0 2px; }
+  .lat-tabs { margin-top: 6px; }
+  .lat-tabs .ant-tabs-nav { margin-bottom: 4px; }
+  .lat-tabs .ant-tabs-tab { padding: 4px 0; font-size: 12px; }
+  .lat-meta { font-size: 11px; color: #8c8c8c; margin-bottom: 2px; font-variant-numeric: tabular-nums; }
+  .lat-legend { display: flex; flex-wrap: wrap; gap: 2px 10px; margin-top: 4px; }
+  .lat-legend-item {
+    display: inline-flex; align-items: center; gap: 4px; font-size: 11px; cursor: pointer;
+    user-select: none; color: rgba(0, 0, 0, .6);
   }
-  .lg-panel-head { font-size: 13px; font-weight: 600; color: rgba(0, 0, 0, .75); margin-bottom: 2px; }
-  .lg-panel-sub { font-weight: 400; font-size: 11px; color: #8c8c8c; margin-left: 8px; }
+  .lat-legend-item b { font-weight: 600; }
+  .lat-legend-item em { font-style: normal; color: #8c8c8c; font-variant-numeric: tabular-nums; }
+  .lat-legend-item.lat-off { opacity: .3; text-decoration: line-through; }
+  .lat-swatch { width: 16px; height: 6px; overflow: visible; }
   .lg-svg { width: 100%; height: auto; display: block; }
-  .lg-svg-sm { max-height: 150px; }
-  .lg-grid { stroke: rgba(128, 128, 128, .22); stroke-width: 1; }
+  .lg-grid { stroke: rgba(128, 128, 128, .18); stroke-width: 1; }
   .lg-axis { fill: #8c8c8c; font-size: 10px; }
-  .lg-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
-  .lg-legend-item { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; cursor: pointer; user-select: none; color: rgba(0, 0, 0, .65); }
-  .lg-legend-item i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
-  .lg-legend-item b { font-weight: 600; }
-  .lg-legend-item em { font-style: normal; color: #8c8c8c; font-variant-numeric: tabular-nums; }
-  .lg-legend-item.lg-off { opacity: .35; text-decoration: line-through; }
-  .lg-row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-  .lg-row2 { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 10px; }
-  .lg-timeline { display: flex; flex-direction: column; gap: 3px; padding: 2px 0; }
+  .lg-panel-head { font-size: 12px; font-weight: 600; color: rgba(0, 0, 0, .7); margin-bottom: 2px; }
+  .lg-panel-sub { font-weight: 400; font-size: 11px; color: #8c8c8c; margin-left: 6px; }
+  .lat-row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .lg-timeline { display: flex; flex-direction: column; gap: 2px; }
   .lg-tl-row { display: flex; align-items: center; gap: 6px; }
-  .lg-tl-name { flex: 0 0 68px; font-size: 11px; color: rgba(0, 0, 0, .65); white-space: nowrap; }
-  .lg-tl-bar { flex: 1 1 auto; display: flex; height: 12px; border-radius: 2px; overflow: hidden; background: rgba(128, 128, 128, .12); }
+  .lg-tl-name { flex: 0 0 66px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+  .lg-tl-bar { flex: 1 1 auto; display: flex; height: 8px; border-radius: 2px; overflow: hidden; background: rgba(128, 128, 128, .10); }
   .lg-tl-bar i { display: block; min-width: 1px; }
-  .lg-tl-0 { background: #52c41a; }
-  .lg-tl-1 { background: #faad14; }
-  .lg-tl-2 { background: #fa8c16; }
-  .lg-tl-3 { background: #f5222d; }
-  .lat-foot { margin-top: 4px; font-size: 12px; color: #999; }
-  .ant-dark .lg-panel-head, .ant-dark .lg-legend-item, .ant-dark .lg-tl-name { color: rgba(255, 255, 255, .75) !important; }
-  @media (max-width: 1200px) { .lg-row3 { grid-template-columns: minmax(0, 1fr); } .lg-row2 { grid-template-columns: minmax(0, 1fr); } }  /* 详情里可点击复制的值：悬停轻微高亮并显示手型 */
+  .lg-tl-0 { background: #52c41a; } .lg-tl-1 { background: #faad14; }
+  .lg-tl-2 { background: #fa8c16; } .lg-tl-3 { background: #f5222d; }
+  .lat-foot { margin-top: 6px; font-size: 11px; color: #a6a6a6; }
+  @media (max-width: 1200px) { .lat-row3 { grid-template-columns: minmax(0, 1fr); } }  /* 详情里可点击复制的值：悬停轻微高亮并显示手型 */
   .copy-val {
     cursor: pointer;
     transition: opacity .15s ease, filter .15s ease;
