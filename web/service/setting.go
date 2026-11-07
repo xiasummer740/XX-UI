@@ -631,6 +631,7 @@ func (s *SettingService) GetVPSResetDay() (int, error) {
 	}
 	return s.getInt("defaultResetDay")
 }
+
 // GetLatencyConfig 返回三网延迟监测的运行参数。
 // interval 单位分钟（1..60），retentionDays 单位天（1..90）。
 func (s *SettingService) GetLatencyConfig() (enabled bool, interval int, retentionDays int, targetsJSON string) {
