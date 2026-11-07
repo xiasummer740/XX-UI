@@ -403,6 +403,12 @@ func (s *LatencyService) TrimToMaxRows(maxRows int) (int64, error) {
 
 // Summary 汇总最近 hours 小时的数据。
 func (s *LatencyService) Summary(hours int) (*LatencySummary, error) {
+	return s.SummaryRange(hours, 0, 0)
+}
+
+// SummaryRange 汇总指定区间（unix 秒）。from/to 都 > 0 且 from < to 时优先于 hours，
+// 供前端框选缩放用；否则退回「最近 hours 小时」。
+func (s *LatencyService) SummaryRange(hours int, from, to int64) (*LatencySummary, error) {
 	enabled, interval, retention, _ := s.settingService.GetLatencyConfig()
 	if hours <= 0 {
 		hours = 24
@@ -411,6 +417,17 @@ func (s *LatencyService) Summary(hours int) (*LatencySummary, error) {
 		hours = retention
 	}
 
+	since := time.Now().Add(-time.Duration(hours) * time.Hour).Unix()
+	until := int64(0)
+	if from > 0 && to > 0 && to > from {
+		since = from
+		until = to
+		hours = int((to - from + 3599) / 3600)
+		if hours <= 0 {
+			hours = 1
+		}
+	}
+	var rows []model.LatencySample
 	sum := &LatencySummary{
 		Hours:         hours,
 		Enabled:       enabled,
@@ -421,13 +438,11 @@ func (s *LatencyService) Summary(hours int) (*LatencySummary, error) {
 		Cells:         []LatencyCell{},
 	}
 
-	since := time.Now().Add(-time.Duration(hours) * time.Hour).Unix()
-	var rows []model.LatencySample
-	if err := database.GetDB().
-		Model(&model.LatencySample{}).
-		Where("ts >= ?", since).
-		Order("ts asc").
-		Find(&rows).Error; err != nil {
+	q := database.GetDB().Model(&model.LatencySample{}).Where("ts >= ?", since)
+	if until > 0 {
+		q = q.Where("ts <= ?", until)
+	}
+	if err := q.Order("ts asc").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 

@@ -38,7 +38,19 @@ func (a *LatencyController) summary(c *gin.Context) {
 			hours = n
 		}
 	}
-	sum, err := a.latencyService.Summary(hours)
+	// 框选缩放时前端会带 from/to（unix 秒），优先于 hours
+	var from, to int64
+	if v := c.PostForm("from"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			from = n
+		}
+	}
+	if v := c.PostForm("to"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			to = n
+		}
+	}
+	sum, err := a.latencyService.SummaryRange(hours, from, to)
 	jsonObj(c, sum, err)
 }
 
