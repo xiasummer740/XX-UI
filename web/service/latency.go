@@ -595,7 +595,7 @@ func (s *LatencyService) SummaryRange(hours int, from, to int64) (*LatencySummar
 		hourExpr := "CAST(strftime('%H', ts + 28800, 'unixepoch') AS INTEGER)"
 		err := database.GetDB().Model(&model.LatencySample{}).
 			Select("city, isp, "+hourExpr+" AS hour, AVG(avg_ms) AS avg_ms").
-			Where("ts >= ? AND ts < ?", now-7*86400, now-86400).
+			Where("ts >= ? AND ts < ?", now-7*86400, since).
 			Group("city, isp, " + hourExpr).
 			Scan(&brs).Error
 		if err == nil && len(brs) > 0 {

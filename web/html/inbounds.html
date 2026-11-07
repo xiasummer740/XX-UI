@@ -205,7 +205,7 @@
                             <a-radio-button value="p95">P95</a-radio-button>
                             <a-radio-button value="max">最大</a-radio-button>
                           </a-radio-group>
-                          <a-tag class="lat-base-tag" :class="{ 'lat-base-on': latencyBaselineOn }" title="过去 7 天同一小时的均值" @click="toggleBaseline">7 天基线</a-tag>
+                          <a-tag class="lat-base-tag" :class="{ 'lat-base-on': latencyBaselineOn }" title="latencyBaselineTip" @click="toggleBaseline">7 天基线</a-tag>
                           <span class="lat-hint-text">[[ latencyScopeHint ]]</span>
                         </span>
                       </div>
@@ -4742,6 +4742,12 @@ function subLinkToken(subId) {
           .map(ev => ({ key: 'em-' + ev.key, x: xOf(ev.ts).toFixed(1), y: (r.lineBottom + 9).toFixed(1) }));
       },
       // 基线：每个运营商取「所选城市 × 过去 7 天同一小时」的均值
+      // 基线没有数据时（新部署不足 7 天历史）在开关上说明原因
+      latencyBaselineTip() {
+        const has = this.latencyBaselineData.length > 0;
+        if (has) return '过去 7 天同一小时的均值（虚线）· 点击隐藏';
+        return '基线暂无数据：需要 7 天以上历史（当前保留期内数据还不够）';
+      },
       latencyBaselineData() {
         const cells = this.latencyScopedCells();
         const groups = {};
