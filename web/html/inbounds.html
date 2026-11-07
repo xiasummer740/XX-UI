@@ -226,7 +226,7 @@
                             <span class="lat-tip-val">[[ r.value ]]<em>ms</em></span>
                             <span class="lat-tip-loss" v-if="r.loss > 0">丢 [[ r.loss ]]%</span>
                             <div class="lat-tip-cities">
-                              <span v-for="c in r.cities" :key="r.name + c.city">{{ c.city }} [[ c.value ]]</span>
+                              <span v-for="c in r.cities" :key="r.name + c.city">[[ c.city ]] [[ c.value ]]</span>
                             </div>
                           </div>
                         </div>
