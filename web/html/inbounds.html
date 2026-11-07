@@ -195,8 +195,11 @@
                         <text v-for="t in chartTiny.yTicks" :key="'tyt-' + t.label" x="40"
                           :y="t.yf + 3" text-anchor="end" class="lg-axis">[[ t.label ]]</text>
                         <g v-for="s in chartTiny.series" :key="'tl-' + s.name">
-                          <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1.8"
+                          <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1.6"
                             stroke-linejoin="round" stroke-linecap="round"></polyline>
+                          <circle v-for="(b, bi) in s.bad" :key="'bad-' + s.name + bi"
+                            :cx="b.x" :cy="b.y" r="2.4" fill="#fff" stroke="#f5222d" stroke-width="1.4">
+                            <title>该时刻有城市丢包</title></circle>
                           <circle :cx="s.last.x" :cy="s.last.y" r="3" :fill="s.color"
                             stroke="#fff" stroke-width="1"></circle>
                         </g>
