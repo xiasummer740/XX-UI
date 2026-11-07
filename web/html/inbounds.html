@@ -165,6 +165,7 @@
                     </a-radio-group>
                     <a-button size="small" icon="thunderbolt" :loading="latencyTesting"
                       @click="runLatencyNow">测</a-button>
+                    <span v-if="latencyRunNote" class="lat-run-note">[[ latencyRunNote ]]</span>
                     <a-button size="small" @click="latencyExpanded = !latencyExpanded">
                       [[ latencyExpanded ? '收起' : '展开' ]]
                     </a-button>
@@ -177,7 +178,9 @@
                     <div class="lat-chart-wrap">
                       <div class="lat-chart-head">
                         <span class="lat-chart-title">RTT 到国内三网 <em class="lat-unit">ms</em><b class="lat-axis-note">· [[ latencyMetricLabel() ]]</b></span>
-                        <span v-for="s in latencyIspLegend" :key="'isp-' + s.name" class="lat-legend-chip">
+                        <span v-for="s in latencyIspLegend" :key="'isp-' + s.name" class="lat-legend-chip"
+                          :class="{ 'lat-off': s.hidden }" :title="s.hidden ? '点击恢复显示' : '点击隐藏'"
+                          @click="toggleLatencyIsp(s.name)">
                           <i :style="{ background: s.color }"></i>
                           <b>[[ s.name ]]</b>
                           <em>[[ s.ms ]]</em>
@@ -193,7 +196,8 @@
                       </div>
                       <div class="lat-svg-box" ref="latBox">
                         <svg class="lat-trend" viewBox="0 0 1000 200"
-                          @mousemove="onLatHover($event)" @mouseleave="latHover = null">
+                          @mousemove="onLatHover($event)" @mouseleave="latHover = null"
+                          @touchstart="onLatTouch($event)" @touchmove="onLatTouch($event)" @touchend="latHover = null">
                           <defs>
                             <clipPath id="latPlotClip">
                               <rect :x="chartTiny.range.padL" :y="chartTiny.range.padT"
@@ -202,6 +206,13 @@
                           </defs>
                           <polygon v-for="b in chartTiny.bands" :key="'bd-' + b.name" :points="b.points"
                             :fill="b.color" fill-opacity="0.085" stroke="none"></polygon>
+                          <!-- 阈值参考线：落在量程内画虚线，超出量程的右上角留标 -->
+                          <line v-for="r in chartTiny.refLines" :key="'rf-' + r.v" x1="44" :y1="r.y"
+                            x2="992" :y2="r.y" class="lat-ref-line"></line>
+                          <text v-for="r in chartTiny.refLines" :key="'rft-' + r.v" x="990"
+                            :y="r.y - 3" text-anchor="end" class="lat-ref-label">[[ r.label ]]</text>
+                          <text v-for="(r, ri) in chartTiny.refAway" :key="'rfa-' + r.v" x="990"
+                            :y="14 + ri * 11" text-anchor="end" class="lat-ref-away">[[ r.dir === 'up' ? '▲' : '▼' ]][[ r.v ]]</text>
                           <line v-for="t in chartTiny.yTicks" :key="'ty-' + t.label" x1="44" :y1="t.y"
                             x2="992" :y2="t.y" class="lg-grid"></line>
                           <line v-for="t in chartTiny.xTicks" :key="'vx-' + t.label" :x1="t.xf" y1="8"
@@ -262,7 +273,10 @@
                           · 平均抖动 [[ latencyCounts.jitter ]] ms
                           · [[ latencySamples ]] 轮/格
                         </div>
-                        <svg class="lg-svg" viewBox="0 0 1000 210">
+                        <div class="lat-svg-box" ref="mainBox">
+                        <svg class="lg-svg" viewBox="0 0 1000 210"
+                          @mousemove="onLatHoverMain($event)" @mouseleave="$set(latHoverMap, 'main', null)"
+                          @touchstart="onLatHoverMain($event)">
                           <line v-for="t in chartMain.yTicks" :key="'my-' + t.label" x1="46" :y1="t.y"
                             x2="992" :y2="t.y" class="lg-grid"></line>
                           <text v-for="t in chartMain.yTicks" :key="'myt-' + t.label" x="42"
@@ -275,7 +289,18 @@
                           </g>
                           <text v-for="t in chartMain.xTicks" :key="'mx-' + t.label" :x="t.xf" y="206"
                             :text-anchor="t.anchor" class="lg-axis">[[ t.label ]]</text>
+                          <line v-if="latHoverMap.main" :x1="latHoverMap.main.x" y1="8" :x2="latHoverMap.main.x" :y2="196" class="lat-cross"></line>
+                          <circle v-for="h in (latHoverMap.main ? latHoverMap.main.marks : [])" :key="'mh-' + h.name"
+                            :cx="h.x" :cy="h.y" r="2.6" fill="#fff" :stroke="h.color" stroke-width="1.6"></circle>
                         </svg>
+                        <div v-if="latHoverMap.main" class="lat-tip" :style="latHoverMap.main.tipStyle">
+                          <div class="lat-tip-time">[[ latHoverMap.main.time ]]</div>
+                          <div v-for="r in latHoverMap.main.rows" :key="'mtip-' + r.name" class="lat-tip-row">
+                            <span class="lat-tip-name" :style="{ color: r.color }">[[ r.name ]]</span>
+                            <span class="lat-tip-val">[[ r.value ]]<em>ms</em></span>
+                          </div>
+                        </div>
+                        </div>
                         <div class="lat-legend">
                           <span v-for="l in latencyLegend" :key="'lg-' + l.name" class="lat-legend-item"
                             :class="{ 'lat-off': l.hidden }" :title="l.tip"
@@ -293,7 +318,10 @@
                         <div class="lat-row3">
                           <div v-for="d in latencyDailyCharts" :key="'dc-' + d.key">
                             <div class="lg-panel-head">[[ d.title ]]</div>
-                            <svg class="lg-svg" viewBox="0 0 340 130">
+                            <div class="lat-svg-box" :ref="'dailyBox_' + d.key">
+                            <svg class="lg-svg" viewBox="0 0 340 130"
+                              @mousemove="onLatHoverDaily($event, d)" @mouseleave="$set(latHoverMap, 'd' + d.key, null)"
+                              @touchstart="onLatHoverDaily($event, d)">
                               <line v-for="t in d.chart.yTicks" :key="d.key + '-' + t.label" x1="38"
                                 :y1="t.y" x2="336" :y2="t.y" class="lg-grid"></line>
                               <text v-for="t in d.chart.yTicks" :key="d.key + '-t-' + t.label" x="34"
@@ -306,14 +334,28 @@
                               </g>
                               <text v-for="t in d.chart.xTicks" :key="d.key + '-x-' + t.label" :x="t.xf"
                                 y="126" :text-anchor="t.anchor" class="lg-axis">[[ t.label ]]</text>
+                              <line v-if="latHoverMap['d' + d.key]" :x1="latHoverMap['d' + d.key].x" y1="6" :x2="latHoverMap['d' + d.key].x" :y2="120" class="lat-cross"></line>
+                              <circle v-for="h in (latHoverMap['d' + d.key] ? latHoverMap['d' + d.key].marks : [])" :key="d.key + '-hh-' + h.name"
+                                :cx="h.x" :cy="h.y" r="2" fill="#fff" :stroke="h.color" stroke-width="1.4"></circle>
                             </svg>
+                            <div v-if="latHoverMap['d' + d.key]" class="lat-tip lat-tip-sm" :style="latHoverMap['d' + d.key].tipStyle">
+                              <div class="lat-tip-time">[[ latHoverMap['d' + d.key].time ]]</div>
+                              <div v-for="r2 in latHoverMap['d' + d.key].rows" :key="d.key + '-tr-' + r2.name" class="lat-tip-row">
+                                <span class="lat-tip-name" :style="{ color: r2.color }">[[ r2.name ]]</span>
+                                <span class="lat-tip-val">[[ r2.value ]]<em>ms</em></span>
+                              </div>
+                            </div>
+                            </div>
                           </div>
                         </div>
                       </a-tab-pane>
                       <a-tab-pane key="jitter" tab="抖动">
                         <div class="lg-panel-head">每轮 ping 的 mdev
                           <span class="lg-panel-sub">越低越稳</span></div>
-                        <svg class="lg-svg" viewBox="0 0 1000 160">
+                        <div class="lat-svg-box" ref="jitterBox">
+                        <svg class="lg-svg" viewBox="0 0 1000 160"
+                          @mousemove="onLatHoverJitter($event)" @mouseleave="$set(latHoverMap, 'jitter', null)"
+                          @touchstart="onLatHoverJitter($event)">
                           <line v-for="t in chartJitter.yTicks" :key="'jy-' + t.label" x1="38" :y1="t.y"
                             x2="996" :y2="t.y" class="lg-grid"></line>
                           <text v-for="t in chartJitter.yTicks" :key="'jyt-' + t.label" x="34"
@@ -324,7 +366,18 @@
                           </g>
                           <text v-for="t in chartJitter.xTicks" :key="'jx-' + t.label" :x="t.xf"
                             y="156" :text-anchor="t.anchor" class="lg-axis">[[ t.label ]]</text>
+                          <line v-if="latHoverMap.jitter" :x1="latHoverMap.jitter.x" y1="6" :x2="latHoverMap.jitter.x" :y2="150" class="lat-cross"></line>
+                          <circle v-for="h in (latHoverMap.jitter ? latHoverMap.jitter.marks : [])" :key="'jh-' + h.name"
+                            :cx="h.x" :cy="h.y" r="2.4" fill="#fff" :stroke="h.color" stroke-width="1.4"></circle>
                         </svg>
+                        <div v-if="latHoverMap.jitter" class="lat-tip lat-tip-sm" :style="latHoverMap.jitter.tipStyle">
+                          <div class="lat-tip-time">[[ latHoverMap.jitter.time ]]</div>
+                          <div v-for="r3 in latHoverMap.jitter.rows" :key="'jtr-' + r3.name" class="lat-tip-row">
+                            <span class="lat-tip-name" :style="{ color: r3.color }">[[ r3.name ]]</span>
+                            <span class="lat-tip-val">[[ r3.value ]]<em>ms</em></span>
+                          </div>
+                        </div>
+                        </div>
                       </a-tab-pane>
                       <a-tab-pane key="stab" tab="稳定性">
                         <div class="lg-panel-head">时间线
@@ -1870,6 +1923,7 @@ function subLinkToken(subId) {
       latencyHours: 24,
       latencyLoading: false,
       latencyTesting: false,
+      latencyRunNote: '',
       latency: {
         enabled: true, interval: 5, retentionDays: 30,
         cities: [], isps: [], cells: [], updatedAt: 0,
@@ -1877,8 +1931,10 @@ function subLinkToken(subId) {
       latencyExpanded: false,
       latencyMetric: 'avg',
       latHover: null,
+      latHoverMap: {},
       latencyTab: 'trend',
       latencyHidden: {},
+      latencyIspHidden: {},
       // 颜色按运营商分（电信蓝 / 联通绿 / 移动橙），线型按城市分 —— 12 条线才分得清
       latencyIspColors: { '电信': '#1d6ff2', '联通': '#12b76a', '移动': '#f79009' },
       latencyCityDash: { '深圳': '', '北京': '7 4', '上海': '2 3', '成都': '10 3 2 3' },
@@ -3449,11 +3505,16 @@ function subLinkToken(subId) {
       },
       async runLatencyNow() {
         this.latencyTesting = true;
+        const t0 = Date.now();
         try {
           const msg = await HttpUtil.post('/panel/api/latency/run', {});
           if (msg && msg.success && msg.obj && msg.obj.summary) {
             this.latency = msg.obj.summary;
-            this.$message.success('这一轮测完了（' + msg.obj.count + ' 个测点）');
+            const cells = (msg.obj.summary.cells || []);
+            const ok = cells.filter(c => (c.lastAvgMs || 0) > 0).length;
+            const secs = ((Date.now() - t0) / 1000).toFixed(1);
+            this.latencyRunNote = '上轮 ' + secs + 's · ' + ok + '/' + (msg.obj.count || cells.length) + ' 通';
+            this.$message.success('这一轮测完了（' + msg.obj.count + ' 个测点，' + secs + 's）');
           } else {
             this.$message.error('探测失败：' + ((msg && msg.msg) || '未知错误'));
           }
@@ -3469,12 +3530,68 @@ function subLinkToken(subId) {
         if (this.latencyMetric === 'max') return 'maxMs';
         return 'avgMs';
       },
+      // 主图图例点击：临时隐藏/恢复某条运营商曲线
+      toggleLatencyIsp(name) {
+        const next = Object.assign({}, this.latencyIspHidden);
+        if (next[name]) delete next[name]; else next[name] = true;
+        this.latencyIspHidden = next;
+      },
       latencyMetricLabel() {
         if (this.latencyMetric === 'p95') return 'P95';
         if (this.latencyMetric === 'max') return '最大';
         return '平均';
       },
       // 悬停：把鼠标位置换算成时间，取每个测点最接近的采样，弹出该时刻明细
+      // 触摸屏：把 touch 坐标换算成鼠标事件，复用同一套悬停逻辑
+      onLatTouch(e) {
+        const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]);
+        if (!t) return;
+        this.onLatHover({ clientX: t.clientX, clientY: t.clientY });
+      },
+      // 通用悬停：给定图表与容器，算出该时刻每个序列最近点的读数（展开区各图共用）
+      latHoverSimple(e, chart, box) {
+        if (!chart || !box || !chart.series.length || !chart.range) return null;
+        const r = chart.range;
+        const rect = box.getBoundingClientRect();
+        if (!rect.width) return null;
+        const vbW = r.w || 1000;
+        const vbX = ((e.clientX - rect.left) / rect.width) * vbW;
+        const ratio = Math.min(1, Math.max(0, (vbX - r.padL) / r.plotW));
+        const ts = r.t0 + ratio * (r.t1 - r.t0);
+        const xOfTs = t => r.padL + ((t - r.t0) / (r.t1 - r.t0 || 1)) * r.plotW;
+        const yOfVal = v => r.padT + (1 - (v - r.lo) / (r.hi - r.lo || 1)) * r.plotH;
+        const marks = [];
+        const rows = [];
+        chart.series.forEach(s => {
+          const raw = s.raw || [];
+          if (!raw.length) return;
+          let best = raw[0], bestD = Infinity;
+          raw.forEach(pt => {
+            const d = Math.abs(pt[0] - ts);
+            if (d < bestD) { bestD = d; best = pt; }
+          });
+          marks.push({ name: s.name, color: s.color, x: xOfTs(best[0]).toFixed(1), y: yOfVal(best[1]).toFixed(1) });
+          rows.push({ name: s.name, color: s.color, value: Math.round(best[1]), loss: 0, cities: [] });
+        });
+        if (!rows.length) return null;
+        const when = new Date(Math.round(ts) * 1000);
+        const pct = (xOfTs(ts) / vbW) * 100;
+        return {
+          x: xOfTs(ts).toFixed(1),
+          time: when.toLocaleTimeString('zh-CN', { hour12: false }),
+          marks: marks, rows: rows,
+          tipStyle: { left: pct + '%', transform: pct > 60 ? 'translateX(-104%)' : 'translateX(4%)' },
+        };
+      },
+      onLatHoverMain(e) {
+        this.$set(this.latHoverMap, 'main', this.latHoverSimple(e, this.chartMain, this.$refs.mainBox));
+      },
+      onLatHoverJitter(e) {
+        this.$set(this.latHoverMap, 'jitter', this.latHoverSimple(e, this.chartJitter, this.$refs.jitterBox));
+      },
+      onLatHoverDaily(e, d) {
+        this.$set(this.latHoverMap, 'd' + d.key, this.latHoverSimple(e, d.chart, this.$refs['dailyBox_' + d.key]));
+      },
       onLatHover(e) {
         const chart = this.chartTiny;
         const box = this.$refs.latBox;
@@ -3541,7 +3658,8 @@ function subLinkToken(subId) {
             transform: pct > 60 ? 'translateX(-104%)' : 'translateX(4%)',
           },
         };
-      },      latencyColorOf(isp, idx) {
+      },
+      latencyColorOf(isp, idx) {
         return this.latencyIspColors[isp] || this.latencyPalette[idx % this.latencyPalette.length];
       },
       latencyDashOf(city, idx) {
@@ -3553,6 +3671,7 @@ function subLinkToken(subId) {
         const order = [];
         const groups = {};
         cells.forEach((c, i) => {
+          if (this.latencyIspHidden[c.isp]) return;
           if (!groups[c.isp]) {
             groups[c.isp] = { order: order.length, color: this.latencyColorOf(c.isp, i), map: {}, bad: {} };
             order.push(c.isp);
@@ -3585,6 +3704,7 @@ function subLinkToken(subId) {
         const groups = {};
         const order = [];
         cells.forEach((c, i) => {
+          if (this.latencyIspHidden[c.isp]) return;
           if (!groups[c.isp]) {
             groups[c.isp] = { color: this.latencyColorOf(c.isp, i), map: {} };
             order.push(c.isp);
@@ -3671,6 +3791,10 @@ function subLinkToken(subId) {
           const q = pp => sorted[Math.min(sorted.length - 1, Math.max(0, Math.round((sorted.length - 1) * pp)))];
           lo = Math.min(q(0.02), q(0.3));
           hi = Math.max(q(0.98), q(0.7));
+          // 阈值线只比上限高一点时，把它拉进画面（否则 170 差 1ms 就看不见了）
+          (o.refLines || []).forEach(v => {
+            if (v > hi && v <= hi * 1.15) hi = v;
+          });
         }
         const padY = (hi - lo) * 0.12;
         lo = Math.max(0, lo - padY);
@@ -3734,6 +3858,14 @@ function subLinkToken(subId) {
           });
         }
 
+        // 阈值参考线：落在量程内的画虚线，超出量程的在右上角留一个小标
+        const refIn = (o.refLines || []).filter(v => v > 0);
+        const refLines = refIn.filter(v => v >= lo && v <= hi).map(v => ({
+          v: v, y: yOf(v).toFixed(1), label: v,
+        }));
+        const refAway = refIn.filter(v => v > hi).map(v => ({ v: v, dir: 'up' }))
+          .concat(refIn.filter(v => v < lo).map(v => ({ v: v, dir: 'down' })));
+
         const yTicks = [];
         const steps = o.yTicks || 4;
         for (let i = 0; i <= steps; i++) {
@@ -3768,6 +3900,7 @@ function subLinkToken(subId) {
         return {
           series: series, bands: bands, yTicks: yTicks, xTicks: xTicks,
           range: range, spikes: spikes, lossStrip: lossStrip,
+          refLines: refLines, refAway: refAway,
         };
       },
       // 横轴刻度：窗口跨天显示 MM/DD，同一天显示 HH:mm
@@ -4252,6 +4385,27 @@ function subLinkToken(subId) {
       }
     },
     computed: {
+      latencyIspLegend() {
+        const cells = (this.latency && this.latency.cells) || [];
+        const field = this.latencyMetricField();
+        const groups = {};
+        const order = [];
+        cells.forEach((c, i) => {
+          if (!groups[c.isp]) {
+            groups[c.isp] = { name: c.isp, color: this.latencyColorOf(c.isp, i), sum: 0, n: 0 };
+            order.push(c.isp);
+          }
+          const pts = c.series || [];
+          const last = pts.length ? pts[pts.length - 1] : null;
+          const v = last ? Number(last[field]) || 0 : 0;
+          if (v > 0) { groups[c.isp].sum += v; groups[c.isp].n++; }
+        });
+        return order.map(i => {
+          const g = groups[i];
+          const hid = !!this.latencyIspHidden[g.name];
+          return { name: g.name, color: g.color, hidden: hid, ms: g.n ? Math.round(g.sum / g.n) + ' ms' : '—' };
+        });
+      },
       // 复制客户端弹窗里的「邮箱预览」
       previewEmails() {
         if (!this.copyClientsModal || !this.copyClientsModal.targetInboundId) return [];
@@ -4280,6 +4434,7 @@ function subLinkToken(subId) {
           padLeft: 44, padBottom: 26, padTop: 10,
           bands: this.latencyIspBands(),
           loss: this.latencyLossSeries,
+          refLines: this.latencyRefLines,
         });
       },
       // 全部测点在每个采样时刻的「最大丢包率」，用于横轴下方的丢包条带
@@ -4295,7 +4450,7 @@ function subLinkToken(subId) {
       },
       // 窗口摘要：P50 / P95 / P99 / 最大 / 丢包率 / 样本数（按所有测点合并算）
       latencyWindowStats() {
-        const cells = (this.latency && this.latency.cells) || [];
+        const cells = ((this.latency && this.latency.cells) || []).filter(c => !this.latencyIspHidden[c.isp] && !this.latencyHidden[c.city + c.isp]);
         const vals = [];
         let lossSum = 0, lossN = 0, fail = 0, seen = 0;
         cells.forEach(c => (c.series || []).forEach(pt => {
@@ -4319,30 +4474,17 @@ function subLinkToken(subId) {
           { label: '采样点', value: seen + '' },
         ];
       },      // 图上方的运营商图例（带当前值）
-      latencyIspLegend() {
-        const cells = (this.latency && this.latency.cells) || [];
-        const field = this.latencyMetricField();
-        const groups = {};
-        const order = [];
-        cells.forEach((c, i) => {
-          if (!groups[c.isp]) {
-            groups[c.isp] = { name: c.isp, color: this.latencyColorOf(c.isp, i), sum: 0, n: 0 };
-            order.push(c.isp);
-          }
-          const pts = c.series || [];
-          const last = pts.length ? pts[pts.length - 1] : null;
-          const v = last ? Number(last[field]) || 0 : 0;
-          if (v > 0) { groups[c.isp].sum += v; groups[c.isp].n++; }
-        });
-        return order.map(i => {
-          const g = groups[i];
-          return { name: g.name, color: g.color, ms: g.n ? Math.round(g.sum / g.n) + ' ms' : '—' };
-        });
+      // 阈值参考线：跟底部 legend 的口径一致（170 关注 / 220 告警）
+      latencyRefLines() {
+        const cfg = this.latencyCfg || {};
+        const warn = Number(cfg.warnMs) || 170;
+        const crit = Number(cfg.critMs) || 220;
+        return [warn, crit].filter(v => v > 0);
       },
       // 展开后的主图
       chartMain() {
         return this.buildLatencyChart(this.latencySeries('main'),
-          { width: 1000, height: 210, yTicks: 4, xTicks: 5, padBottom: 18 });
+            { width: 1000, height: 210, yTicks: 4, xTicks: 5, padBottom: 18, refLines: this.latencyRefLines });
       },
       chartJitter() {
         return this.buildLatencyChart(this.latencySeries('jitter'),
@@ -4549,7 +4691,13 @@ function subLinkToken(subId) {
     font-size: 11px; color: #8c8c8c; font-variant-numeric: tabular-nums;
   }
   .lat-stat-line b { font-weight: 500; color: #bfbfbf; margin-right: 4px; }
-  .lat-trend { display: block; width: 100%; height: auto; }  /* 图表容器与悬停提示 */
+  .lat-trend { display: block; width: 100%; height: auto; }  .lat-ref-line { stroke: rgba(250, 173, 20, .55); stroke-width: 1; stroke-dasharray: 5 4; }
+  .lat-ref-label { font-size: 9px; fill: rgba(212, 140, 10, .95); font-variant-numeric: tabular-nums; }
+  .lat-ref-away { font-size: 9px; fill: rgba(212, 140, 10, .8); }
+  .lat-run-note { font-size: 10px; color: #8c8c8c; font-variant-numeric: tabular-nums; }
+  .lat-legend-chip { cursor: pointer; transition: opacity .15s ease; }
+  .lat-legend-chip.lat-off { opacity: .35; text-decoration: line-through; }
+  .lat-tip-sm { font-size: 10px; padding: 4px 6px; }  /* 图表容器与悬停提示 */
   .lat-svg-box { position: relative; }
   .lat-cross { stroke: rgba(0, 0, 0, .28); stroke-width: 1; stroke-dasharray: 3 3; }
   .lat-tip {
