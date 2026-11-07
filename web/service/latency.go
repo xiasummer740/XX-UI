@@ -581,7 +581,6 @@ func (s *LatencyService) SummaryRange(hours int, from, to int64) (*LatencySummar
 		sum.Cells = append(sum.Cells, cell)
 	}
 
-
 	// 基线：过去 7 天「同一小时」的均值（24 个槽），只在看 24h 这类短窗口时算，
 	// 一次 GROUP BY 只回 12×24 行，代价可控。
 	if hours <= 26 && len(sum.Cells) > 0 {
