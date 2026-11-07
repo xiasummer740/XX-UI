@@ -326,9 +326,18 @@ func (s *Server) startTask() {
 	// Check if xray needs to be restarted every 30 seconds
 	s.cron.AddFunc("@every 30s", func() {
 		if s.xrayService.IsNeedRestartAndSetFalse() {
-			err := s.xrayService.RestartXray(false)
-			if err != nil {
+			// 必须 isForce=true。原因：IsNeedRestartAndSetFalse() 已经把
+			// isNeedXrayRestart 置为 false 了，而 RestartXray(false) 内部有短路：
+			//   if !isForce && p.GetConfig().Equals(xrayConfig) && !isNeedXrayRestart.Load() { return nil }
+			// 标记已被清 → !Load() 恒为 true，只要内存配置和磁盘配置恰好相等
+			// 就直接 return nil：不重启、不报错，标记也没了。结果是新加的入站
+			// 永远加载不进来，端口一直不监听，而面板上一切看着正常。
+			// 2026-11-07 入站 21（2087）就是这么变成"不可用"的。
+			if err := s.xrayService.RestartXray(true); err != nil {
 				logger.Error("restart xray failed:", err)
+				// 失败要把标记放回去，否则这一轮消费完就再没机会 ——
+				// 只能等用户手动点重启，或者等 6 小时那个定时任务兜底。
+				s.xrayService.SetToNeedRestart()
 			}
 		}
 	})
