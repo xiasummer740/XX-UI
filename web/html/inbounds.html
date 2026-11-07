@@ -205,6 +205,7 @@
                             <a-radio-button value="p95">P95</a-radio-button>
                             <a-radio-button value="max">最大</a-radio-button>
                           </a-radio-group>
+                          <a-tag class="lat-base-tag lat-tight-tag" :class="{ 'lat-base-on': latencyTightOn }" title="忽略 170/220 阈值线，只按曲线自身量程画，正常区间细节更清楚" @click="toggleTight">窄量程</a-tag>
                           <a-tag class="lat-base-tag" :class="{ 'lat-base-on': latencyBaselineOn }" title="latencyBaselineTip" @click="toggleBaseline">7 天基线</a-tag>
                           <span class="lat-hint-text">[[ latencyScopeHint ]]</span>
                         </span>
@@ -1980,6 +1981,7 @@ function subLinkToken(subId) {
       latencyRange: null,
       latBrush: null,
       latPinned: false,
+      latencyTightOn: (() => { try { return localStorage.getItem('latTight') === '1'; } catch (e) { return false; } })(),
       latencyBaselineOn: (() => { try { return localStorage.getItem('latBase') !== '0'; } catch (e) { return true; } })(),
       latHoverTs: null,
       latLegendOpen: false,
@@ -3739,6 +3741,10 @@ function subLinkToken(subId) {
         return p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds());
       },
       // 点击图表钉住/取消浮层，鼠标移开不消失，方便抄数字
+      toggleTight() {
+        this.latencyTightOn = !this.latencyTightOn;
+        try { localStorage.setItem('latTight', this.latencyTightOn ? '1' : '0'); } catch (e) {}
+      },
       toggleBaseline() {
         this.latencyBaselineOn = !this.latencyBaselineOn;
         try { localStorage.setItem('latBase', this.latencyBaselineOn ? '1' : '0'); } catch (e) {}
@@ -4065,10 +4071,12 @@ function subLinkToken(subId) {
           const q = pp => sorted[Math.min(sorted.length - 1, Math.max(0, Math.round((sorted.length - 1) * pp)))];
           lo = Math.min(q(0.02), q(0.3));
           hi = Math.max(q(0.98), q(0.7));
-          // 阈值线只比上限高一点时，把它拉进画面（否则 170 差 1ms 就看不见了）
-          (o.refLines || []).forEach(v => {
-            if (v > hi && v <= hi * 1.15) hi = v;
-          });
+          // 阈值线只比上限高一点时把它拉进画面；窄量程模式下不拉，保住正常区间的细节
+          if (o.pullRef !== false) {
+            (o.refLines || []).forEach(v => {
+              if (v > hi && v <= hi * 1.15) hi = v;
+            });
+          }
         }
         const padY = (hi - lo) * 0.12;
         lo = Math.max(0, lo - padY);
@@ -4845,7 +4853,7 @@ function subLinkToken(subId) {
           padLeft: 44, padBottom: 26, padTop: 10,
           bands: this.latencyIspBands(),
           loss: this.latencyLossSeries,
-          refLines: this.latencyRefLines, typical: true,
+          refLines: this.latencyRefLines, typical: true, pullRef: !this.latencyTightOn,
           baseline: this.latencyBaselineOn ? this.latencyBaselineData : [],
         });
       },
@@ -5335,6 +5343,25 @@ function subLinkToken(subId) {
   }
   .copy-val:active {
     opacity: .5;
+  }
+  /* 窄屏（手机 / 小平板）：工具条折行，图别被压扁 */
+  @media (max-width: 900px) {
+    .lat-scope { width: 108px; }
+    .lat-tight-tag, .lat-base-tag { font-size: 9px; }
+    .lat-loss-wrap { flex-direction: column; }
+    .lat-ev-list { max-height: 120px; }
+    .lat-meta { white-space: normal; line-height: 1.7; }
+    .lat-card .ant-card-extra .ant-space { display: flex; flex-wrap: wrap; row-gap: 4px; }
+  }
+  @media (max-width: 560px) {
+    .lat-card .ant-card-head-wrapper { flex-direction: column; align-items: stretch; }
+    .lat-card .ant-card-head { padding-left: 10px; padding-right: 10px; }
+    .lat-card .ant-card-head-title { padding: 6px 0 2px; }
+    .lat-card .ant-card-extra { width: 100%; margin: 0 0 4px; float: none; }
+    .lat-card .ant-card-extra .ant-space { justify-content: flex-start; }
+    .lat-scope { width: 92px; }
+    .lat-health { display: none; }
+    .lat-legend { flex-wrap: wrap; row-gap: 2px; }
   }
 </style>
 {{ template "page/body_end" .}}
