@@ -22,64 +22,75 @@
           </a-row>
           <a-row :gutter="[isMobile ? 8 : 16, isMobile ? 0 : 12]" v-else>
             <a-col>
-              <a-card size="small" class="ib-stat-card" :body-style="{ padding: '12px 16px' }" hoverable>
-                <div class="ib-stat-head">
-                  <span class="ib-stat-hint">统计窗口：当前账号下所有入站</span>
-                  <span class="ib-stat-refresh">
-                    <a-icon type="clock-circle"></a-icon>
-                    [[ lastRefreshAt ? '最后刷新 ' + lastRefreshAt : '等待首次刷新' ]]
-                  </span>
-                </div>
-                <a-row :gutter="[16, 12]" type="flex" align="middle">
-                  <!-- 主指标：总用量（含上行/下行细分） -->
-                  <a-col :sm="12" :md="6">
-                    <div class="ib-metric ib-metric-primary">
-                      <div class="ib-metric-title">{{ i18n "pages.inbounds.totalUsage" }}</div>
-                      <div class="ib-metric-value">[[ SizeFormatter.sizeFormat(total.up + total.down) ]]</div>
-                      <div class="ib-metric-sub">
-                        <span>↑ [[ SizeFormatter.sizeFormat(total.up) ]]</span>
-                        <span>↓ [[ SizeFormatter.sizeFormat(total.down) ]]</span>
-                      </div>
-                    </div>
-                  </a-col>
-                  <!-- 套餐用量：带进度和剩余天数 -->
-                  <a-col :sm="12" :md="6">
-                    <div class="ib-metric" style="cursor: pointer;" @click="openVpsModal">
-                      <div class="ib-metric-title">
-                        套餐用量
-                        <a-icon type="right" class="ib-metric-go"></a-icon>
-                      </div>
-                      <div class="ib-metric-value">[[ vpsQuotaTitle ]]</div>
-                      <a-progress v-if="vpsUsage && vpsUsage.quotaBytes > 0"
-                        :percent="Math.min(100, Number((vpsUsage.percent || 0).toFixed(1)))"
-                        :show-info="false" size="small" :stroke-color="vpsQuotaColor"
-                        style="margin: 2px 0 0 0;"></a-progress>
-                      <div v-if="vpsUsage && vpsUsage.quotaBytes > 0" class="ib-metric-sub">
-                        <span>[[ vpsUsage.percent.toFixed(1) ]]%</span>
-                        <span>剩 [[ vpsUsage.daysLeft ]] 天</span>
-                      </div>
-                    </div>
-                  </a-col>
-                  <!-- 次要指标 -->
+              <a-card size="small" :style="{ padding: '16px' }" hoverable>
+                <a-row>
                   <a-col :sm="12" :md="4">
-                    <div class="ib-metric">
-                      <div class="ib-metric-title">{{ i18n "pages.inbounds.allTimeTrafficUsage" }}</div>
-                      <div class="ib-metric-value">[[ SizeFormatter.sizeFormat(total.allTime) ]]</div>
-                      <div class="ib-metric-sub"><span>历史累计</span></div>
+                    <a-custom-statistic
+                      title='{{ i18n "pages.inbounds.totalDownUp" }}'
+                      :value="`${SizeFormatter.sizeFormat(total.up)} / ${SizeFormatter.sizeFormat(total.down)}`">
+                      <template #prefix>
+                        <a-icon type="swap"></a-icon>
+                      </template>
+                    </a-custom-statistic>
+                  </a-col>
+                  <a-col :sm="12" :md="4">
+                    <a-custom-statistic
+                      title='{{ i18n "pages.inbounds.totalUsage" }}'
+                      :value="SizeFormatter.sizeFormat(total.up + total.down)"
+                      :style="{ marginTop: isMobile ? '10px' : 0 }">
+                      <template #prefix>
+                        <a-icon type="pie-chart"></a-icon>
+                      </template>
+                    </a-custom-statistic>
+                  </a-col>
+                  <a-col :sm="12" :md="4">
+                    <a-custom-statistic title='套餐用量' :value="vpsQuotaTitle"
+                      :style="{ marginTop: isMobile ? '10px' : 0 }"
+                      style="cursor: pointer;" @click="openVpsModal">
+                      <template #prefix>
+                        <a-icon :type="vpsQuotaIcon" :style="{ color: vpsQuotaColor }"></a-icon>
+                      </template>
+                    </a-custom-statistic>
+                    <a-progress v-if="vpsUsage && vpsUsage.quotaBytes > 0"
+                      :percent="Math.min(100, Number((vpsUsage.percent || 0).toFixed(1)))"
+                      :show-info="false" size="small" :stroke-color="vpsQuotaColor"
+                      style="margin: -6px 0 0 0;"></a-progress>
+                    <div v-if="vpsUsage && vpsUsage.quotaBytes > 0"
+                      :style="{ fontSize: '12px', color: vpsQuotaColor, marginTop: '2px' }">
+                      [[ vpsUsage.percent.toFixed(1) ]]% · 剩 [[ vpsUsage.daysLeft ]] 天
                     </div>
                   </a-col>
                   <a-col :sm="12" :md="4">
-                    <div class="ib-metric">
-                      <div class="ib-metric-title">{{ i18n "pages.inbounds.inboundCount" }}</div>
-                      <div class="ib-metric-value">[[ dbInbounds.length ]]</div>
-                      <div class="ib-metric-sub"><span>[[ totalOnline ]] 在线客户端</span></div>
-                    </div>
+                    <a-custom-statistic
+                      title='{{ i18n "pages.inbounds.allTimeTrafficUsage" }}'
+                      :value="SizeFormatter.sizeFormat(total.allTime)"
+                      :style="{ marginTop: isMobile ? '10px' : 0 }">
+                      <template #prefix>
+                        <a-icon type="history"></a-icon>
+                      </template>
+                    </a-custom-statistic>
                   </a-col>
                   <a-col :sm="12" :md="4">
-                    <div class="ib-metric">
-                      <div class="ib-metric-title">{{ i18n "clients" }}</div>
-                      <div class="ib-metric-value">[[ total.clients ]]</div>
-                      <div class="ib-metric-chips">
+                    <a-custom-statistic
+                      title='{{ i18n "pages.inbounds.inboundCount" }}'
+                      :value="dbInbounds.length"
+                      :style="{ marginTop: isMobile ? '10px' : 0 }">
+                      <template #prefix>
+                        <a-icon type="bars"></a-icon>
+                      </template>
+                    </a-custom-statistic>
+                  </a-col>
+                  <a-col :sm="12" :md="4">
+                    <a-custom-statistic title='{{ i18n "clients" }}' value=" "
+                      :style="{ marginTop: isMobile ? '10px' : 0 }">
+                      <template #prefix>
+                        <a-space direction="horizontal">
+                          <a-icon type="team"></a-icon>
+                          <div>
+                            <a-back-top
+                              :target="() => document.getElementById('content-layout')"
+                              visibility-height="200"></a-back-top>
+                            <a-tag color="green">[[ total.clients ]]</a-tag>
                             <a-popover title='{{ i18n "disabled" }}'
                               :overlay-class-name="themeSwitcher.currentTheme">
                               <template slot="content">
@@ -121,13 +132,12 @@
                               <a-tag color="blue" v-if="onlineClients.length">[[
                                 onlineClients.length ]]</a-tag>
                             </a-popover>
-                      </div>
-                    </div>
+                          </div>
+                        </a-space>
+                      </template>
+                    </a-custom-statistic>
                   </a-col>
                 </a-row>
-                <!-- 回到顶部：统计卡改版后保留 -->
-                <a-back-top :target="() => document.getElementById('content-layout')"
-                  :visibility-height="200"></a-back-top>
               </a-card>
             </a-col>
             <!-- 三网延迟监测：默认只占一行摘要 + 96px 趋势，分析面板点「展开」才出来 -->
@@ -465,7 +475,7 @@
                   <a-table :columns="isMobile ? mobileColumns : columns"
                     :row-key="dbInbound => dbInbound.id"
                     :data-source="searchedInbounds"
-                    :scroll="isMobile ? {} : { x: 1180 }"
+                    :scroll="isMobile ? {} : { x: 1000 }"
                     :pagination=pagination(searchedInbounds)
                     :expand-icon-as-cell="false" :expand-row-by-click="false"
                     :expand-icon-column-index="0" :indent-size="0"
@@ -683,7 +693,7 @@
                       </template>
                     </template>
                     <template slot="deviceLimit" slot-scope="text, dbInbound">
-                      <a-tag :style="{ margin: '0' }" class="ib-neutral">
+                      <a-tag :style="{ margin: '0' }" color="blue">
                         [[ dbInbound.deviceLimit > 0 ? dbInbound.deviceLimit : '-' ]]
                       </a-tag>
                     </template>
@@ -714,7 +724,12 @@
                             [[ SizeFormatter.sizeFormat(dbInbound.total) ]]
                           </template>
                           <template v-else>
-                            <span class="ib-unlimited">不限</span>
+                            <svg height="10px" width="14px"
+                              viewBox="0 0 640 512" fill="currentColor">
+                              <path
+                                d="M484.4 96C407 96 349.2 164.1 320 208.5C290.8 164.1 233 96 155.6 96C69.75 96 0 167.8 0 256s69.75 160 155.6 160C233.1 416 290.8 347.9 320 303.5C349.2 347.9 407 416 484.4 416C570.3 416 640 344.2 640 256S570.3 96 484.4 96zM155.6 368C96.25 368 48 317.8 48 256s48.25-112 107.6-112c67.75 0 120.5 82.25 137.1 112C276 285.8 223.4 368 155.6 368zM484.4 368c-67.75 0-120.5-82.25-137.1-112C364 226.2 416.6 144 484.4 144C543.8 144 592 194.2 592 256S543.8 368 484.4 368z"
+                                fill="currentColor"></path>
+                            </svg>
                           </template>
                         </a-tag>
                       </a-popover>
@@ -735,7 +750,14 @@
                           ]]
                         </a-tag>
                       </a-popover>
-                      <a-tag v-else class="infinite-tag ib-perm">永久</a-tag>
+                      <a-tag v-else color="purple" class="infinite-tag">
+                        <svg height="10px" width="14px" viewBox="0 0 640 512"
+                          fill="currentColor">
+                          <path
+                            d="M484.4 96C407 96 349.2 164.1 320 208.5C290.8 164.1 233 96 155.6 96C69.75 96 0 167.8 0 256s69.75 160 155.6 160C233.1 416 290.8 347.9 320 303.5C349.2 347.9 407 416 484.4 416C570.3 416 640 344.2 640 256S570.3 96 484.4 96zM155.6 368C96.25 368 48 317.8 48 256s48.25-112 107.6-112c67.75 0 120.5 82.25 137.1 112C276 285.8 223.4 368 155.6 368zM484.4 368c-67.75 0-120.5-82.25-137.1-112C364 226.2 416.6 144 484.4 144C543.8 144 592 194.2 592 256S543.8 368 484.4 368z"
+                            fill="currentColor"></path>
+                        </svg>
+                      </a-tag>
                     </template>
                     <template slot="chainProxyStatus" slot-scope="text, dbInbound">
                       <template v-if="dbInbound.chainProxy && dbInbound.chainProxy !== '{}' && dbInbound.chainProxy !== ''">
@@ -745,7 +767,7 @@
                         </a-tag>
                       </template>
                       <template v-else>
-                        <a-tag :style="{ margin: '0', fontSize: '10px', lineHeight: '14px', padding: '0 4px' }" class="ib-neutral">未配置</a-tag>
+                        <a-tag :style="{ margin: '0', fontSize: '10px', lineHeight: '14px', padding: '0 4px', color: '#999' }">未配置</a-tag>
                       </template>
                     </template>
                     <template slot="ping" slot-scope="text, dbInbound">
@@ -861,7 +883,7 @@
                               <tr v-if="clientCount[dbInbound.id]">
                                 <td>{{ i18n "clients" }}</td>
                                 <td>
-                                  <a-tag :style="{ margin: '0' }" class="ib-neutral">[[
+                                  <a-tag :style="{ margin: '0' }" color="blue">[[
                                     clientCount[dbInbound.id].clients
                                     ]]</a-tag>
                                   <a-popover title='{{ i18n "disabled" }}'
@@ -1030,7 +1052,15 @@
                                     [[ IntlUtil.formatDate(dbInbound.expiryTime)
                                     ]]
                                   </a-tag>
-                                  <a-tag v-else :style="{ textAlign: 'center' }" class="infinite-tag ib-perm">永久</a-tag>
+                                  <a-tag v-else :style="{ textAlign: 'center' }"
+                                    color="purple" class="infinite-tag">
+                                    <svg height="10px" width="14px"
+                                      viewBox="0 0 640 512" fill="currentColor">
+                                      <path
+                                        d="M484.4 96C407 96 349.2 164.1 320 208.5C290.8 164.1 233 96 155.6 96C69.75 96 0 167.8 0 256s69.75 160 155.6 160C233.1 416 290.8 347.9 320 303.5C349.2 347.9 407 416 484.4 416C570.3 416 640 344.2 640 256S570.3 96 484.4 96zM155.6 368C96.25 368 48 317.8 48 256s48.25-112 107.6-112c67.75 0 120.5 82.25 137.1 112C276 285.8 223.4 368 155.6 368zM484.4 368c-67.75 0-120.5-82.25-137.1-112C364 226.2 416.6 144 484.4 144C543.8 144 592 194.2 592 256S543.8 368 484.4 368z"
+                                        fill="currentColor"></path>
+                                    </svg>
+                                  </a-tag>
                                 </td>
                               </tr>
                               <tr>
@@ -1045,7 +1075,7 @@
                               <tr>
                                 <td>{{ i18n "pages.inbounds.deviceLimit" }}</td>
                                 <td>
-                                  <a-tag :style="{ margin: '0' }" class="ib-neutral">
+                                  <a-tag :style="{ margin: '0' }" color="blue">
                                     [[ dbInbound.deviceLimit > 0 ? dbInbound.deviceLimit : '-' ]]
                                   </a-tag>
                                 </td>
@@ -1615,15 +1645,14 @@ function subLinkToken(subId) {
     scopedSlots: { customRender: 'enable' },
   }, {
     title: '{{ i18n "pages.inbounds.remark" }}',
-    align: 'left',
-    width: 150,
-    ellipsis: true,
+    align: 'center',
+    width: 60,
     dataIndex: "remark",
   }, {
     title: '{{ i18n "pages.inbounds.port" }}',
-    align: 'right',
+    align: 'center',
     dataIndex: "port",
-    width: 66,
+    width: 40,
   }, {
     title: '{{ i18n "pages.inbounds.protocol" }}',
     align: 'left',
@@ -1631,13 +1660,13 @@ function subLinkToken(subId) {
     scopedSlots: { customRender: 'protocol' },
   }, {
     title: '{{ i18n "clients" }}',
-    align: 'center',
-    width: 56,
+    align: 'left',
+    width: 50,
     scopedSlots: { customRender: 'clients' },
   }, {
     title: '{{ i18n "pages.inbounds.deviceLimit" }}',
     align: 'center',
-    width: 58,
+    width: 40,
     scopedSlots: { customRender: 'deviceLimit' },
   }, {
     title: '{{ i18n "pages.inbounds.traffic" }}',
@@ -1647,17 +1676,17 @@ function subLinkToken(subId) {
   }, {
     title: '{{ i18n "pages.inbounds.expireDate" }}',
     align: 'center',
-    width: 86,
+    width: 40,
     scopedSlots: { customRender: 'expiryTime' },
   }, {
     title: '链式代理',
     align: 'center',
-    width: 74,
+    width: 40,
     scopedSlots: { customRender: 'chainProxyStatus' },
   }, {
     title: '实测延迟',
     align: 'center',
-    width: 84,
+    width: 76,
     scopedSlots: { customRender: 'ping' },
   }, {
     title: '{{ i18n "pages.inbounds.connFamily" }}',
@@ -1816,12 +1845,10 @@ function subLinkToken(subId) {
       latencyHours: 24,
       latencyLoading: false,
       latencyTesting: false,
-      // 在线客户端总数（用于顶部统计卡的次级信息）
       latency: {
         enabled: true, interval: 5, retentionDays: 30,
         cities: [], isps: [], cells: [], updatedAt: 0,
       },
-      lastRefreshAt: '',
       latencyExpanded: false,
       latencyTab: 'trend',
       latencyHidden: {},
@@ -2046,8 +2073,6 @@ function subLinkToken(subId) {
         if (!this.loadingStates.fetched) {
           this.loadingStates.fetched = true
         }
-        // 顶部统计卡显示「最后刷新 hh:mm:ss」，方便判断数据是否过期
-        this.lastRefreshAt = new Date().toLocaleTimeString('zh-CN', { hour12: false });
         if (this.enableFilter) {
           this.filterInbounds();
         } else {
@@ -4079,15 +4104,7 @@ function subLinkToken(subId) {
         if (rows >= 10000) return (rows / 10000).toFixed(1) + ' 万';
         return String(rows);
       },
-      // 所有入站的在线客户端数合计
-      totalOnline() {
-        let n = 0;
-        Object.keys(this.clientCount || {}).forEach(k => {
-          const c = this.clientCount[k];
-          if (c && c.online) n += c.online.length;
-        });
-        return n;
-      },      // 常驻趋势图：3 条运营商曲线 + 城市区间带（190px）
+      // 常驻趋势图：3 条运营商曲线 + 城市区间带（190px）
       chartTiny() {
         return this.buildLatencyChart(this.latencyIspSeries(), {
           width: 1000, height: 190, yTicks: 4, xTicks: 5,
@@ -4321,40 +4338,6 @@ function subLinkToken(subId) {
       left: 50vw !important;
     }
   }
-  /* ===== 顶部统计卡：主次分明 ===== */
-  .ib-stat-card .ant-card-body { padding: 12px 16px; }
-  .ib-stat-head {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 8px; margin-bottom: 6px; font-size: 11px; color: #a6a6a6;
-  }
-  .ib-stat-refresh { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
-  .ib-metric { display: flex; flex-direction: column; gap: 1px; }
-  .ib-metric-title {
-    font-size: 11px; color: #8c8c8c; display: inline-flex; align-items: center; gap: 3px;
-    white-space: nowrap;
-  }
-  .ib-metric-go { font-size: 10px; color: #bfbfbf; }
-  .ib-metric-value {
-    font-size: 20px; font-weight: 600; line-height: 26px; color: rgba(0, 0, 0, .85);
-    font-variant-numeric: tabular-nums; white-space: nowrap;
-  }
-  .ib-metric-primary .ib-metric-value { font-size: 26px; line-height: 32px; color: #1677ff; }
-  .ib-metric-sub {
-    font-size: 11px; color: #8c8c8c; display: flex; gap: 10px;
-    font-variant-numeric: tabular-nums; white-space: nowrap;
-  }
-  .ib-metric-chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 1px; }
-  .ib-metric-chips .ant-tag { margin: 0; font-size: 10px; line-height: 15px; padding: 0 4px; }
-
-  /* ===== 表格：数字等宽、不换行 ===== */
-  #app .ant-table-wrapper .ant-table { font-variant-numeric: tabular-nums; }
-  #app .ant-table-tbody > tr > td,
-  #app .ant-table-thead > tr > th { padding: 10px 8px; }
-  #app .ant-table-tbody > tr > td { vertical-align: middle; }
-  #app .ant-table .ant-tag { white-space: nowrap; }
-  .ib-unlimited { font-size: 11px; color: #8c8c8c; }
-  .ib-neutral { color: #8c8c8c !important; background: rgba(128, 128, 128, .10) !important; border-color: transparent !important; }
-  .ib-perm { color: #8c8c8c !important; background: rgba(128, 128, 128, .10) !important; border-color: transparent !important; }
   /* ===== 三网延迟监测（运维面板） ===== */
   .lat-card .ant-card-body { padding: 12px 16px 10px; }
   .lat-card .ant-card-head { min-height: 40px; }
