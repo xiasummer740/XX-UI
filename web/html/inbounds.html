@@ -194,8 +194,8 @@
                           <span class="lat-hint-text">阴影 = 该运营商 4 城区间 · 悬停看该时刻 12 个测点</span>
                         </span>
                       </div>
-                      <div class="lat-svg-box" ref="latBox">
-                        <svg class="lat-trend" viewBox="0 0 1000 200"
+                      <div class="lat-svg-box" ref="latBox" v-if="chartTiny.series.length">
+                        <svg class="lat-trend" viewBox="0 0 1000 200" role="img" aria-label="国内三网 RTT 趋势图"
                           @mousemove="onLatHover($event)" @mouseleave="latHover = null"
                           @touchstart="onLatTouch($event)" @touchmove="onLatTouch($event)" @touchend="latHover = null">
                           <defs>
@@ -259,6 +259,10 @@
                             </div>
                           </div>
                         </div>
+                      </div>
+                      <div v-else class="lat-empty">
+                        <a-icon type="line-chart"></a-icon>
+                        <span>该时间窗还没有采样。<b v-if="!latency.enabled">三网延迟监测未开启</b><b v-else>等下一轮探测，或点上方「测」立即跑一轮</b></span>
                       </div>
                     </div>
                   </div>
@@ -3516,9 +3520,11 @@ function subLinkToken(subId) {
             this.latencyRunNote = '上轮 ' + secs + 's · ' + ok + '/' + (msg.obj.count || cells.length) + ' 通';
             this.$message.success('这一轮测完了（' + msg.obj.count + ' 个测点，' + secs + 's）');
           } else {
+            this.latencyRunNote = '';
             this.$message.error('探测失败：' + ((msg && msg.msg) || '未知错误'));
           }
         } catch (e) {
+          this.latencyRunNote = '';
           this.$message.error('探测失败：' + (e.message || e));
         } finally {
           this.latencyTesting = false;
@@ -3601,7 +3607,16 @@ function subLinkToken(subId) {
         if (!rect.width) return;
         const vbX = ((e.clientX - rect.left) / rect.width) * 1000;
         const ratio = Math.min(1, Math.max(0, (vbX - r.padL) / r.plotW));
-        const ts = r.t0 + ratio * (r.t1 - r.t0);
+        const cursorTs = r.t0 + ratio * (r.t1 - r.t0);
+
+        // 先把光标时间吸附到所有序列最近的桶上：长窗口下桶很宽，
+        // 不吸附会出现「十字线一个时间、浮层另一个时间、点位又在别处」。
+        let snapTs = null, snapD = Infinity;
+        chart.series.forEach(s => (s.raw || []).forEach(pt => {
+          const d = Math.abs(pt[0] - cursorTs);
+          if (d < snapD) { snapD = d; snapTs = pt[0]; }
+        }));
+        const ts = snapTs === null ? cursorTs : snapTs;
 
         const field = this.latencyMetricField();
         const xOfTs = t => r.padL + ((t - r.t0) / (r.t1 - r.t0 || 1)) * r.plotW;
@@ -3617,7 +3632,9 @@ function subLinkToken(subId) {
             const d = Math.abs(pt[0] - ts);
             if (d < bestD) { bestD = d; best = pt; }
           });
-          marks.push({ name: s.name, color: s.color, x: xOfTs(best[0]).toFixed(1), y: yOfVal(best[1]).toFixed(1) });
+          const x = xOfTs(best[0]).toFixed(1);
+          const y = Math.max(r.padT, Math.min(r.padT + r.plotH, yOfVal(best[1]))).toFixed(1);
+          marks.push({ name: s.name, color: s.color, x: x, y: y });
 
           // 同一时刻 4 个城市的明细
           const cities = [];
@@ -3808,7 +3825,7 @@ function subLinkToken(subId) {
 
         const series = visible.map(s => {
           const n = s.data.length;
-          const dots = n <= 3
+          const dots = n <= 12
             ? s.data.map(pt => ({ x: xOf(pt[0]).toFixed(1), y: yClamp(pt[1]).toFixed(1) }))
             : [];
           return {
@@ -4691,7 +4708,13 @@ function subLinkToken(subId) {
     font-size: 11px; color: #8c8c8c; font-variant-numeric: tabular-nums;
   }
   .lat-stat-line b { font-weight: 500; color: #bfbfbf; margin-right: 4px; }
-  .lat-trend { display: block; width: 100%; height: auto; }  .lat-ref-line { stroke: rgba(250, 173, 20, .55); stroke-width: 1; stroke-dasharray: 5 4; }
+  .lat-trend { display: block; width: 100%; height: auto; }  .lat-svg-box { touch-action: pan-y; -webkit-user-select: none; user-select: none; }
+  .lat-empty {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    height: 180px; color: #bfbfbf; font-size: 12px;
+  }
+  .lat-empty b { font-weight: 500; color: #8c8c8c; }
+  .lat-ref-line { stroke: rgba(250, 173, 20, .55); stroke-width: 1; stroke-dasharray: 5 4; }
   .lat-ref-label { font-size: 9px; fill: rgba(212, 140, 10, .95); font-variant-numeric: tabular-nums; }
   .lat-ref-away { font-size: 9px; fill: rgba(212, 140, 10, .8); }
   .lat-run-note { font-size: 10px; color: #8c8c8c; font-variant-numeric: tabular-nums; }
