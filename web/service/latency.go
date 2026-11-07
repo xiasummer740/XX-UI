@@ -143,6 +143,14 @@ type LatencyCell struct {
 	Slow1000  int            `json:"slow1000"`
 	Series    []LatencyPoint `json:"series"`
 	Daily     []LatencyDaily `json:"daily"`
+	// 基线：过去 7 天同一小时的均值（按 +08:00 的小时归槽，24 个点）
+	Baseline []LatencyBaseline `json:"baseline,omitempty"`
+}
+
+// LatencyBaseline 是「过去 7 天同一小时」的均值，用来画常态基线。
+type LatencyBaseline struct {
+	Hour  int     `json:"hour"`
+	AvgMs float64 `json:"avgMs"`
 }
 
 // LatencySummary 是整块卡片的数据。
@@ -571,6 +579,40 @@ func (s *LatencyService) SummaryRange(hours int, from, to int64) (*LatencySummar
 		cell.Daily = dailyStats(b.rows)
 
 		sum.Cells = append(sum.Cells, cell)
+	}
+
+
+	// 基线：过去 7 天「同一小时」的均值（24 个槽），只在看 24h 这类短窗口时算，
+	// 一次 GROUP BY 只回 12×24 行，代价可控。
+	if hours <= 26 && len(sum.Cells) > 0 {
+		now := time.Now().Unix()
+		type baseRow struct {
+			City  string
+			Isp   string
+			Hour  int
+			AvgMs float64
+		}
+		var brs []baseRow
+		hourExpr := "CAST(strftime('%H', ts + 28800, 'unixepoch') AS INTEGER)"
+		err := database.GetDB().Model(&model.LatencySample{}).
+			Select("city, isp, "+hourExpr+" AS hour, AVG(avg_ms) AS avg_ms").
+			Where("ts >= ? AND ts < ?", now-7*86400, now-86400).
+			Group("city, isp, " + hourExpr).
+			Scan(&brs).Error
+		if err == nil && len(brs) > 0 {
+			byCell := map[string][]LatencyBaseline{}
+			for _, r := range brs {
+				key := r.City + "|" + r.Isp
+				byCell[key] = append(byCell[key], LatencyBaseline{Hour: r.Hour, AvgMs: r.AvgMs})
+			}
+			for i := range sum.Cells {
+				key := sum.Cells[i].City + "|" + sum.Cells[i].Isp
+				if v, ok := byCell[key]; ok {
+					sort.Slice(v, func(a, b int) bool { return v[a].Hour < v[b].Hour })
+					sum.Cells[i].Baseline = v
+				}
+			}
+		}
 	}
 
 	return sum, nil

@@ -166,7 +166,14 @@
                     <a-button size="small" icon="thunderbolt" :loading="latencyTesting"
                       @click="runLatencyNow">测</a-button>
                     <a-tag v-if="latencyRange" closable color="blue" class="lat-range-tag" @close="resetLatencyRange">自定义区间</a-tag>
-                    <a-button size="small" icon="download" title="导出当前视角 CSV" @click="exportLatencyCsv"></a-button>
+                    <a-dropdown>
+                      <a-button size="small" icon="download" title="导出"></a-button>
+                      <a-menu slot="overlay" @click="({ key }) => (key === 'png' ? exportLatencyPng() : exportLatencyCsv())">
+                        <a-menu-item key="png">导出 PNG</a-menu-item>
+                        <a-menu-item key="csv">导出 CSV</a-menu-item>
+                      </a-menu>
+                    </a-dropdown>
+                    <a-button size="small" icon="share-alt" title="复制含窗口与视角的链接" @click="shareLat"></a-button>
                     <span v-if="latencyRunNote" class="lat-run-note">[[ latencyRunNote ]]</span>
                     <a-button size="small" @click="latencyExpanded = !latencyExpanded">
                       [[ latencyExpanded ? '收起' : '展开' ]]
@@ -198,6 +205,7 @@
                             <a-radio-button value="p95">P95</a-radio-button>
                             <a-radio-button value="max">最大</a-radio-button>
                           </a-radio-group>
+                          <a-tag class="lat-base-tag" :class="{ 'lat-base-on': latencyBaselineOn }" title="过去 7 天同一小时的均值" @click="toggleBaseline">7 天基线</a-tag>
                           <span class="lat-hint-text">[[ latencyScopeHint ]]</span>
                         </span>
                       </div>
@@ -237,9 +245,13 @@
                           <line v-if="latHover" :x1="latHover.x" y1="8" :x2="latHover.x"
                             :y2="chartTiny.range.lineBottom" class="lat-cross"></line>
                           <g clip-path="url(#latPlotClip)">
+                            <!-- 7 天基线：同小时均值，淡虚线 -->
+                            <polyline v-for="b in (chartTiny.baseline || [])" :key="'bl-' + b.name" :points="b.points"
+                              fill="none" :stroke="b.color" stroke-opacity="0.3" stroke-width="1"
+                              stroke-dasharray="3 4" vector-effect="non-scaling-stroke"></polyline>
                             <g v-for="s in chartTiny.series" :key="'tl-' + s.name">
                               <path v-if="chartTiny.series.length <= 3" :d="s.area" :fill="'url(#latArea-' + s.name + ')'" stroke="none"></path>
-                          <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1.15" vector-effect="non-scaling-stroke"
+                              <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1.15" vector-effect="non-scaling-stroke"
                                 stroke-linejoin="round" stroke-linecap="round"></polyline>
                               <circle :cx="s.last.x" :cy="s.last.y" r="3" :fill="s.color"
                                 stroke="#fff" stroke-width="1"></circle>
@@ -292,7 +304,7 @@
                   <!-- 展开区：标签页，高度固定，不再一条条往下堆 -->
                   <template v-if="latencyExpanded">
                     <div class="lat-meta">
-                      失败 <b>[[ latencyCounts.fail ]]</b> · &gt;300ms <b>[[ latencyCounts.s300 ]]</b>
+                      失败 <b :title="latencyFailDetail">[[ latencyCounts.fail ]]</b> · &gt;300ms <b>[[ latencyCounts.s300 ]]</b>
                       · &gt;500ms <b>[[ latencyCounts.s500 ]]</b> · &gt;1000ms <b>[[ latencyCounts.s1000 ]]</b>
                       · 平均抖动 <b>[[ latencyCounts.jitter ]]</b> ms · <b>[[ latencySamples ]]</b> 轮/格
                     </div>
@@ -353,7 +365,7 @@
                           <div class="lat-loss-list">
                             <div class="lg-panel-head">丢包事件 <span class="lg-panel-sub">≥5% 且连续，最多 30 条</span></div>
                             <div v-if="latencyLossEvents.length" class="lat-ev-list">
-                              <div v-for="ev in latencyLossEvents" :key="ev.key" class="lat-ev-row">
+                              <div v-for="ev in latencyLossEvents" :key="ev.key" class="lat-ev-row" title="点击放大到这一段" @click="zoomToTs(ev.ts)">
                                 <span class="lat-ev-isp">[[ ev.name ]]</span>
                                 <span class="lat-ev-time">[[ ev.range ]]</span>
                                 <span class="lat-ev-peak">[[ ev.peak ]]</span>
@@ -1966,6 +1978,7 @@ function subLinkToken(subId) {
       latencyRange: null,
       latBrush: null,
       latPinned: false,
+      latencyBaselineOn: (() => { try { return localStorage.getItem('latBase') !== '0'; } catch (e) { return true; } })(),
       latHoverTs: null,
       latLegendOpen: false,
       // 视角：多选城市，空 = 全部城市；默认只看本地深圳
@@ -3724,6 +3737,10 @@ function subLinkToken(subId) {
         return p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds());
       },
       // 点击图表钉住/取消浮层，鼠标移开不消失，方便抄数字
+      toggleBaseline() {
+        this.latencyBaselineOn = !this.latencyBaselineOn;
+        try { localStorage.setItem('latBase', this.latencyBaselineOn ? '1' : '0'); } catch (e) {}
+      },
       toggleLatPin() {
         if (!this.latHover) return;
         this.latPinned = !this.latPinned;
@@ -3752,7 +3769,74 @@ function subLinkToken(subId) {
         const px = rect.left + ((r.padL + ((next - r.t0) / (r.t1 - r.t0)) * r.plotW) / 1000) * rect.width;
         this.onLatHover({ clientX: px, clientY: rect.top + rect.height / 2 });
       },
-      // 导出当前视角的 CSV（时间 × 运营商）
+      // ===== 分享链接：把 窗口/区间/视角/指标 编进 hash =====
+      applyLatHash() {
+        try {
+          const m = (location.hash || '').match(/lat=([^&]+)/);
+          if (!m) return;
+          const st = JSON.parse(decodeURIComponent(m[1]));
+          if (st.hours) this.latencyHours = st.hours;
+          if (st.metric) this.latencyMetric = st.metric;
+          if (Array.isArray(st.scope)) this.latencyScopeSel = st.scope;
+          if (st.from && st.to) this.latencyRange = { from: st.from, to: st.to };
+          if (typeof st.base === 'boolean') this.latencyBaselineOn = st.base;
+        } catch (e) {}
+      },
+      shareLat() {
+        const st = {
+          hours: this.latencyHours,
+          metric: this.latencyMetric,
+          scope: this.latencyScopeSel,
+          base: this.latencyBaselineOn,
+        };
+        if (this.latencyRange) { st.from = this.latencyRange.from; st.to = this.latencyRange.to; }
+        const url = location.origin + location.pathname + '#lat=' + encodeURIComponent(JSON.stringify(st));
+        const done = () => this.$message.success('链接已复制（含窗口与视角）');
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(done).catch(() => { window.prompt('复制这个链接', url); });
+        } else {
+          window.prompt('复制这个链接', url);
+        }
+      },
+      // 导出当前图表为 PNG（把 svg 转 canvas，内联必要的样式）
+      exportLatencyPng() {
+        const svg = document.querySelector('svg.lat-trend');
+        if (!svg) return;
+        const clone = svg.cloneNode(true);
+        clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        clone.setAttribute('width', '2000');
+        clone.setAttribute('height', '380');
+        const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+        style.textContent = '.lg-grid{stroke:rgba(17,24,39,.06);stroke-width:1}'
+          + '.lg-grid-v{stroke:rgba(17,24,39,.04);stroke-width:1}'
+          + '.lg-axis{fill:#b3b3b3;font-size:9.5px;font-family:sans-serif}'
+          + '.lat-cross{stroke:rgba(17,24,39,.2);stroke-dasharray:2 4}'
+          + '.lat-ref-line{stroke-width:1;stroke-dasharray:4 4}'
+          + '.lat-ref-label{font-size:9px;fill:rgba(212,140,10,.95)}'
+          + '.lat-loss-label{font-size:8.5px;fill:#c8c8c8}'
+          + '.lat-typical{fill:rgba(17,24,39,.028)}.lat-median{stroke:rgba(17,24,39,.14);stroke-dasharray:5 4}';
+        clone.insertBefore(style, clone.firstChild);
+        // 导出前清掉交互痕迹（十字线、框选遮罩、悬停点）
+        clone.querySelectorAll('.lat-cross, .lat-brush, circle[stroke="#fff"]').forEach(el => el.remove());
+        const data = new XMLSerializer().serializeToString(clone);
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 2000; canvas.height = 380;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob(blob => {
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'latency-' + this.latencyHours + 'h.png';
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+          });
+        };
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(data);
+      },      // 导出当前视角的 CSV（时间 × 运营商）
       exportLatencyCsv() {
         const cells = this.latencyScopedCells();
         const field = this.latencyMetricField();
@@ -3813,6 +3897,12 @@ function subLinkToken(subId) {
         // 太窄当误触，忽略（小于 60 秒）
         if (to - from < 60) return;
         this.latencyRange = { from: from, to: to };
+        this.loadLatency();
+      },
+      // 点丢包事件：把窗口收窄到该时刻前后 10 分钟
+      zoomToTs(ts) {
+        if (!ts) return;
+        this.latencyRange = { from: ts - 600, to: ts + 600 };
         this.loadLatency();
       },
       resetLatencyRange() {
@@ -3959,7 +4049,9 @@ function subLinkToken(subId) {
           if (v > 0) vals.push(v);
         });
         visible.forEach(s => scan(s.data));
-        bandsIn.forEach(b => { scan(b.min); scan(b.max); });
+        visible.forEach(s => scan(s.data));
+        // 基线也参与量程，否则基线超出范围会被压到顶端
+        (o.baseline || []).forEach(b => { if (b.data && b.data.length) scan(b.data); });
         if (!isFinite(lo)) { lo = 0; hi = 100; }
         if (hi - lo < 20) { hi = lo + 20; }
 
@@ -4103,6 +4195,13 @@ function subLinkToken(subId) {
             anchor: i === 0 ? 'start' : (i === nx - 1 ? 'end' : 'middle'),
           });
         }
+        // 基线（过去 7 天同一小时的均值）：淡色虚线，贴着主曲线看偏离
+        const baselineIn = o.baseline || [];
+        const baselineSeries = baselineIn.map(b => ({
+          name: b.name, color: b.color,
+          points: (b.data || []).map(pt => xOf(pt[0]).toFixed(1) + ',' + yClamp(pt[1]).toFixed(1)).join(' '),
+        })).filter(s => s.points);
+
         // 区间带：把「4 个城市的最小/最大」之间填成半透明区域
         const bands = bandsIn.map(b => {
           const up = b.max.map(pt => xOf(pt[0]).toFixed(1) + ',' + yClamp(pt[1]).toFixed(1));
@@ -4118,7 +4217,7 @@ function subLinkToken(subId) {
           lineBottom: plotBottom,
         };
         return {
-          series: series, bands: bands, yTicks: yTicks, typicalBand: typicalBand, medianY: medianY, xTicks: xTicks,
+          series: series, bands: bands, baseline: baselineSeries, yTicks: yTicks, typicalBand: typicalBand, medianY: medianY, xTicks: xTicks,
           range: range, spikes: spikes, lossStrip: lossStrip,
           refLines: refLines, refAway: refAway,
         };
@@ -4456,7 +4555,7 @@ function subLinkToken(subId) {
     },
     mounted() {
       // 顶部「套餐用量」卡片：进页面就拉一次，之后跟随刷新
-      this.loadVpsUsage();
+      this.applyLatHash();
       // 三网延迟：进页面拉一次，之后每 60 秒跟一次
       this.loadLatency();
       this.latencyTimer = setInterval(() => this.loadLatency(), 60000);
@@ -4642,6 +4741,29 @@ function subLinkToken(subId) {
           .slice(0, 14)
           .map(ev => ({ key: 'em-' + ev.key, x: xOf(ev.ts).toFixed(1), y: (r.lineBottom + 9).toFixed(1) }));
       },
+      // 基线：每个运营商取「所选城市 × 过去 7 天同一小时」的均值
+      latencyBaselineData() {
+        const cells = this.latencyScopedCells();
+        const groups = {};
+        cells.forEach((c, i) => {
+          if (this.latencyIspHidden[c.isp]) return;
+          if (!c.baseline || !c.baseline.length) return;
+          const g = groups[c.isp] || (groups[c.isp] = { name: c.isp, color: this.latencyColorOf(c.isp, i), hours: {}, tsSet: {} });
+          c.baseline.forEach(b => { (g.hours[b.hour] = g.hours[b.hour] || []).push(b.avgMs); });
+          (c.series || []).forEach(pt => { g.tsSet[pt.ts] = true; });
+        });
+        return Object.keys(groups).map(k => {
+          const g = groups[k];
+          const data = Object.keys(g.tsSet).map(Number).sort((a, b) => a - b).map(ts => {
+            const arr = g.hours[new Date(ts * 1000).getHours()];
+            if (!arr || !arr.length) return null;
+            let s = 0;
+            for (let i = 0; i < arr.length; i++) s += arr[i];
+            return [ts, s / arr.length];
+          }).filter(Boolean);
+          return { name: g.name, color: g.color, data: data };
+        }).filter(s => s.data.length > 2);
+      },
       // 图例默认只露一行，点「更多」展开全部测点
       latencyLegendShown() {
         const all = this.latencyIspLegend;
@@ -4701,18 +4823,31 @@ function subLinkToken(subId) {
           bands: this.latencyIspBands(),
           loss: this.latencyLossSeries,
           refLines: this.latencyRefLines, typical: true,
+          baseline: this.latencyBaselineOn ? this.latencyBaselineData : [],
         });
       },
       // 全部测点在每个采样时刻的「最大丢包率」，用于横轴下方的丢包条带
       latencyLossSeries() {
+        // 长窗口（>7 天）用均值聚合：取最大值会让 30d 整条飘红，失去信息量
+        const longWin = (this.latencyHours || 24) > 168;
         const cells = this.latencyScopedCells();
         const m = {};
         cells.forEach(c => (c.series || []).forEach(pt => {
           const lv = Number(pt.lossPct) || 0;
-          if (lv <= 0) return;
-          if (!m[pt.ts] || m[pt.ts] < lv) m[pt.ts] = lv;
+          if (lv <= 0 && !longWin) return;
+          const cur = m[pt.ts];
+          if (longWin) {
+            // 均值：所有（含 0）测点一起平均
+            if (!cur) m[pt.ts] = { sum: lv, n: 1 };
+            else { cur.sum += lv; cur.n++; }
+          } else if (cur === undefined || cur < lv) {
+            m[pt.ts] = lv;
+          }
         }));
-        return Object.keys(m).map(Number).sort((a, b) => a - b).map(ts => [ts, m[ts]]);
+        return Object.keys(m).map(Number).sort((a, b) => a - b).map(ts => {
+          const v = m[ts];
+          return [ts, longWin ? v.sum / Math.max(1, v.n) : v];
+        });
       },
       // 窗口摘要：P50 / P95 / P99 / 最大 / 丢包率 / 样本数（按所有测点合并算）
       latencyWindowStats() {
@@ -4831,6 +4966,13 @@ function subLinkToken(subId) {
           else if (ms >= 220) out.push(c.city + c.isp + ' ' + Math.round(ms) + 'ms');
         });
         return out;
+      },
+      // 失败明细：哪几个测点失败了多少轮
+      latencyFailDetail() {
+        const cells = this.latencyScopedCells().filter(c => (c.failCount || 0) > 0)
+          .sort((a, b) => (b.failCount || 0) - (a.failCount || 0)).slice(0, 6);
+        if (!cells.length) return '窗口内没有整轮失败（丢包 100%）';
+        return '失败最多的测点：' + cells.map(c => c.city + c.isp + ' ' + c.failCount + ' 轮').join(' · ');
       },
       latencyCounts() {
         const cells = (this.latency && this.latency.cells) || [];
@@ -5033,9 +5175,10 @@ function subLinkToken(subId) {
   .lat-loss-chart { flex: 1 1 auto; min-width: 0; }
   .lat-loss-list { flex: 0 0 254px; }
   .lat-ev-list { max-height: 156px; overflow-y: auto; }
-  .lat-ev-row { display: grid; grid-template-columns: 50px 1fr 36px 52px; gap: 6px; align-items: center;
+  .lat-ev-row { cursor: pointer; display: grid; grid-template-columns: 50px 1fr 36px 52px; gap: 6px; align-items: center;
     font-size: 11px; color: #6b7280; font-variant-numeric: tabular-nums; padding: 2px 0;
     border-bottom: 1px dashed rgba(17, 24, 39, .05); }
+  .lat-ev-row:hover { background: rgba(91, 143, 249, .06); }
   .lat-ev-isp { color: #111827; }
   .lat-ev-peak { color: #f4664a; font-weight: 600; text-align: right; }
   .lat-ev-dur { color: #9ca3af; text-align: right; }
@@ -5060,7 +5203,11 @@ function subLinkToken(subId) {
   .inbounds-page.dark .lat-ev-row { border-bottom-color: rgba(255, 255, 255, .06); }
   .inbounds-page.dark .lat-ev-isp { color: rgba(255, 255, 255, .8); }
   .inbounds-page.dark .lat-loss-label { fill: rgba(255, 255, 255, .34); }
-  .inbounds-page.dark .lat-stat-line { border-top-color: rgba(255, 255, 255, .07); }  .lat-typical { fill: rgba(17, 24, 39, .028); }
+  .inbounds-page.dark .lat-stat-line { border-top-color: rgba(255, 255, 255, .07); }  .lat-base-tag { font-size: 10px; line-height: 18px; margin: 0 0 0 6px; border-radius: 999px; cursor: pointer;
+    color: #9ca3af; background: rgba(17, 24, 39, .03); border-color: rgba(17, 24, 39, .06); }
+  .lat-base-tag.lat-base-on { color: #5b8ff9; background: rgba(91, 143, 249, .1); border-color: rgba(91, 143, 249, .25); }
+  .inbounds-page.dark .lat-base-tag { color: rgba(255, 255, 255, .45); background: rgba(255, 255, 255, .05); border-color: rgba(255, 255, 255, .1); }
+  .inbounds-page.dark .lat-base-tag.lat-base-on { color: #7aa7ff; background: rgba(91, 143, 249, .18); border-color: rgba(91, 143, 249, .4); }  .lat-typical { fill: rgba(17, 24, 39, .028); }
   .lat-median { stroke: rgba(17, 24, 39, .14); stroke-width: 1; stroke-dasharray: 5 4; }
   .lat-ref-line { stroke: rgba(246, 189, 22, .5); stroke-width: 1; stroke-dasharray: 4 4; }
   .lat-ref-label { font-size: 9px; fill: rgba(212, 140, 10, .95); font-variant-numeric: tabular-nums; }
@@ -5107,6 +5254,7 @@ function subLinkToken(subId) {
   /* 展开区 */
   .lat-tabs { margin-top: 4px; border-top: 1px solid rgba(128, 128, 128, .12); padding-top: 4px; }
   .lat-tabs .ant-tabs-nav { margin-bottom: 6px; }
+  .lat-tabs .ant-tabs-content { min-height: 206px; }
   .lat-tabs .ant-tabs-tab { padding: 4px 0; font-size: 12px; }
   .lat-meta {
     font-size: 11px; color: #8c8c8c; margin: 2px 0 6px;
