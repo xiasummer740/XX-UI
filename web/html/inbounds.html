@@ -3687,8 +3687,8 @@ function subLinkToken(subId) {
         const range = {
           t0: t0, t1: t1, lo: lo, hi: hi,
           padL: padL, padT: padT, padB: padB, padR: padR,
-          w: width, h: height,
-          plotW: width - padL - padR, plotH: height - padT - padB,
+          w: W, h: H,
+          plotW: W - padL - padR, plotH: H - padT - padB,
         };
         return { series: series, bands: bands, yTicks: yTicks, xTicks: xTicks, range: range };
       },
