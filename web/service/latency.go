@@ -39,7 +39,7 @@ const (
 	// 同时探测的分组数
 	latencyProbeConcurrency = 4
 	// 曲线最多返回多少个点（前端画图用，多了没意义）
-	latencyMaxSeriesPoints = 600
+	latencyMaxSeriesPoints = 360
 )
 
 // LatencyTarget 是一个「城市 + 运营商」以及它的候选测点。

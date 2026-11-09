@@ -2176,14 +2176,16 @@ function subLinkToken(subId) {
           return;
         }
 
-        await this.getLastOnlineMap();
-      await this.getClientIpFamilyMap();
-        await this.getOnlineUsers();
-
+        // 先把列表渲染出来，别等「最后在线 / IP 族 / 在线用户」三个接口串行跑完；
+        // 原来四个请求排成一队，任何一个慢，表格就一直转圈。
         this.setInbounds(msg.obj);
-        setTimeout(() => {
-          this.refreshing = false;
-        }, 500);
+        this.refreshing = false;
+
+        Promise.all([
+          this.getLastOnlineMap().catch(() => {}),
+          this.getClientIpFamilyMap().catch(() => {}),
+          this.getOnlineUsers().catch(() => {}),
+        ]);
       },
       async getOnlineUsers() {
         const msg = await HttpUtil.post('/panel/api/inbounds/onlines');
@@ -4869,10 +4871,12 @@ function subLinkToken(subId) {
       // 顶部「套餐用量」卡片：进页面就拉一次，之后跟随刷新
       this.applyLatHash();
       this.loadVpsUsage();
-      this.loadSysmon();
-      // 三网延迟：进页面拉一次，之后每 60 秒跟一次
-      this.loadLatency();
-      this.latencyTimer = setInterval(() => this.loadLatency(), 60000);
+      // 延迟/服务器状态的数据包比较大，先让入站列表渲染完再拉，避免表一直转圈
+      setTimeout(() => this.loadSysmon(), 600);
+      setTimeout(() => {
+        this.loadLatency();
+        this.latencyTimer = setInterval(() => this.loadLatency(), 60000);
+      }, 250);
       // Fetch VPS settings for the VPS info card
       HttpUtil.post('/panel/setting/all').then(msg => {
         if (msg.success && msg.obj) {
