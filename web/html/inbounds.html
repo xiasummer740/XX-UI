@@ -438,51 +438,6 @@
                           </div>
                         </div>
                       </a-tab-pane>
-                      <a-tab-pane key="stab" tab="稳定性 / 抖动">
-                        <div class="lg-panel-head">时间线
-                          <span class="lg-panel-sub">绿=正常 黄=慢 橙=轻微丢包 红=丢包或超 500ms</span></div>
-                        <div class="lg-timeline">
-                          <div v-for="row in latencyTimeline" :key="'tl-' + row.name" class="lg-tl-row">
-                            <span class="lg-tl-name" :style="{ color: row.color }">[[ row.name ]]</span>
-                            <span class="lg-tl-bar">
-                              <i v-for="(seg, idx) in row.segs" :key="idx" :class="'lg-tl-' + seg.lvl"
-                                :style="{ flex: seg.w }" :title="seg.tip"></i>
-                            </span>
-                          </div>
-                        </div>
-                        <div class="lat-sub-block">
-                        <div class="lg-panel-head">抖动（每轮 ping 的 mdev）
-                          <span class="lg-panel-sub">越低越稳</span></div>
-                          <div class="lat-svg-box" ref="jitterBox">
-                          <svg class="lg-svg" viewBox="0 0 1000 160"
-                            @mousemove="onLatHoverJitter($event)" @mouseleave="$set(latHoverMap, 'jitter', null)"
-                            @touchstart="onLatHoverJitter($event)">
-                            <line v-for="t in chartJitter.yTicks" :key="'jy-' + t.label" x1="38" :y1="t.y"
-                              x2="996" :y2="t.y" class="lg-grid"></line>
-                            <text v-for="t in chartJitter.yTicks" :key="'jyt-' + t.label" x="34"
-                              :y="t.yf + 3" text-anchor="end" class="lg-axis">[[ t.label ]]</text>
-                            <g v-for="s in chartJitter.series" :key="'jl-' + s.name">
-                              <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1" vector-effect="non-scaling-stroke"
-                                :stroke-dasharray="s.dash" stroke-linejoin="round"></polyline>
-                              <circle v-if="s.last" :cx="s.last.x" :cy="s.last.y" r="2.6" :fill="s.color"
-                                stroke="#fff" stroke-width="1"></circle>
-                            </g>
-                            <text v-for="t in chartJitter.xTicks" :key="'jx-' + t.label" :x="t.xf"
-                              y="156" :text-anchor="t.anchor" class="lg-axis">[[ t.label ]]</text>
-                            <line v-if="latHoverMap.jitter" :x1="latHoverMap.jitter.x" y1="6" :x2="latHoverMap.jitter.x" :y2="150" class="lat-cross"></line>
-                            <circle v-for="h in (latHoverMap.jitter ? latHoverMap.jitter.marks : [])" :key="'jh-' + h.name"
-                              :cx="h.x" :cy="h.y" r="2.4" fill="#fff" :stroke="h.color" stroke-width="1.4"></circle>
-                          </svg>
-                          <div v-if="latHoverMap.jitter" class="lat-tip lat-tip-sm" :style="latHoverMap.jitter.tipStyle">
-                            <div class="lat-tip-time">[[ latHoverMap.jitter.time ]]</div>
-                            <div v-for="r3 in latHoverMap.jitter.rows" :key="'jtr-' + r3.name" class="lat-tip-row">
-                              <span class="lat-tip-name" :style="{ color: r3.color }">[[ r3.name ]]</span>
-                              <span class="lat-tip-val">[[ r3.value ]]<em>ms</em></span>
-                            </div>
-                          </div>
-                          </div>
-                        </div>
-                      </a-tab-pane>
                     </a-tabs>
                     <div class="lat-legend">
                       <span v-for="l in latencyLegendShown" :key="'lg-' + l.name" class="lat-legend-item"
@@ -515,38 +470,6 @@
                       阈值 <b>≤170ms</b> 正常 · <b>170–220ms</b> 关注 · <b>&gt;220ms / 丢包≥5%</b> 告警
                     </span>
                   </div>
-                </a-spin>
-              </a-card>
-            </a-col>
-            <a-col :span="24">
-              <a-card size="small" class="sys-card">
-                <template #title>
-                  <div class="sys-head">
-                    <span class="sys-title"><a-icon type="dashboard"></a-icon>服务器状态</span>
-                    <a-radio-group v-model="sysHours" size="small" button-style="solid" @change="loadSysmon">
-                      <a-radio-button :value="1">1h</a-radio-button>
-                      <a-radio-button :value="6">6h</a-radio-button>
-                      <a-radio-button :value="24">24h</a-radio-button>
-                      <a-radio-button :value="168">7d</a-radio-button>
-                    </a-radio-group>
-                  </div>
-                </template>
-                <a-spin :spinning="sysLoading">
-                  <div v-if="sysCharts.length" class="sys-grid">
-                    <div v-for="c in sysCharts" :key="'sys-' + c.key" class="sys-mini">
-                      <div class="sys-mini-head">
-                        <span class="sys-mini-name">[[ c.name ]]</span>
-                        <span class="sys-mini-val" :style="{ color: c.color }">[[ c.lastText ]]</span>
-                      </div>
-                      <svg class="sys-mini-svg" viewBox="0 0 300 72">
-                        <polygon v-if="c.area" :points="c.area" :fill="c.color" fill-opacity="0.12"></polygon>
-                        <polyline v-if="c.points" :points="c.points" fill="none" :stroke="c.color" stroke-width="1.2"
-                          stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline>
-                      </svg>
-                      <div class="sys-mini-foot">峰值 [[ c.maxText ]] · 平均 [[ c.avgText ]]</div>
-                    </div>
-                  </div>
-                  <div v-else class="lat-empty"><a-icon type="dashboard"></a-icon><span>还没有采集到数据，30 秒后自动出现</span></div>
                 </a-spin>
               </a-card>
             </a-col>
