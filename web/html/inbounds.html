@@ -196,10 +196,10 @@
                           <a-menu slot="overlay" class="lat-city-menu" @click="({ key }) => onCityPick(key)">
                             <a-menu-item v-for="ct in latencyCityOptions" :key="ct">
                               <a-icon :type="latencyScopeSel.indexOf(ct) >= 0 ? 'check' : 'minus'"
-                                :class="{ 'lat-city-check': latencyScopeSel.indexOf(ct) >= 0 }" />
+                                :class="{ 'lat-city-check': latencyScopeSel.indexOf(ct) >= 0 }"></a-icon>
                               <span :class="{ 'lat-city-on': latencyScopeSel.indexOf(ct) >= 0 }">[[ ct ]]</span>
                             </a-menu-item>
-                            <a-menu-divider />
+                            <a-menu-divider></a-menu-divider>
                             <a-menu-item key="__all__">选择全部城市</a-menu-item>
                             <a-menu-item key="__shenzhen__">只看深圳（单城）</a-menu-item>
                           </a-menu>
