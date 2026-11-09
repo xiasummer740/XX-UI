@@ -232,8 +232,9 @@
                           </a-tooltip>
                           <span class="lat-smooth-wrap" title="消峰：对曲线做滑动平均，只看趋势，不改原始数据">
                             <span class="lat-smooth-label">消峰</span>
-                            <a-slider v-model="latSmooth" :min="0" :max="4" :step="1" class="lat-smooth-slider"
-                              :tip-formatter="v => ['关闭', '轻', '中', '强', '很强'][v]"></a-slider>
+                            <a-slider :value="latSmooth" :min="0" :max="10" :step="1" class="lat-smooth-slider"
+                              :tip-formatter="v => latSmoothLabel(v)" @afterChange="commitLatSmooth"></a-slider>
+                            <span class="lat-smooth-val">[[ latSmoothLabel(latSmooth) ]]</span>
                           </span>
                           <span class="lat-hint-text">[[ latencyScopeHint ]]</span>
                         </span>
@@ -329,10 +330,10 @@
                           <div v-for="r in latHover.rows" :key="'tip-' + r.name" class="lat-tip-row">
                             <span class="lat-tip-name" :style="{ color: r.color }">[[ r.name ]]</span>
                             <span class="lat-tip-val">[[ r.value ]]<em>ms</em></span>
-                            <span class="lat-tip-loss" v-if="r.loss > 0">丢 [[ r.loss ]]%</span>
+                            <span class="lat-tip-loss" :class="{ 'lat-tip-loss-zero': !r.loss }">丢 [[ (r.loss || 0).toFixed(1) ]]%</span>
                             <div class="lat-tip-cities">
                               <span v-for="c in r.cities" :key="r.name + c.city" class="lat-tip-city"
-                                :class="{ 'lat-tip-city-loss': c.loss > 0 }">[[ c.city ]] [[ c.value ]]ms<em v-if="c.loss > 0"> · 丢 [[ c.loss ]]%</em></span>
+                                :class="{ 'lat-tip-city-loss': c.loss > 0 }">[[ c.city ]] [[ c.value ]]ms<em> · 丢 [[ (c.loss || 0).toFixed(1) ]]%</em></span>
                             </div>
                           </div>
                         </div>
@@ -2020,7 +2021,7 @@ function subLinkToken(subId) {
       latencyRange: null,
       latFocusName: '',
       latDay: '',
-      latSmooth: 0,
+      latSmooth: (() => { try { return Number(localStorage.getItem('latSmooth') || 0) || 0; } catch (e) { return 0; } })(),
       latMode: (() => { try { return localStorage.getItem('latMode') || 'icmp'; } catch (e) { return 'icmp'; } })(),
       latOnly: null,
       latDayRange: [],
@@ -3632,6 +3633,16 @@ function subLinkToken(subId) {
           this.latencyLoading = false;
         }
       },
+      // 消峰档位文案 + 拖动结束才提交（拖动过程不重算，避免卡顿）
+      latSmoothLabel(v) {
+        const n = Math.max(0, Math.min(10, Number(v) || 0));
+        if (!n) return '关闭';
+        return '窗口 ' + (n * 2 + 1);
+      },
+      commitLatSmooth(v) {
+        this.latSmooth = Math.max(0, Math.min(10, Number(v) || 0));
+        try { localStorage.setItem('latSmooth', String(this.latSmooth)); } catch (e) {}
+      },
       // 服务器状态曲线：CPU / 负载 / 内存 / 磁盘 / 网络 / 进程 / 连接数
       loadSysmon() {
         this.sysLoading = true;
@@ -3857,14 +3868,14 @@ function subLinkToken(subId) {
             if (!bb) return;
             const v = Number(bb[field]) || 0;
             if (v <= 0) return;
-            cities.push({ city: c.city, value: Math.round(v), loss: Math.round(Number(bb.lossPct) || 0) });
+            cities.push({ city: c.city, value: Math.round(v), loss: Math.round((Number(bb.lossPct) || 0) * 10) / 10 });
             const l = Number(bb.lossPct) || 0;
             if (l > lossMax) lossMax = l;
           });
           rows.push({
             name: s.name, color: s.color,
             value: Math.round(best[1]),
-            loss: Math.round(lossMax),
+            loss: Math.round(lossMax * 10) / 10,
             cities: this.latencyScopeSel.length > 1 ? cities : [],
           loss: this.latHoverLoss,
           });
@@ -4207,8 +4218,8 @@ function subLinkToken(subId) {
             if ((Number(pt.lossPct) || 0) > 0) badMap[pt.ts] = true;
           });
         });
-        // 消峰：滑动平均窗口（0=关闭，1..4 对应 3/5/7/9 点）
-        const smoothW = [1, 3, 5, 7, 9][Math.max(0, Math.min(4, Number(this.latSmooth) || 0))] || 1;
+        // 消峰：0=关闭，1..10 对应窗口 3..21（奇数，越大越平滑但不糊成一条线）
+        const smoothW = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21][Math.max(0, Math.min(10, Number(this.latSmooth) || 0))] || 1;
         const smoothArr = arr => {
           if (smoothW <= 1 || arr.length < smoothW) return arr;
           const half = Math.floor(smoothW / 2);
@@ -5749,6 +5760,8 @@ function subLinkToken(subId) {
   .lat-tip-name { font-weight: 600; min-width: 26px; }
   .lat-tip-val { font-weight: 600; color: rgba(0, 0, 0, .85); }
   .lat-tip-val em { font-style: normal; font-size: 9px; color: #bfbfbf; margin-left: 1px; }
+  .lat-tip-loss-zero { color: rgba(0, 0, 0, .3); }
+  .lat-smooth-val { font-size: 10px; color: rgba(0, 0, 0, .45); min-width: 46px; }
   .lat-tip-city { margin-right: 6px; }
   .lat-tip-city-loss { color: #d46b08; }
   .lat-tip-city em { font-style: normal; font-size: 9px; }
