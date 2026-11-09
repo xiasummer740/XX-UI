@@ -248,6 +248,7 @@ type LatencySample struct {
 	// Mode 探测方式：icmp（默认；老数据为空也按 icmp 处理）/ tcp（TCP 握手）
 	Mode string `json:"mode" gorm:"index:idx_lat_mode"`
 	// 同一轮顺带测到的 TCP 握手数据（ICMP 与 TCP 同频采样，前端按模式切视图）
+	TcpTarget  string  `json:"tcpTarget"`
 	TcpSent    int     `json:"tcpSent"`
 	TcpRecv    int     `json:"tcpRecv"`
 	TcpLossPct float64 `json:"tcpLossPct"`

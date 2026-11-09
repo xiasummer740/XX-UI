@@ -48,6 +48,8 @@ type LatencyTarget struct {
 	City       string   `json:"city"`
 	Isp        string   `json:"isp"`
 	Candidates []string `json:"candidates"`
+	// TCPHost 可选：TCP 探测用的域名（运营商 DNS 多数只回 ICMP）
+	TCPHost string `json:"tcpHost,omitempty"`
 }
 
 // defaultLatencyTargets 是内置的三网测点（2026-11 在中国大陆实测可通）。
@@ -203,6 +205,62 @@ func (s *LatencyService) PingOnce(ctx context.Context, ip string, count int) Lat
 	return parsePingOutput(string(out), ip, count, runtime.GOOS == "windows")
 }
 
+// regionOf 把城市映射成 zstaticcdn 的区域前缀。
+func regionOf(city string) string {
+	switch city {
+	case "北京":
+		return "bj"
+	case "上海":
+		return "sh"
+	case "成都", "重庆":
+		return "sc"
+	default:
+		return "gd"
+	}
+}
+
+// ispCode 把运营商名映射成 zstaticcdn 的运营商代号。
+func ispCode(isp string) string {
+	switch isp {
+	case "联通":
+		return "cu"
+	case "移动":
+		return "cm"
+	default:
+		return "ct"
+	}
+}
+
+// tcpHostFor 返回某格用于 TCP 探测的双栈节点域名。
+// 运营商自己的 DNS 基本只回 ICMP，TCP 拿不到握手延迟，所以 TCP 走公共 CDN 节点。
+func tcpHostFor(t LatencyTarget) string {
+	if t.TCPHost != "" {
+		return t.TCPHost
+	}
+	return regionOf(t.City) + "-" + ispCode(t.Isp) + "-dualstack.ip.zstaticcdn.com"
+}
+
+// PingTCPHost 解析域名后做 TCP 握手测延迟（默认 443，失败回落 80）。
+func (s *LatencyService) PingTCPHost(ctx context.Context, host string, count int) LatencyProbeResult {
+	res := LatencyProbeResult{Target: host, Sent: count}
+	ips, err := net.LookupHost(host)
+	if err != nil || len(ips) == 0 {
+		res.LossPct = 100
+		return res
+	}
+	ip := ips[0]
+	for _, port := range []int{443, 80} {
+		r := s.PingTCPOnce(ctx, ip, port, count)
+		if r.Recv > 0 {
+			r.Target = host + " (" + ip + ":" + strconv.Itoa(port) + ")"
+			return r
+		}
+	}
+	res.Target = host
+	res.LossPct = 100
+	return res
+}
+
 // PingTCPOnce 用 TCP 三次握手测延迟。
 // 国内骨干常对 ICMP 限速（表现为晚高峰丢包/抬高 RTT），TCP 更接近业务真实路径，
 // 两者同时看才能分清「真拥塞」和「ICMP 被降级」。
@@ -276,7 +334,7 @@ func (s *LatencyService) Compare(ctx context.Context) []LatencyCompareRow {
 				return
 			}
 			ip := ic.Target
-			tc := s.PingTCPOnce(ctx, ip, 53, 3)
+			tc := s.PingTCPHost(ctx, tcpHostFor(t), 3)
 			out[i] = LatencyCompareRow{
 				City: t.City, Isp: t.Isp, Target: ip, Port: 53,
 				ICMPMs: round2(ic.AvgMs), ICMPLoss: round2(ic.LossPct),
@@ -441,12 +499,10 @@ func (s *LatencyService) RunOnce() (int, error) {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			// 同一轮 ICMP / TCP 都采：ICMP 走 ping，TCP 走 53 端口握手
-			base, ok := s.probeTarget(ctx, t)
+			base, _ := s.probeTarget(ctx, t)
 			res := base
-			var tcpRes LatencyProbeResult
-			if ok && base.Target != "" {
-				tcpRes = s.PingTCPOnce(ctx, base.Target, 53, latencyTcpCount)
-			}
+			// ICMP 与 TCP 用不同目标：TCP 走 CDN 双栈节点，规避运营商封 53
+			tcpRes := s.PingTCPHost(ctx, tcpHostFor(t), latencyTcpCount)
 			_ = mode
 			mu.Lock()
 			results = append(results, outcome{t: t, res: res, tcp: tcpRes})
@@ -470,6 +526,7 @@ func (s *LatencyService) RunOnce() (int, error) {
 			MaxMs:      round2(o.res.MaxMs),
 			Jitter:     round2(o.res.Jitter),
 			Mode:       "both",
+			TcpTarget:  o.tcp.Target,
 			TcpSent:    o.tcp.Sent,
 			TcpRecv:    o.tcp.Recv,
 			TcpLossPct: round2(o.tcp.LossPct),
