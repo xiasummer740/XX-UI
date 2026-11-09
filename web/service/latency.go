@@ -341,6 +341,16 @@ func parsePingOutput(text, ip string, count int, windows bool) LatencyProbeResul
 	return res
 }
 
+// ProbeMode 返回当前探测方式：icmp（默认）/ tcp。
+func (s *LatencyService) ProbeMode() string {
+	if raw, err := s.settingService.getString("latencyProbeMode"); err == nil {
+		if strings.ToLower(strings.TrimSpace(raw)) == "tcp" {
+			return "tcp"
+		}
+	}
+	return "icmp"
+}
+
 // Targets 返回当前生效的测点列表：设置里配了 latencyTargets 就用它，否则用内置默认。
 func (s *LatencyService) Targets() []LatencyTarget {
 	raw, err := s.settingService.getString("latencyTargets")
@@ -409,6 +419,7 @@ func (s *LatencyService) RunOnce() (int, error) {
 
 	targets := s.Targets()
 	now := time.Now().Unix()
+	mode := s.ProbeMode()
 
 	type outcome struct {
 		t   LatencyTarget
@@ -427,7 +438,18 @@ func (s *LatencyService) RunOnce() (int, error) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			res, _ := s.probeTarget(ctx, t)
+			var res LatencyProbeResult
+			if mode == "tcp" {
+				// TCP 模式：先用 ICMP 探通一个可用候选，再用握手测延迟
+				base, ok := s.probeTarget(ctx, t)
+				if ok && base.Target != "" {
+					res = s.PingTCPOnce(ctx, base.Target, 53, latencyPingCount)
+				} else {
+					res = base
+				}
+			} else {
+				res, _ = s.probeTarget(ctx, t)
+			}
 			mu.Lock()
 			results = append(results, outcome{t: t, res: res})
 			mu.Unlock()
@@ -449,6 +471,7 @@ func (s *LatencyService) RunOnce() (int, error) {
 			AvgMs:   round2(o.res.AvgMs),
 			MaxMs:   round2(o.res.MaxMs),
 			Jitter:  round2(o.res.Jitter),
+			Mode:    mode,
 		})
 	}
 	if len(samples) == 0 {
@@ -501,12 +524,12 @@ func (s *LatencyService) TrimToMaxRows(maxRows int) (int64, error) {
 
 // Summary 汇总最近 hours 小时的数据。
 func (s *LatencyService) Summary(hours int) (*LatencySummary, error) {
-	return s.SummaryRange(hours, 0, 0)
+	return s.SummaryRange(hours, 0, 0, "")
 }
 
 // SummaryRange 汇总指定区间（unix 秒）。from/to 都 > 0 且 from < to 时优先于 hours，
 // 供前端框选缩放用；否则退回「最近 hours 小时」。
-func (s *LatencyService) SummaryRange(hours int, from, to int64) (*LatencySummary, error) {
+func (s *LatencyService) SummaryRange(hours int, from, to int64, mode string) (*LatencySummary, error) {
 	enabled, interval, retention, _ := s.settingService.GetLatencyConfig()
 	if hours <= 0 {
 		hours = 24
@@ -537,6 +560,12 @@ func (s *LatencyService) SummaryRange(hours int, from, to int64) (*LatencySummar
 	}
 
 	q := database.GetDB().Model(&model.LatencySample{}).Where("ts >= ?", since)
+	if strings.ToLower(strings.TrimSpace(mode)) == "tcp" {
+		q = q.Where("mode = ?", "tcp")
+	} else {
+		// 老数据 mode 为空串，按 icmp 处理
+		q = q.Where("mode = ? OR mode IS NULL OR mode = ''", "icmp")
+	}
 	if until > 0 {
 		q = q.Where("ts <= ?", until)
 	}

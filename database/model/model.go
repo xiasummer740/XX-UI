@@ -245,6 +245,8 @@ type LatencySample struct {
 	AvgMs   float64 `json:"avgMs"`
 	MaxMs   float64 `json:"maxMs"`
 	Jitter  float64 `json:"jitter"` // mdev，抖动
+	// Mode 探测方式：icmp（默认；老数据为空也按 icmp 处理）/ tcp（TCP 握手）
+	Mode string `json:"mode" gorm:"index:idx_lat_mode"`
 }
 
 // SysSample 是服务器自身的运行指标采样（每 30 秒一行，保留 7 天）：

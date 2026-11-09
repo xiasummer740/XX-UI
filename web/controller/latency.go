@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/XiaSummer740/XX-UI/web/service"
@@ -53,7 +54,8 @@ func (a *LatencyController) summary(c *gin.Context) {
 			to = n
 		}
 	}
-	sum, err := a.latencyService.SummaryRange(hours, from, to)
+	mode := strings.TrimSpace(c.PostForm("mode"))
+	sum, err := a.latencyService.SummaryRange(hours, from, to, mode)
 	jsonObj(c, sum, err)
 }
 
@@ -88,5 +90,6 @@ func (a *LatencyController) targets(c *gin.Context) {
 		"retentionDays": retention,
 		"targetsJson":   raw,
 		"targets":       a.latencyService.Targets(),
+		"mode":          a.latencyService.ProbeMode(),
 	}, nil)
 }
