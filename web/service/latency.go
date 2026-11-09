@@ -293,15 +293,25 @@ func (s *LatencyService) PingTCPHost(ctx context.Context, host string, count int
 	}
 	order := append(v4, v6...)
 	for _, ip := range order {
+		// 两个端口都测，取更快的那次：个别 CDN 节点只对 443 限速（实测会到 1200ms），
+		// 80 却还是 160ms，只测 443 会把这种限速误判成「线路很差」。
+		var best LatencyProbeResult
+		bestPort := 0
 		for _, port := range []int{443, 80} {
 			r := s.PingTCPOnce(ctx, ip, port, count)
-			if r.Recv > 0 {
-				if !strings.Contains(ip, ":") {
-					tcpPin(host, ip)
-				}
-				r.Target = host + " (" + ip + ":" + strconv.Itoa(port) + ")"
-				return r
+			if r.Recv == 0 {
+				continue
 			}
+			if bestPort == 0 || r.AvgMs < best.AvgMs {
+				best, bestPort = r, port
+			}
+		}
+		if bestPort != 0 {
+			if !strings.Contains(ip, ":") {
+				tcpPin(host, ip)
+			}
+			best.Target = host + " (" + ip + ":" + strconv.Itoa(bestPort) + ")"
+			return best
 		}
 	}
 	res.Target = host
