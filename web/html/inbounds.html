@@ -171,14 +171,6 @@
                     <a-button size="small" icon="thunderbolt" :loading="latencyTesting"
                       @click="runLatencyNow">测</a-button>
                     <a-tag v-if="latencyRange" closable color="blue" class="lat-range-tag" @close="resetLatencyRange">自定义区间</a-tag>
-                    <a-dropdown>
-                      <a-button size="small" icon="download" title="导出"></a-button>
-                      <a-menu slot="overlay" @click="({ key }) => (key === 'png' ? exportLatencyPng() : exportLatencyCsv())">
-                        <a-menu-item key="png">导出 PNG</a-menu-item>
-                        <a-menu-item key="csv">导出 CSV</a-menu-item>
-                      </a-menu>
-                    </a-dropdown>
-                    <a-button size="small" icon="share-alt" title="复制含窗口与视角的链接" @click="shareLat"></a-button>
                     <span v-if="latencyRunNote" class="lat-run-note">[[ latencyRunNote ]]</span>
                     <a-button size="small" @click="latencyExpanded = !latencyExpanded">
                       [[ latencyExpanded ? '收起' : '展开' ]]
@@ -206,7 +198,7 @@
                           <span class="lat-clear-chip" title="全部恢复显示" @click="clearIspHidden">清空</span>
                           <a-checkbox v-for="s in latencyIspLegend" :key="'ic-' + s.name" :checked="!latencyIspHidden[s.name]"
                             class="lat-chip" @change="e => toggleLatencyIsp(s.name)"
-                            @mouseenter.native="latOnly = 'isp:' + s.name" @mouseleave.native="latOnly = null"><i class="lat-chip-dot" :style="{ background: s.color }"></i>[[ s.name ]]</a-checkbox>
+                            @mouseenter.native="latOnly = 'isp:' + s.name" @mouseleave.native="latOnly = null">[[ s.name ]]</a-checkbox>
                         </span>
                         <span class="lat-chart-hint">
                           <a-radio-group v-model="latencyMetric" size="small" button-style="solid">
@@ -2121,6 +2113,15 @@ function subLinkToken(subId) {
       latencyIspHidden: (() => { try { return JSON.parse(localStorage.getItem('latIspHidden') || '{}') || {}; } catch (e) { return {}; } })(),
       // 颜色按运营商分（电信蓝 / 联通绿 / 移动橙），线型按城市分 —— 12 条线才分得清
       latencyIspColors: { '电信': '#5B8FF9', '联通': '#38C9A6', '移动': '#F6BD16' },
+      // 每个「城市 + 运营商」一个独立颜色，12 条线才分得清（照 itdog 的做法）
+      latencyCellPalette: [
+        '#5B8FF9', '#38C9A6', '#F6BD16',
+        '#F4664A', '#6DC8EC', '#3BA272',
+        '#9270CA', '#FF9D4D', '#F08BB4',
+        '#7CB305', '#13A8A8', '#A0522D',
+      ],
+      latencyCityOrder: { '深圳': 0, '广州': 0, '北京': 1, '上海': 2, '成都': 3 },
+      latencyIspOrder: { '电信': 0, '联通': 1, '移动': 2 },
       latencyCityDash: { '深圳': '', '北京': '7 4', '上海': '2 3', '成都': '10 3 2 3' },
       latencyPalette: ['#5B8FF9', '#38C9A6', '#F6BD16', '#9270CA', '#6DC8EC', '#FF9D4D'],
       latencyDashes: ['', '7 4', '2 3', '10 3 2 3'],
@@ -4178,6 +4179,15 @@ function subLinkToken(subId) {
         const x2 = ((Math.max(b.fromX, b.toX) - rect.left) / rect.width) * 1000;
         return { x: x1.toFixed(1), w: Math.max(1, x2 - x1).toFixed(1) };
       },
+      // 按城市+运营商取色：同名城市/运营商组合永远同一色，切换视图也不变
+      latCellColor(city, isp, idx) {
+        const co = this.latencyCityOrder[city];
+        const io = this.latencyIspOrder[isp];
+        if (co !== undefined && io !== undefined) {
+          return this.latencyCellPalette[(co * 3 + io) % this.latencyCellPalette.length];
+        }
+        return this.latencyPalette[(idx || 0) % this.latencyPalette.length];
+      },
       latencyColorOf(isp, idx) {
         return this.latencyIspColors[isp] || this.latencyPalette[idx % this.latencyPalette.length];
       },
@@ -4202,7 +4212,7 @@ function subLinkToken(subId) {
         cells.forEach((c, i) => {
           if (this.latencyIspHidden[c.isp]) return;
           if (!groups[c.isp]) {
-            groups[c.isp] = { order: order.length, color: this.latencyColorOf(c.isp, i), map: {}, bad: {}, to: {} };
+            groups[c.isp] = { order: order.length, color: this.latCellColor(c.city, c.isp, i), map: {}, bad: {}, to: {} };
             order.push(c.isp);
           }
           const name = c.city + c.isp;
@@ -4251,7 +4261,7 @@ function subLinkToken(subId) {
               if ((Number(pt.lossPct) || 0) > 0) bad.push([pt.ts, v]);
             });
             if (!data.length) return;
-            out.push({ name: name, color: this.latencyColorOf(c.isp, i), dash: this.latencyDashOf(c.city, i), data: smoothArr(data), bad: bad, timeouts: timeouts });
+            out.push({ name: name, color: this.latCellColor(c.city, c.isp, i), dash: this.latencyDashOf(c.city, i), data: smoothArr(data), bad: bad, timeouts: timeouts });
           });
           return out;
         }
@@ -5418,7 +5428,7 @@ function subLinkToken(subId) {
           const name = c.city + c.isp;
           return {
             name: name,
-            color: this.latencyColorOf(c.isp, i),
+            color: this.latCellColor(c.city, c.isp, i),
             dash: this.latencyDashOf(c.city, i),
             hidden: !!this.latencyHidden[name],
             avg: Math.round(c.avgMs || 0),
