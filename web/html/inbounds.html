@@ -237,15 +237,9 @@
                           </span>
                           <span class="lat-hint-text">[[ latencyScopeHint ]]</span>
                         </span>
-                        <span v-if="latencyMultiCity" class="lat-city-dashes">
-                          <span v-for="(ct, ci) in latencyScopeSel" :key="'cd-' + ct" class="lat-city-dash">
-                            <svg class="lat-dash-swatch" viewBox="0 0 20 6"><line x1="1" y1="3" x2="19" y2="3"
-                              :stroke-dasharray="latencyCityDash[ct]" stroke="#8c8c8c" stroke-width="1.6"></line></svg>[[ ct ]]
-                          </span>
-                        </span>
                       </div>
                       <div class="lat-svg-box" ref="latBox" v-if="chartTiny.series.length" tabindex="0" @keydown="onLatKey" title="拖拽框选放大 · 点击钉住浮层 · ←/→ 移动">
-                        <svg class="lat-trend" viewBox="0 0 1000 200" role="img" aria-label="国内三网 RTT 趋势图"
+                        <svg class="lat-trend" viewBox="0 0 1000 200" preserveAspectRatio="none" role="img" aria-label="国内三网 RTT 趋势图"
                           @mousemove="onLatHover($event)" @mouseleave="unpinLatHover" @click="toggleLatPin"
                           @mousedown="onLatBrushStart($event)" @mouseup="onLatBrushEnd"
                           @touchstart="onLatTouch($event)" @touchmove="onLatTouch($event)" @touchend="latHover = null">
@@ -5735,6 +5729,8 @@ function subLinkToken(subId) {
   .lat-legend-chip { cursor: pointer; transition: opacity .15s ease; }
   .lat-legend-chip.lat-off { opacity: .35; text-decoration: line-through; }
   .lat-tip-sm { font-size: 10px; padding: 4px 6px; min-width: 0; max-width: 150px; }  /* 图表容器与悬停提示 */
+  .lat-card .ant-card-body { padding: 8px 12px 6px; }
+  .lat-trend { height: clamp(150px, 17vw, 230px); }
   .lat-svg-box { position: relative; }
   .lat-cross { stroke: rgba(0, 0, 0, .28); stroke-width: 1; stroke-dasharray: 3 3; }
   .lat-tip {
@@ -5782,6 +5778,7 @@ function subLinkToken(subId) {
     font-size: 11px; color: #8c8c8c; margin: 2px 0 6px;
     font-variant-numeric: tabular-nums;
   }
+  .lat-legend { font-size: 10px; gap: 2px 10px; margin-top: 4px; }
   .lat-legend { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 4px; font-size: 10px; }
   .lat-legend-more { cursor: pointer; color: #5b8ff9; }
   .lat-legend-item {
