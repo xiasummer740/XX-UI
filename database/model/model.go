@@ -247,6 +247,13 @@ type LatencySample struct {
 	Jitter  float64 `json:"jitter"` // mdev，抖动
 	// Mode 探测方式：icmp（默认；老数据为空也按 icmp 处理）/ tcp（TCP 握手）
 	Mode string `json:"mode" gorm:"index:idx_lat_mode"`
+	// 同一轮顺带测到的 TCP 握手数据（ICMP 与 TCP 同频采样，前端按模式切视图）
+	TcpSent    int     `json:"tcpSent"`
+	TcpRecv    int     `json:"tcpRecv"`
+	TcpLossPct float64 `json:"tcpLossPct"`
+	TcpMinMs   float64 `json:"tcpMinMs"`
+	TcpAvgMs   float64 `json:"tcpAvgMs"`
+	TcpMaxMs   float64 `json:"tcpMaxMs"`
 }
 
 // SysSample 是服务器自身的运行指标采样（每 30 秒一行，保留 7 天）：

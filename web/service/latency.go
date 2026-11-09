@@ -33,6 +33,7 @@ import (
 const (
 	// 每轮每个测点发几个包。5 个包足够算丢包率，又不会把对端打疼。
 	latencyPingCount = 5
+	latencyTcpCount  = 3
 	// 单个测点整体超时
 	latencyProbeTimeout = 12 * time.Second
 	// 同时探测的分组数
@@ -424,6 +425,7 @@ func (s *LatencyService) RunOnce() (int, error) {
 	type outcome struct {
 		t   LatencyTarget
 		res LatencyProbeResult
+		tcp LatencyProbeResult
 	}
 	results := make([]outcome, 0, len(targets))
 
@@ -438,20 +440,16 @@ func (s *LatencyService) RunOnce() (int, error) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			var res LatencyProbeResult
-			if mode == "tcp" {
-				// TCP 模式：先用 ICMP 探通一个可用候选，再用握手测延迟
-				base, ok := s.probeTarget(ctx, t)
-				if ok && base.Target != "" {
-					res = s.PingTCPOnce(ctx, base.Target, 53, latencyPingCount)
-				} else {
-					res = base
-				}
-			} else {
-				res, _ = s.probeTarget(ctx, t)
+			// 同一轮 ICMP / TCP 都采：ICMP 走 ping，TCP 走 53 端口握手
+			base, ok := s.probeTarget(ctx, t)
+			res := base
+			var tcpRes LatencyProbeResult
+			if ok && base.Target != "" {
+				tcpRes = s.PingTCPOnce(ctx, base.Target, 53, latencyTcpCount)
 			}
+			_ = mode
 			mu.Lock()
-			results = append(results, outcome{t: t, res: res})
+			results = append(results, outcome{t: t, res: res, tcp: tcpRes})
 			mu.Unlock()
 		}(t)
 	}
@@ -460,18 +458,24 @@ func (s *LatencyService) RunOnce() (int, error) {
 	samples := make([]model.LatencySample, 0, len(results))
 	for _, o := range results {
 		samples = append(samples, model.LatencySample{
-			City:    o.t.City,
-			Isp:     o.t.Isp,
-			Target:  o.res.Target,
-			Ts:      now,
-			Sent:    o.res.Sent,
-			Recv:    o.res.Recv,
-			LossPct: round2(o.res.LossPct),
-			MinMs:   round2(o.res.MinMs),
-			AvgMs:   round2(o.res.AvgMs),
-			MaxMs:   round2(o.res.MaxMs),
-			Jitter:  round2(o.res.Jitter),
-			Mode:    mode,
+			City:       o.t.City,
+			Isp:        o.t.Isp,
+			Target:     o.res.Target,
+			Ts:         now,
+			Sent:       o.res.Sent,
+			Recv:       o.res.Recv,
+			LossPct:    round2(o.res.LossPct),
+			MinMs:      round2(o.res.MinMs),
+			AvgMs:      round2(o.res.AvgMs),
+			MaxMs:      round2(o.res.MaxMs),
+			Jitter:     round2(o.res.Jitter),
+			Mode:       "both",
+			TcpSent:    o.tcp.Sent,
+			TcpRecv:    o.tcp.Recv,
+			TcpLossPct: round2(o.tcp.LossPct),
+			TcpMinMs:   round2(o.tcp.MinMs),
+			TcpAvgMs:   round2(o.tcp.AvgMs),
+			TcpMaxMs:   round2(o.tcp.MaxMs),
 		})
 	}
 	if len(samples) == 0 {
@@ -560,17 +564,24 @@ func (s *LatencyService) SummaryRange(hours int, from, to int64, mode string) (*
 	}
 
 	q := database.GetDB().Model(&model.LatencySample{}).Where("ts >= ?", since)
-	if strings.ToLower(strings.TrimSpace(mode)) == "tcp" {
-		q = q.Where("mode = ?", "tcp")
-	} else {
-		// 老数据 mode 为空串，按 icmp 处理
-		q = q.Where("mode = ? OR mode IS NULL OR mode = ''", "icmp")
-	}
 	if until > 0 {
 		q = q.Where("ts <= ?", until)
 	}
 	if err := q.Order("ts asc").Find(&rows).Error; err != nil {
 		return nil, err
+	}
+	// TCP 视图：用同一行里的 TCP 字段替换，下面的聚合逻辑照旧
+	if strings.ToLower(strings.TrimSpace(mode)) == "tcp" {
+		kept := rows[:0]
+		for _, r := range rows {
+			if r.TcpSent <= 0 {
+				continue
+			}
+			r.Sent, r.Recv = r.TcpSent, r.TcpRecv
+			r.LossPct, r.MinMs, r.AvgMs, r.MaxMs = r.TcpLossPct, r.TcpMinMs, r.TcpAvgMs, r.TcpMaxMs
+			kept = append(kept, r)
+		}
+		rows = kept
 	}
 
 	type bucket struct {

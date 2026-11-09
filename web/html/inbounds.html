@@ -199,12 +199,14 @@
                         <span class="lat-chip-group">
                           <span class="lat-clear-chip" title="全部城市" @click="latencyScopeSel = latencyCityOptions.slice(); onLatencyScopeChange(latencyScopeSel)">清空</span>
                           <a-checkbox v-for="ct in latencyCityOptions" :key="'cc-' + ct" :checked="latencyScopeSel.indexOf(ct) >= 0"
-                            class="lat-chip" @change="e => toggleCity(ct, e.target.checked)">[[ ct ]]</a-checkbox>
+                            class="lat-chip" @change="e => toggleCity(ct, e.target.checked)"
+                            @mouseenter.native="latOnly = 'city:' + ct" @mouseleave.native="latOnly = null">[[ ct ]]</a-checkbox>
                         </span>
                         <span class="lat-chip-group">
                           <span class="lat-clear-chip" title="全部恢复显示" @click="clearIspHidden">清空</span>
                           <a-checkbox v-for="s in latencyIspLegend" :key="'ic-' + s.name" :checked="!latencyIspHidden[s.name]"
-                            class="lat-chip" @change="e => toggleLatencyIsp(s.name)"><i class="lat-chip-dot" :style="{ background: s.color }"></i>[[ s.name ]]</a-checkbox>
+                            class="lat-chip" @change="e => toggleLatencyIsp(s.name)"
+                            @mouseenter.native="latOnly = 'isp:' + s.name" @mouseleave.native="latOnly = null"><i class="lat-chip-dot" :style="{ background: s.color }"></i>[[ s.name ]]</a-checkbox>
                         </span>
                         <span class="lat-chart-hint">
                           <a-radio-group v-model="latencyMetric" size="small" button-style="solid">
@@ -280,7 +282,7 @@
                             <polyline v-for="b in (chartTiny.baseline || [])" :key="'bl-' + b.name" :points="b.points"
                               fill="none" :stroke="b.color" stroke-opacity="0.3" stroke-width="1"
                               stroke-dasharray="3 4" vector-effect="non-scaling-stroke"></polyline>
-                            <g v-for="s in chartTiny.series" :key="'ms-' + s.name">
+                            <g v-for="s in chartTiny.series" :key="'ms-' + s.name" :class="{ 'lat-dim': latOnly && !latOnlyMatch(s.name) }">
                               <path v-if="chartTiny.series.length <= 3" :d="s.area" :fill="'url(#latArea-' + s.name + ')'" stroke="none"></path>
                               <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1.15" vector-effect="non-scaling-stroke"
                                 stroke-linejoin="round" stroke-linecap="round"></polyline>
@@ -478,6 +480,7 @@
                     <div class="lat-legend">
                       <span v-for="l in latencyLegendShown" :key="'lg-' + l.name" class="lat-legend-item"
                         :class="{ 'lat-off': l.hidden }" :title="l.tip"
+                        @mouseenter="latOnly = 'name:' + l.name" @mouseleave="latOnly = null"
                         @click="toggleLatencySeries(l.name)">
                         <svg class="lat-swatch" viewBox="0 0 18 6">
                           <line x1="1" y1="3" x2="17" y2="3" :stroke="l.color" stroke-width="1.8"
@@ -2095,6 +2098,7 @@ function subLinkToken(subId) {
       latDay: '',
       latSmooth: 0,
       latMode: (() => { try { return localStorage.getItem('latMode') || 'icmp'; } catch (e) { return 'icmp'; } })(),
+      latOnly: null,
       latBrush: null,
       latPinned: false,
       latHoverLossChart: null,
@@ -3739,6 +3743,16 @@ function subLinkToken(subId) {
       shiftLatDay(delta) {
         const base = this.latDay ? moment(this.latDay, 'YYYY-MM-DD') : moment();
         this.applyLatDay(base.add(delta, 'day').format('YYYY-MM-DD'));
+      },
+      // 悬停胶囊时判断某条线是否该保留
+      latOnlyMatch(name) {
+        const v = this.latOnly;
+        if (!v) return true;
+        const i = v.indexOf(':');
+        const kind = v.slice(0, i), key = v.slice(i + 1);
+        if (kind === 'isp') return name === key || name.endsWith(key);
+        if (kind === 'city') return name.indexOf(key) === 0;
+        return name === key;
       },
       // 城市复选框：至少留一个，避免全空后图表无数据
       toggleCity(city, checked) {
@@ -5573,10 +5587,9 @@ function subLinkToken(subId) {
   .lat-city-menu .anticon { font-size: 11px; margin-right: 6px; color: rgba(0, 0, 0, .25); }
   .lat-city-menu .lat-city-check { color: #52c41a; }
   .lat-city-on { font-weight: 600; }
-  /* 悬停聚焦：鼠标指向哪条线，其它线与面积自动淡出（纯 CSS，不重绘） */
-  .lat-trend g { transition: opacity .15s ease; }
-  .lat-trend:hover g:not(:hover) { opacity: .1; }
-  .lat-trend g:hover { opacity: 1; }
+  /* 悬停聚焦：鼠标停在某个城市/运营商上，只留对应曲线，其它隐藏 */
+  .lat-trend g { transition: opacity .12s ease; }
+  .lat-trend g.lat-dim { opacity: .06; }
   /* 工具栏 chips：城市 / 运营商一行勾选，替代原来的下拉 */
   .lat-chip-group { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px;
     border: 1px solid rgba(17, 24, 39, .08); border-radius: 999px; background: rgba(255, 255, 255, .6); }
