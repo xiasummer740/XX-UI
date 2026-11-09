@@ -153,7 +153,7 @@
                 </template>
                 <template #extra>
                   <a-space :size="6">
-                    <span class="lat-health" :class="latencyAlerts.length ? 'lat-health-bad' : 'lat-health-ok'">
+                    <span class="lat-health" :class="latencyAlerts.length ? 'lat-health-bad' : 'lat-health-ok'" :title="latencyAlerts.length ? latencyAlerts.join('｜') : '全部测点在阈值内'">
                       [[ latencyAlerts.length ? latencyAlerts.length + ' 项异常' : '全部正常' ]]
                     </span>
                     <a-radio-group v-model="latencyHours" size="small" button-style="solid"
@@ -187,11 +187,23 @@
                     <div class="lat-chart-wrap">
                       <div class="lat-chart-head">
                         <span class="lat-chart-title">RTT 到国内三网 <em class="lat-unit">ms</em><b class="lat-axis-note">· [[ latencyMetricLabel() ]]</b></span>
-                        <a-select v-model="latencyScopeSel" size="small" mode="multiple" class="lat-scope"
-                          :max-tag-count="1" allow-clear placeholder="全部城市"
-                          :dropdown-match-select-width="false" @change="onLatencyScopeChange">
-                          <a-select-option v-for="ct in latencyCityOptions" :key="'sc-' + ct" :value="ct">[[ ct ]]</a-select-option>
-                        </a-select>
+                        <a-dropdown :trigger="['click']" placement="bottomLeft" class="lat-city-drop">
+                          <span class="lat-city-btn" :class="{ 'lat-city-btn-on': latencyScopeSel.length }">
+                            <a-icon type="environment" class="lat-city-ico"></a-icon>
+                            <span class="lat-city-txt">[[ latencyScopeLabel ]]</span>
+                            <a-icon type="down" class="lat-city-caret"></a-icon>
+                          </span>
+                          <a-menu slot="overlay" class="lat-city-menu" @click="({ key }) => onCityPick(key)">
+                            <a-menu-item v-for="ct in latencyCityOptions" :key="ct">
+                              <a-icon :type="latencyScopeSel.indexOf(ct) >= 0 ? 'check' : 'minus'"
+                                :class="{ 'lat-city-check': latencyScopeSel.indexOf(ct) >= 0 }" />
+                              <span :class="{ 'lat-city-on': latencyScopeSel.indexOf(ct) >= 0 }">[[ ct ]]</span>
+                            </a-menu-item>
+                            <a-menu-divider />
+                            <a-menu-item key="__all__">选择全部城市</a-menu-item>
+                            <a-menu-item key="__shenzhen__">只看深圳（单城）</a-menu-item>
+                          </a-menu>
+                        </a-dropdown>
                         <span v-for="s in latencyIspLegend" :key="'isp-' + s.name" class="lat-legend-chip"
                           :class="{ 'lat-off': s.hidden }" :title="s.hidden ? '点击恢复显示' : '点击隐藏'"
                           @click="toggleLatencyIsp(s.name)">
@@ -205,9 +217,23 @@
                             <a-radio-button value="p95">P95</a-radio-button>
                             <a-radio-button value="max">最大</a-radio-button>
                           </a-radio-group>
-                          <a-tag class="lat-base-tag lat-tight-tag" :class="{ 'lat-base-on': latencyTightOn }" title="忽略 170/220 阈值线，只按曲线自身量程画，正常区间细节更清楚" @click="toggleTight">窄量程</a-tag>
-                          <a-tag class="lat-base-tag" :class="{ 'lat-base-on': latencyBaselineOn }" title="latencyBaselineTip" @click="toggleBaseline">7 天基线</a-tag>
+                          <a-tooltip title="关闭：按 170 / 220 阈值线撑开纵轴。打开：只按曲线自身范围画，正常区间的波动看得清，但阈值线可能出画面">
+                            <a-tag class="lat-base-tag lat-tight-tag" :class="{ 'lat-base-on': latencyTightOn }" @click="toggleTight">
+                              <a-icon :type="latencyTightOn ? 'check-circle' : 'compress'"></a-icon>[[ latencyTightOn ? '紧贴曲线' : '含阈值线' ]]
+                            </a-tag>
+                          </a-tooltip>
+                          <a-tooltip title="叠加过去 7 天同一小时的均值虚线：今天的曲线比平时高多少，一眼能看出来">
+                            <a-tag class="lat-base-tag" :class="{ 'lat-base-on': latencyBaselineOn }" @click="toggleBaseline">
+                              <a-icon :type="latencyBaselineOn ? 'check-circle' : 'line-chart'"></a-icon>7 日基线
+                            </a-tag>
+                          </a-tooltip>
                           <span class="lat-hint-text">[[ latencyScopeHint ]]</span>
+                        </span>
+                        <span v-if="latencyMultiCity" class="lat-city-dashes">
+                          <span v-for="(ct, ci) in latencyScopeSel" :key="'cd-' + ct" class="lat-city-dash">
+                            <svg class="lat-dash-swatch" viewBox="0 0 20 6"><line x1="1" y1="3" x2="19" y2="3"
+                              :stroke-dasharray="latencyCityDash[ct]" stroke="#8c8c8c" stroke-width="1.6"></line></svg>[[ ct ]]
+                          </span>
                         </span>
                       </div>
                       <div class="lat-svg-box" ref="latBox" v-if="chartTiny.series.length" tabindex="0" @keydown="onLatKey" title="拖拽框选放大 · 点击钉住浮层 · ←/→ 移动">
@@ -4026,6 +4052,30 @@ function subLinkToken(subId) {
             if ((Number(pt.lossPct) || 0) > 0) badMap[pt.ts] = true;
           });
         });
+        const cityCount = {};
+        cells.forEach(c => { cityCount[c.city] = 1; });
+        const multiCity = Object.keys(cityCount).length > 1;
+
+        // 多城市：每个「城市 + 运营商」单独一条线，城市用虚线样式区分，颜色仍按运营商
+        if (multiCity) {
+          const out = [];
+          cells.forEach((c, i) => {
+            if (this.latencyIspHidden[c.isp]) return;
+            const name = c.city + c.isp;
+            if (this.latencyHidden[name]) return;
+            const data = [], bad = [];
+            (c.series || []).forEach(pt => {
+              const v = Number(pt[this.latencyMetricField()]) || 0;
+              if (v <= 0) return;
+              data.push([pt.ts, v]);
+              if ((Number(pt.lossPct) || 0) > 0) bad.push([pt.ts, v]);
+            });
+            if (!data.length) return;
+            out.push({ name: name, color: this.latencyColorOf(c.isp, i), dash: this.latencyDashOf(c.city, i), data: data, bad: bad });
+          });
+          return out;
+        }
+
         return order.map(isp => {
           const g = groups[isp];
           const keys = Object.keys(g.map).map(Number).sort((a, b) => a - b);
@@ -4313,6 +4363,19 @@ function subLinkToken(subId) {
         if (h === 168) return '最近 7 天';
         if (h === 720) return '最近 30 天';
         return '最近 ' + h + ' 小时';
+      },
+      onCityPick(key) {
+        if (key === '__all__') {
+          this.latencyScopeSel = this.latencyCityOptions.slice();
+        } else if (key === '__shenzhen__') {
+          this.latencyScopeSel = ['深圳'];
+        } else {
+          const cur = (this.latencyScopeSel || []).slice();
+          const at = cur.indexOf(key);
+          if (at >= 0) { if (cur.length > 1) cur.splice(at, 1); } else { cur.push(key); }
+          this.latencyScopeSel = cur;
+        }
+        this.onLatencyScopeChange(this.latencyScopeSel);
       },
       toggleLatencySeries(name) {
         const next = Object.assign({}, this.latencyHidden);
@@ -4802,6 +4865,16 @@ function subLinkToken(subId) {
         return cs.length ? cs : ['深圳', '北京', '上海', '成都'];
       },
       // 视角文案：一个城市 / 多个城市 / 全部
+      latencyScopeLabel() {
+        const sel = this.latencyScopeSel || [];
+        if (!sel.length) return '全部城市';
+        if (sel.length === 1) return sel[0];
+        return sel[0] + ' +' + (sel.length - 1);
+      },
+      // 选多城时才需要「按城市分线」，单城/全网自适应
+      latencyMultiCity() {
+        return (this.latencyScopeSel || []).length > 1;
+      },
       latencyScopeHint() {
         const sel = this.latencyScopeSel || [];
         const total = (this.latency.cities || []).length || 4;
@@ -5247,7 +5320,34 @@ function subLinkToken(subId) {
     display: flex; align-items: center; flex-wrap: wrap; gap: 4px 14px;
     margin-bottom: 2px; font-size: 11px; color: #8c8c8c;
   }
-  .lat-scope { width: 132px; }
+  /* 城市选择：小胶囊按钮代替多选框，选中数量一目了然 */
+  .lat-city-drop { display: inline-flex; }
+  .lat-city-btn {
+    display: inline-flex; align-items: center; gap: 3px;
+    height: 22px; padding: 0 8px; border-radius: 999px; cursor: pointer;
+    font-size: 11px; color: rgba(0, 0, 0, .62);
+    background: rgba(255, 255, 255, .72); border: 1px solid rgba(17, 24, 39, .1);
+    transition: border-color .15s ease, color .15s ease;
+  }
+  .lat-city-btn:hover { border-color: rgba(91, 143, 249, .45); color: #5b8ff9; }
+  .lat-city-btn-on { color: #2f54eb; border-color: rgba(91, 143, 249, .35); background: rgba(91, 143, 249, .09); }
+  .lat-city-ico, .lat-city-caret { font-size: 10px; opacity: .75; }
+  .lat-city-menu .anticon { font-size: 11px; margin-right: 6px; color: rgba(0, 0, 0, .25); }
+  .lat-city-menu .lat-city-check { color: #52c41a; }
+  .lat-city-on { font-weight: 600; }
+  .lat-city-dashes { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: 2px; }
+  .lat-city-dash { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; color: rgba(0, 0, 0, .45); }
+  .lat-dash-swatch { width: 20px; height: 6px; }
+  .inbounds-page.dark .lat-city-btn { background: rgba(255, 255, 255, .06); border-color: rgba(255, 255, 255, .14); color: rgba(255, 255, 255, .6); }
+  .inbounds-page.dark .lat-city-dash { color: rgba(255, 255, 255, .4); }
+  /* 开关标签：关=虚线灰边，开=实心蓝，避免"看不出来是开关" */
+  .lat-base-tag { font-size: 10px; line-height: 18px; padding: 0 7px; margin: 0; cursor: pointer; white-space: nowrap;
+    border-radius: 999px; border: 1px dashed rgba(17, 24, 39, .25); color: rgba(0, 0, 0, .5); background: transparent; }
+  .lat-base-tag .anticon { font-size: 10px; margin-right: 3px; }
+  .lat-base-tag.lat-base-on { border-style: solid; border-color: rgba(91, 143, 249, .5);
+    color: #2f54eb; background: rgba(91, 143, 249, .12); font-weight: 500; }
+  .inbounds-page.dark .lat-base-tag { border-color: rgba(255, 255, 255, .22); color: rgba(255, 255, 255, .5); }
+  .inbounds-page.dark .lat-base-tag.lat-base-on { color: #7aa7ff; background: rgba(91, 143, 249, .2); border-color: rgba(91, 143, 249, .45); }  .lat-scope { width: 132px; }
   .lat-scope .ant-select-selection--multiple .ant-select-selection__rendered { margin: 0 4px; }
   .lat-scope .ant-select-selection--multiple .ant-select-selection__choice { font-size: 11px; height: 20px; line-height: 18px; margin: 1px 2px 1px 0; padding: 0 6px; border-radius: 999px; background: rgba(17,24,39,.05); border: none; }
   .lat-scope .ant-select-selection { border-radius: 999px; border-color: rgba(17, 24, 39, .1); }
@@ -5323,11 +5423,7 @@ function subLinkToken(subId) {
   .inbounds-page.dark .lat-ev-row { border-bottom-color: rgba(255, 255, 255, .06); }
   .inbounds-page.dark .lat-ev-isp { color: rgba(255, 255, 255, .8); }
   .inbounds-page.dark .lat-loss-label { fill: rgba(255, 255, 255, .34); }
-  .inbounds-page.dark .lat-stat-line { border-top-color: rgba(255, 255, 255, .07); }  .lat-base-tag { font-size: 10px; line-height: 18px; margin: 0 0 0 6px; border-radius: 999px; cursor: pointer;
-    color: #9ca3af; background: rgba(17, 24, 39, .03); border-color: rgba(17, 24, 39, .06); }
-  .lat-base-tag.lat-base-on { color: #5b8ff9; background: rgba(91, 143, 249, .1); border-color: rgba(91, 143, 249, .25); }
-  .inbounds-page.dark .lat-base-tag { color: rgba(255, 255, 255, .45); background: rgba(255, 255, 255, .05); border-color: rgba(255, 255, 255, .1); }
-  .inbounds-page.dark .lat-base-tag.lat-base-on { color: #7aa7ff; background: rgba(91, 143, 249, .18); border-color: rgba(91, 143, 249, .4); }
+  .inbounds-page.dark .lat-stat-line { border-top-color: rgba(255, 255, 255, .07); }
   .lat-typical { fill: rgba(17, 24, 39, .028); }
   .lat-median { stroke: rgba(17, 24, 39, .14); stroke-width: 1; stroke-dasharray: 5 4; }
   .lat-ref-line { stroke: rgba(246, 189, 22, .5); stroke-width: 1; stroke-dasharray: 4 4; }
@@ -5449,6 +5545,10 @@ function subLinkToken(subId) {
     .lat-scope { width: 92px; }
     .lat-health { display: none; }
     .lat-legend { flex-wrap: wrap; row-gap: 2px; }
+    .lat-legend-chip em { display: none; }
+    .lat-chart-hint .ant-radio-group { display: inline-flex; flex-wrap: nowrap; }
+    .lat-hint-text { display: none; }
+    .lat-city-dashes { display: none; }
   }
 </style>
 {{ template "page/body_end" .}}
