@@ -248,12 +248,23 @@ func (s *LatencyService) PingTCPHost(ctx context.Context, host string, count int
 		res.LossPct = 100
 		return res
 	}
-	ip := ips[0]
-	for _, port := range []int{443, 80} {
-		r := s.PingTCPOnce(ctx, ip, port, count)
-		if r.Recv > 0 {
-			r.Target = host + " (" + ip + ":" + strconv.Itoa(port) + ")"
-			return r
+	// 优先 IPv4：这台机器 IPv6 出口不稳，双栈域名常常先给 AAAA
+	var v4, v6 []string
+	for _, ip := range ips {
+		if strings.Contains(ip, ":") {
+			v6 = append(v6, ip)
+		} else {
+			v4 = append(v4, ip)
+		}
+	}
+	order := append(v4, v6...)
+	for _, ip := range order {
+		for _, port := range []int{443, 80} {
+			r := s.PingTCPOnce(ctx, ip, port, count)
+			if r.Recv > 0 {
+				r.Target = host + " (" + ip + ":" + strconv.Itoa(port) + ")"
+				return r
+			}
 		}
 	}
 	res.Target = host
