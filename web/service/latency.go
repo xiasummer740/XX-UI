@@ -240,9 +240,43 @@ func tcpHostFor(t LatencyTarget) string {
 	return regionOf(t.City) + "-" + ispCode(t.Isp) + "-dualstack.ip.zstaticcdn.com"
 }
 
+// tcpPinnedIP 记住每台主机上一次解析到的 IPv4，30 分钟内不再重解析。
+// CDN 的 anycast 会漂节点，每次重解析会让曲线突然从 160ms 跳到 1200ms，
+// 那种跳变是「换了节点」不是线路变差。
+var (
+	tcpPinnedIP = map[string]string{}
+	tcpPinnedAt = map[string]time.Time{}
+	tcpPinnedMu sync.Mutex
+	tcpPinTTL   = 30 * time.Minute
+)
+
+func tcpPinned(host string) string {
+	tcpPinnedMu.Lock()
+	defer tcpPinnedMu.Unlock()
+	if ip, ok := tcpPinnedIP[host]; ok && time.Since(tcpPinnedAt[host]) < tcpPinTTL {
+		return ip
+	}
+	return ""
+}
+
+func tcpPin(host, ip string) {
+	tcpPinnedMu.Lock()
+	defer tcpPinnedMu.Unlock()
+	tcpPinnedIP[host] = ip
+	tcpPinnedAt[host] = time.Now()
+}
+
 // PingTCPHost 解析域名后做 TCP 握手测延迟（默认 443，失败回落 80）。
 func (s *LatencyService) PingTCPHost(ctx context.Context, host string, count int) LatencyProbeResult {
 	res := LatencyProbeResult{Target: host, Sent: count}
+	pinned := tcpPinned(host)
+	if pinned != "" {
+		r := s.PingTCPOnce(ctx, pinned, 443, count)
+		if r.Recv > 0 {
+			r.Target = host + " (" + pinned + ":443)"
+			return r
+		}
+	}
 	ips, err := net.LookupHost(host)
 	if err != nil || len(ips) == 0 {
 		res.LossPct = 100
@@ -262,6 +296,9 @@ func (s *LatencyService) PingTCPHost(ctx context.Context, host string, count int
 		for _, port := range []int{443, 80} {
 			r := s.PingTCPOnce(ctx, ip, port, count)
 			if r.Recv > 0 {
+				if !strings.Contains(ip, ":") {
+					tcpPin(host, ip)
+				}
 				r.Target = host + " (" + ip + ":" + strconv.Itoa(port) + ")"
 				return r
 			}
