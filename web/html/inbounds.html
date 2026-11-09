@@ -163,6 +163,7 @@
                       <a-radio-button :value="168">7d</a-radio-button>
                       <a-radio-button :value="720">30d</a-radio-button>
                     </a-radio-group>
+                    <a-button size="small" icon="swap" :loading="latCmpLoading" title="同时跑一遍 ICMP 和 TCP，判断高延迟/丢包是真拥塞还是 ICMP 被降级" @click="openLatCompare">ICMP/TCP</a-button>
                     <a-button size="small" icon="thunderbolt" :loading="latencyTesting"
                       @click="runLatencyNow">测</a-button>
                     <a-tag v-if="latencyRange" closable color="blue" class="lat-range-tag" @close="resetLatencyRange">自定义区间</a-tag>
@@ -302,6 +303,15 @@
                               :x="l.x" :y="l.y" :width="l.w" :height="l.h" :fill="l.color"
                               :fill-opacity="l.opacity" rx="1"></rect>
                           </g>
+                          <!-- 超时标记：这一桶一个回包都没有（区别于没取样） -->
+                          <g v-if="chartTiny.timeoutMarks && chartTiny.timeoutMarks.length">
+                            <g v-for="(t, ti) in chartTiny.timeoutMarks" :key="'to-' + ti">
+                              <line :x1="t.x - 2.4" :y1="chartTiny.range.lineBottom - 5" :x2="t.x + 2.4"
+                                :y2="chartTiny.range.lineBottom - 0.5" class="lat-timeout-mark"></line>
+                              <line :x1="t.x - 2.4" :y1="chartTiny.range.lineBottom - 0.5" :x2="t.x + 2.4"
+                                :y2="chartTiny.range.lineBottom - 5" class="lat-timeout-mark"></line>
+                            </g>
+                          </g>
                           <path v-for="m in latencyEventMarks" :key="m.key"
                             :d="'M' + m.x + ' ' + m.y + ' l-3 -5 h6 z'" fill="rgba(244,102,74,.75)"></path>                          <rect v-if="latBrushRect" :x="latBrushRect.x" y="8" :width="latBrushRect.w" height="168"
                             fill="rgba(91,143,249,.14)" stroke="rgba(91,143,249,.5)" stroke-width="1"
@@ -336,6 +346,7 @@
                   <template v-if="latencyExpanded">
                     <div class="lat-meta">
                       失败 <b :title="latencyFailDetail">[[ latencyCounts.fail ]]</b> · &gt;300ms <b>[[ latencyCounts.s300 ]]</b>
+                      · 超时 <b title="整轮一个回包都没收到（探测超时），和慢请求分开统计">[[ latencyCounts.timeouts ]]</b>
                       · &gt;500ms <b>[[ latencyCounts.s500 ]]</b> · &gt;1000ms <b>[[ latencyCounts.s1000 ]]</b>
                       · 平均抖动 <b>[[ latencyCounts.jitter ]]</b> ms · <b>[[ latencySamples ]]</b> 轮/格
                     </div>
@@ -1529,6 +1540,32 @@
       </a-form-item>
     </a-form>
   </a-modal>
+
+    <!-- ICMP / TCP 对照：判断高延迟是链路真差还是 ICMP 被中间设备降级 -->
+    <a-modal title="ICMP / TCP 对照" :visible="latCmpOpen" :footer="null" :width="640"
+      @cancel="latCmpOpen = false" :body-style="{ padding: '12px 16px' }">
+      <div class="lat-cmp-tip">同时向每个测点发 3 个 ICMP 包和 3 次 TCP 握手（53 端口）。两者差距大，说明是 ICMP 被限速/降级；都差才是真的拥塞。</div>
+      <a-spin :spinning="latCmpLoading">
+        <div v-if="latCmpErr" class="lat-cmp-err">[[ latCmpErr ]]</div>
+        <div v-else class="lat-cmp-list">
+          <div class="lat-cmp-row lat-cmp-head">
+            <span class="lat-cmp-cell">城市 / 运营商</span>
+            <span class="lat-cmp-cell">测点</span>
+            <span class="lat-cmp-num">ICMP</span>
+            <span class="lat-cmp-num">TCP</span>
+            <span class="lat-cmp-num">差值</span>
+          </div>
+          <div v-for="r in latCmpRows" :key="'cmp-' + r.city + r.isp" class="lat-cmp-row">
+            <span class="lat-cmp-cell">[[ r.city ]][[ r.isp ]]</span>
+            <span class="lat-cmp-cell lat-cmp-target">[[ r.target || '—' ]]</span>
+            <span class="lat-cmp-num">[[ r.icmpMs ? r.icmpMs + 'ms' : '超时' ]]</span>
+            <span class="lat-cmp-num">[[ r.tcpMs ? r.tcpMs + 'ms' : '超时' ]]</span>
+            <span class="lat-cmp-num" :class="r.verdictClass">[[ r.verdict ]]</span>
+          </div>
+        </div>
+        <div v-if="latCmpTook" class="lat-cmp-foot">耗时 [[ latCmpTook ]] ms · 一次性测量，不进历史</div>
+      </a-spin>
+    </a-modal>
   <!-- 流量历史弹窗 -->
   <a-modal :title="'流量历史（每月用量）'" :visible="trafficHistoryModal.visible"
     @cancel="trafficHistoryModal.visible = false" :footer="null"
@@ -2026,6 +2063,11 @@ function subLinkToken(subId) {
       latBrush: null,
       latPinned: false,
       latHoverLossChart: null,
+      latCmpOpen: false,
+      latCmpLoading: false,
+      latCmpErr: '',
+      latCmpTook: 0,
+      latCmpRows: [],
       latencyTightOn: (() => { try { return localStorage.getItem('latTight') === '1'; } catch (e) { return false; } })(),
       latencyBaselineOn: (() => { try { return localStorage.getItem('latBase') !== '0'; } catch (e) { return true; } })(),
       latHoverTs: null,
@@ -3787,6 +3829,33 @@ function subLinkToken(subId) {
       },
       // 点击图表钉住/取消浮层，鼠标移开不消失，方便抄数字
       // 丢包图的悬停：把鼠标 x 反算成时刻，取最近的采样点
+      // ICMP / TCP 对照：一次性探测，不进历史表
+      openLatCompare() {
+        this.latCmpOpen = true;
+        this.latCmpLoading = true;
+        this.latCmpErr = '';
+        this.latCmpRows = [];
+        HttpUtil.post('/panel/api/latency/compare', {}).then(msg => {
+          this.latCmpLoading = false;
+          if (!msg || !msg.success) { this.latCmpErr = (msg && msg.msg) || '对照探测失败，稍后重试'; return; }
+          const rows = ((msg.obj || {}).rows) || [];
+          this.latCmpTook = (msg.obj || {}).tookMs || 0;
+          this.latCmpRows = rows.map(r => {
+            const ic = Number(r.icmpMs) || 0, tc = Number(r.tcpMs) || 0;
+            let verdict = '一致', cls = 'lat-cmp-ok';
+            if (!tc && !ic) { verdict = '都不通'; cls = 'lat-cmp-bad'; }
+            else if (!ic && tc) { verdict = 'ICMP 被挡'; cls = 'lat-cmp-warn'; }
+            else if (ic && !tc) { verdict = 'TCP 不通'; cls = 'lat-cmp-bad'; }
+            else if (ic && tc) {
+              const d = ic - tc;
+              if (d > Math.max(20, tc * 0.25)) { verdict = 'ICMP 偏高'; cls = 'lat-cmp-warn'; }
+              else if (d < -Math.max(20, ic * 0.25)) { verdict = 'TCP 偏高'; cls = 'lat-cmp-warn'; }
+            }
+            return Object.assign({}, r, { verdict: verdict, verdictClass: cls });
+          }).sort((a, b) => (Number(b.icmpMs) - Number(b.tcpMs)) - (Number(a.icmpMs) - Number(a.tcpMs)));
+          if (!this.latCmpRows.length) this.latCmpErr = '没有拿到任何测点结果';
+        }).catch(() => { this.latCmpLoading = false; this.latCmpErr = '对照探测失败，稍后重试'; });
+      },
       onLatHoverLossChart(e) {
         const ch = this.latencyLossCharts;
         const r = ch && ch.range;
@@ -4036,7 +4105,7 @@ function subLinkToken(subId) {
         cells.forEach((c, i) => {
           if (this.latencyIspHidden[c.isp]) return;
           if (!groups[c.isp]) {
-            groups[c.isp] = { order: order.length, color: this.latencyColorOf(c.isp, i), map: {}, bad: {} };
+            groups[c.isp] = { order: order.length, color: this.latencyColorOf(c.isp, i), map: {}, bad: {}, to: {} };
             order.push(c.isp);
           }
           const name = c.city + c.isp;
@@ -4044,6 +4113,7 @@ function subLinkToken(subId) {
           const m = groups[c.isp].map;
           const badMap = groups[c.isp].bad;
           (c.series || []).forEach(pt => {
+            if (pt.timeout) groups[c.isp].to[pt.ts] = true;
             const v = Number(pt[this.latencyMetricField()]) || 0;
             if (v <= 0) return;
             if (!m[pt.ts]) m[pt.ts] = [0, 0];
@@ -4063,15 +4133,16 @@ function subLinkToken(subId) {
             if (this.latencyIspHidden[c.isp]) return;
             const name = c.city + c.isp;
             if (this.latencyHidden[name]) return;
-            const data = [], bad = [];
+            const data = [], bad = [], timeouts = [];
             (c.series || []).forEach(pt => {
+              if (pt.timeout) timeouts.push([pt.ts, 0]);
               const v = Number(pt[this.latencyMetricField()]) || 0;
               if (v <= 0) return;
               data.push([pt.ts, v]);
               if ((Number(pt.lossPct) || 0) > 0) bad.push([pt.ts, v]);
             });
             if (!data.length) return;
-            out.push({ name: name, color: this.latencyColorOf(c.isp, i), dash: this.latencyDashOf(c.city, i), data: data, bad: bad });
+            out.push({ name: name, color: this.latencyColorOf(c.isp, i), dash: this.latencyDashOf(c.city, i), data: data, bad: bad, timeouts: timeouts });
           });
           return out;
         }
@@ -4082,7 +4153,8 @@ function subLinkToken(subId) {
           const data = keys.map(ts => [ts, g.map[ts][0] / g.map[ts][1]]);
           // 该时刻只要有一个城市丢包，就在图上打红点
           const bad = keys.filter(ts => g.bad[ts]).map(ts => [ts, g.map[ts][0] / g.map[ts][1]]);
-          return { name: isp, color: g.color, dash: '', data: data, bad: bad };
+          const timeouts = Object.keys(g.to).map(Number).sort((a, b) => a - b).map(ts => [ts, 0]);
+          return { name: isp, color: g.color, dash: '', data: data, bad: bad, timeouts: timeouts };
         });
       },
       // 区间带：每个运营商在 4 个城市上的最小值/最大值，画成阴影看「横向差异」
@@ -4314,6 +4386,13 @@ function subLinkToken(subId) {
             anchor: i === 0 ? 'start' : (i === nx - 1 ? 'end' : 'middle'),
           });
         }
+        // 超时标记：每桶只要有一格超时就打一个 ×（在丢包条带上方）
+        const timeoutSet = {};
+        visible.forEach(s => (s.timeouts || []).forEach(t => { timeoutSet[t[0]] = true; }));
+        const timeoutMarks = Object.keys(timeoutSet).map(Number).sort((a, b) => a - b)
+          .map(ts => ({ x: Math.round(xOf(ts) * 10) / 10, ts: ts }))
+          .filter(t => t.x >= padL && t.x <= padL + plotW);
+
         // 断档带：把时间戳区间映射成 x，太窄或完全在视野外就丢了
         const gaps = (o.gaps || []).map(g => {
           const x1 = Math.max(padL, xOf(g.a));
@@ -4343,7 +4422,7 @@ function subLinkToken(subId) {
           lineBottom: plotBottom,
         };
         return {
-          series: series, bands: bands, baseline: baselineSeries, gaps: gaps, yTicks: yTicks, typicalBand: typicalBand, medianY: medianY, xTicks: xTicks,
+          series: series, bands: bands, baseline: baselineSeries, gaps: gaps, timeoutMarks: timeoutMarks, yTicks: yTicks, typicalBand: typicalBand, medianY: medianY, xTicks: xTicks,
           range: range, spikes: spikes, lossStrip: lossStrip,
           refLines: refLines, refAway: refAway,
         };
@@ -5164,16 +5243,17 @@ function subLinkToken(subId) {
       },
       latencyCounts() {
         const cells = (this.latency && this.latency.cells) || [];
-        let fail = 0, s300 = 0, s500 = 0, s1000 = 0, jitSum = 0, jitN = 0;
+        let fail = 0, s300 = 0, s500 = 0, s1000 = 0, jitSum = 0, jitN = 0, timeouts = 0;
         cells.forEach(c => {
           fail += c.failCount || 0;
+          timeouts += c.timeouts || 0;
           s300 += c.slow300 || 0;
           s500 += c.slow500 || 0;
           s1000 += c.slow1000 || 0;
           if (c.avgJitter) { jitSum += c.avgJitter; jitN++; }
         });
         return {
-          fail: fail, s300: s300, s500: s500, s1000: s1000,
+          fail: fail, s300: s300, s500: s500, s1000: s1000, timeouts: timeouts,
           jitter: jitN ? (jitSum / jitN).toFixed(1) : '0.0',
         };
       },
@@ -5428,6 +5508,23 @@ function subLinkToken(subId) {
   .lat-median { stroke: rgba(17, 24, 39, .14); stroke-width: 1; stroke-dasharray: 5 4; }
   .lat-ref-line { stroke: rgba(246, 189, 22, .5); stroke-width: 1; stroke-dasharray: 4 4; }
   .lat-ref-label { font-size: 9px; fill: rgba(212, 140, 10, .95); font-variant-numeric: tabular-nums; }
+  /* ICMP / TCP 对照表 */
+  .lat-cmp-tip { font-size: 11px; line-height: 1.7; color: rgba(0, 0, 0, .5); margin-bottom: 8px; }
+  .lat-cmp-list { border-top: 1px solid rgba(17, 24, 39, .06); }
+  .lat-cmp-row { display: flex; align-items: center; gap: 8px; padding: 6px 2px;
+    border-bottom: 1px solid rgba(17, 24, 39, .06); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .lat-cmp-head { font-size: 10px; color: rgba(0, 0, 0, .4); border-bottom-color: rgba(17, 24, 39, .1); }
+  .lat-cmp-cell { flex: 1 1 26%; min-width: 86px; }
+  .lat-cmp-target { flex: 1 1 30%; color: rgba(0, 0, 0, .45); font-size: 11px; }
+  .lat-cmp-num { flex: 0 0 64px; text-align: right; }
+  .lat-cmp-ok { color: #237804; }
+  .lat-cmp-warn { color: #d46b08; }
+  .lat-cmp-bad { color: #cf1322; }
+  .lat-cmp-err { font-size: 12px; color: #cf1322; padding: 10px 0; }
+  .lat-cmp-foot { font-size: 10px; color: rgba(0, 0, 0, .35); margin-top: 8px; }
+  .inbounds-page.dark .lat-cmp-tip, .inbounds-page.dark .lat-cmp-target, .inbounds-page.dark .lat-cmp-foot { color: rgba(255, 255, 255, .42); }
+  .inbounds-page.dark .lat-cmp-list, .inbounds-page.dark .lat-cmp-row { border-color: rgba(255, 255, 255, .08); }  .lat-timeout-mark { stroke: rgba(120, 120, 120, .75); stroke-width: 1.2; stroke-linecap: round; }
+  .inbounds-page.dark .lat-timeout-mark { stroke: rgba(255, 255, 255, .45); }
   .lat-gap-label { font-size: 8.5px; fill: rgba(100, 116, 139, .8); }
   .inbounds-page.dark .lat-gap-label { fill: rgba(255, 255, 255, .38); }
   .lat-sub-block { margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(17, 24, 39, .07); }

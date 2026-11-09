@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"net"
 	"os/exec"
 	"regexp"
 	"runtime"
@@ -107,6 +108,8 @@ type LatencyPoint struct {
 	MaxMs   float64 `json:"maxMs"`
 	LossPct float64 `json:"lossPct"`
 	Jitter  float64 `json:"jitter"`
+	// Timeout=这个桶里一个包都没回来（探测超时），区别于"没取样"
+	Timeout bool `json:"timeout,omitempty"`
 }
 
 // LatencyDaily 是某一天的统计（按 +08:00 切天）。
@@ -137,12 +140,14 @@ type LatencyCell struct {
 	AvgJitter   float64 `json:"avgJitter"`
 	Samples     int     `json:"samples"`
 	// 探针失败 / 慢请求计数（对应 Grafana 那种 Probe failures / >300ms count 面板）
-	FailCount int            `json:"failCount"`
-	Slow300   int            `json:"slow300"`
-	Slow500   int            `json:"slow500"`
-	Slow1000  int            `json:"slow1000"`
-	Series    []LatencyPoint `json:"series"`
-	Daily     []LatencyDaily `json:"daily"`
+	FailCount int `json:"failCount"`
+	Slow300   int `json:"slow300"`
+	Slow500   int `json:"slow500"`
+	Slow1000  int `json:"slow1000"`
+	// 窗口内超时轮数（recv=0），和「慢请求」分开统计
+	Timeouts int            `json:"timeouts"`
+	Series   []LatencyPoint `json:"series"`
+	Daily    []LatencyDaily `json:"daily"`
 	// 基线：过去 7 天同一小时的均值（按 +08:00 的小时归槽，24 个点）
 	Baseline []LatencyBaseline `json:"baseline,omitempty"`
 }
@@ -195,6 +200,91 @@ func (s *LatencyService) PingOnce(ctx context.Context, ip string, count int) Lat
 	cmd := exec.CommandContext(cctx, "ping", args...)
 	out, _ := cmd.CombinedOutput()
 	return parsePingOutput(string(out), ip, count, runtime.GOOS == "windows")
+}
+
+// PingTCPOnce 用 TCP 三次握手测延迟。
+// 国内骨干常对 ICMP 限速（表现为晚高峰丢包/抬高 RTT），TCP 更接近业务真实路径，
+// 两者同时看才能分清「真拥塞」和「ICMP 被降级」。
+func (s *LatencyService) PingTCPOnce(ctx context.Context, host string, port, count int) LatencyProbeResult {
+	if count <= 0 {
+		count = latencyPingCount
+	}
+	if port <= 0 {
+		port = 53
+	}
+	res := LatencyProbeResult{Target: host, Sent: count}
+	dialer := net.Dialer{Timeout: 2 * time.Second}
+	var sum, minV, maxV float64
+	for i := 0; i < count; i++ {
+		dctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		start := time.Now()
+		conn, err := dialer.DialContext(dctx, "tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+		cancel()
+		if err != nil {
+			continue
+		}
+		ms := float64(time.Since(start).Microseconds()) / 1000
+		_ = conn.Close()
+		res.Recv++
+		sum += ms
+		if res.Recv == 1 || ms < minV {
+			minV = ms
+		}
+		if ms > maxV {
+			maxV = ms
+		}
+	}
+	if res.Sent > 0 {
+		res.LossPct = float64(res.Sent-res.Recv) / float64(res.Sent) * 100
+	}
+	if res.Recv > 0 {
+		res.MinMs, res.MaxMs = minV, maxV
+		res.AvgMs = sum / float64(res.Recv)
+	}
+	return res
+}
+
+// LatencyCompareRow 是同一个测点的 ICMP / TCP 对照结果。
+type LatencyCompareRow struct {
+	City     string  `json:"city"`
+	Isp      string  `json:"isp"`
+	Target   string  `json:"target"`
+	Port     int     `json:"port"`
+	ICMPMs   float64 `json:"icmpMs"`
+	ICMPLoss float64 `json:"icmpLoss"`
+	TCPMs    float64 `json:"tcpMs"`
+	TCPLoss  float64 `json:"tcpLoss"`
+}
+
+// Compare 对每个测点同时跑一遍 ICMP 和 TCP（3 包），用于判断
+// 高延迟/丢包是链路真的差，还是 ICMP 被中间设备降级。
+func (s *LatencyService) Compare(ctx context.Context) []LatencyCompareRow {
+	targets := s.Targets()
+	out := make([]LatencyCompareRow, len(targets))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 6)
+	for i, t := range targets {
+		wg.Add(1)
+		go func(i int, t LatencyTarget) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			ic, ok := s.probeTarget(ctx, t)
+			if !ok || ic.Target == "" {
+				out[i] = LatencyCompareRow{City: t.City, Isp: t.Isp, Port: 53, ICMPLoss: 100, TCPLoss: 100}
+				return
+			}
+			ip := ic.Target
+			tc := s.PingTCPOnce(ctx, ip, 53, 3)
+			out[i] = LatencyCompareRow{
+				City: t.City, Isp: t.Isp, Target: ip, Port: 53,
+				ICMPMs: round2(ic.AvgMs), ICMPLoss: round2(ic.LossPct),
+				TCPMs: round2(tc.AvgMs), TCPLoss: round2(tc.LossPct),
+			}
+		}(i, t)
+	}
+	wg.Wait()
+	return out
 }
 
 // parsePingOutput 把 ping 的输出解析成结构化结果。
@@ -544,6 +634,7 @@ func (s *LatencyService) SummaryRange(hours int, from, to int64) (*LatencySummar
 		for _, r := range b.rows {
 			if r.Recv == 0 {
 				cell.FailCount++
+				cell.Timeouts++
 			}
 			if r.AvgMs > 300 {
 				cell.Slow300++
@@ -679,6 +770,10 @@ func bucketize(rows []model.LatencySample, buckets int) []LatencyPoint {
 		}
 		if sent > 0 {
 			p.LossPct = round2(float64(sent-recv) / float64(sent) * 100)
+		}
+		// 整桶一个回包都没有 = 这一轮探测超时（不是没取样，也不是 0ms）
+		if recv == 0 && sent > 0 {
+			p.Timeout = true
 		}
 		if len(avgs) > 0 {
 			sorted := append([]float64(nil), avgs...)

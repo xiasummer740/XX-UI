@@ -1,8 +1,10 @@
 package controller
 
 import (
+	"context"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/XiaSummer740/XX-UI/web/service"
 
@@ -27,7 +29,7 @@ func (a *LatencyController) initRouter(g *gin.RouterGroup) {
 	// 用 POST：查询窗口参数走 body，避免出现在访问日志/Referer 里
 	g.POST("/summary", a.summary)
 	g.POST("/run", a.runNow)
-	g.POST("/targets", a.targets)
+	g.POST("/compare", a.compare)
 }
 
 // summary 返回最近 N 小时的三网延迟汇总（城市 × 运营商 + 曲线）。
@@ -67,6 +69,13 @@ func (a *LatencyController) runNow(c *gin.Context) {
 	}
 	sum, err := a.latencyService.Summary(24)
 	jsonObj(c, gin.H{"count": n, "summary": sum}, err)
+}
+
+// compare 对每个测点同时跑 ICMP 和 TCP，用来分辨「真拥塞」和「ICMP 被限速」。
+func (a *LatencyController) compare(c *gin.Context) {
+	start := time.Now()
+	rows := a.latencyService.Compare(context.Background())
+	jsonObj(c, gin.H{"rows": rows, "tookMs": time.Since(start).Milliseconds()}, nil)
 }
 
 // targets 返回当前生效的测点配置（前端「设置」弹窗用来回填）。
