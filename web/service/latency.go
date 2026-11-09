@@ -314,6 +314,11 @@ func (s *LatencyService) PingTCPHost(ctx context.Context, host string, count int
 			if !strings.Contains(ip, ":") {
 				tcpPin(host, ip)
 			}
+			// 握手用时取最小值：个别节点会把 SYN 排队几秒再回，
+			// 平均值会被这种排队拉成 900ms+，最小值才是链路本身的往返。
+			if best.MinMs > 0 {
+				best.AvgMs = best.MinMs
+			}
 			best.Target = host + " (" + ip + ":" + strconv.Itoa(bestPort) + ")"
 			return best
 		}
