@@ -29,6 +29,7 @@ func (a *LatencyController) initRouter(g *gin.RouterGroup) {
 	// 用 POST：查询窗口参数走 body，避免出现在访问日志/Referer 里
 	g.POST("/summary", a.summary)
 	g.POST("/run", a.runNow)
+	g.POST("/targets", a.targets)
 	g.POST("/compare", a.compare)
 }
 
