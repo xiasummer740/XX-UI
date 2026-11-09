@@ -3816,7 +3816,20 @@ function subLinkToken(subId) {
       },
       onLatHover(e) {
         // 正在拖框时不弹浮层，只更新选区
-        if (this.latBrush) { this.onLatBrushMove(e); return; }
+        if (this.latBrush && this.latBrush.moved) { this.onLatBrushMove(e); return; }
+        // 一帧只处理一次：原来的实现每个 mousemove 都重算 12 条线并重绘浮层，
+        // 鼠标一动就排队，表现就是「浮层半天不出来」。
+        this._hoverRaw = { clientX: e.clientX };
+        // 第一次进入图表立刻算一次，用户不用等下一帧
+        if (!this.latHover) { this.applyLatHover(this._hoverRaw); return; }
+        if (this._hoverRaf) return;
+        this._hoverRaf = (window.requestAnimationFrame || (fn => setTimeout(fn, 16)))(() => {
+          this._hoverRaf = null;
+          const ev = this._hoverRaw;
+          if (ev) this.applyLatHover(ev);
+        });
+      },
+      applyLatHover(e) {
         const chart = this.chartTiny;
         const box = this.$refs.latBox;
         if (!chart || !box || !chart.series.length || !chart.range) return;
@@ -3884,6 +3897,14 @@ function subLinkToken(subId) {
 
         const when = new Date(Math.round(ts) * 1000);
         const pct = (xOfTs(ts) / 1000) * 100;
+        // 时间点没变（只是鼠标横向挪动）：就地更新位置，不重建浮层内容
+        if (this.latHoverTs === ts && this.latHover) {
+          this.latHover = Object.assign({}, this.latHover, {
+            x: xOfTs(ts).toFixed(1),
+            tipStyle: { left: pct + '%', transform: pct > 60 ? 'translateX(-104%)' : 'translateX(4%)' },
+          });
+          return;
+        }
         this.latHoverTs = ts;
         this.latHover = {
           x: xOfTs(ts).toFixed(1),
@@ -4116,18 +4137,19 @@ function subLinkToken(subId) {
       onLatBrushStart(e) {
         const ts = this.latXToTs(e.clientX);
         if (ts === null) return;
-        this.latBrush = { fromTs: ts, toTs: ts, fromX: e.clientX, toX: e.clientX };
+        this.latBrush = { fromTs: ts, toTs: ts, fromX: e.clientX, toX: e.clientX, moved: false };
       },
       onLatBrushMove(e) {
         if (!this.latBrush) return;
         const ts = this.latXToTs(e.clientX);
         if (ts === null) return;
-        this.latBrush = Object.assign({}, this.latBrush, { toTs: ts, toX: e.clientX });
+        const moved = this.latBrush.moved || Math.abs(e.clientX - this.latBrush.fromX) >= 4;
+        this.latBrush = Object.assign({}, this.latBrush, { toTs: ts, toX: e.clientX, moved: moved });
       },
       onLatBrushEnd() {
         const b = this.latBrush;
         this.latBrush = null;
-        if (!b) return;
+        if (!b || !b.moved) return;
         const from = Math.min(b.fromTs, b.toTs);
         const to = Math.max(b.fromTs, b.toTs);
         // 太窄当误触，忽略（小于 60 秒）
@@ -4910,6 +4932,9 @@ function subLinkToken(subId) {
       // 顶部「套餐用量」卡片：进页面就拉一次，之后跟随刷新
       this.applyLatHash();
       this.loadVpsUsage();
+      // 鼠标在图表外松开时也要结束框选，否则 latBrush 卡住会让浮层一直不出现
+      this._latUpHandler = () => { if (this.latBrush) this.onLatBrushEnd(); };
+      window.addEventListener('mouseup', this._latUpHandler);
       // 延迟/服务器状态包较大，先让入站列表出图再拉
       setTimeout(() => this.loadSysmon(), 600);
       // 三网延迟：进页面拉一次，之后每 60 秒跟一次
@@ -5053,6 +5078,7 @@ function subLinkToken(subId) {
       }
     },
     beforeDestroy() {
+      if (this._latUpHandler) window.removeEventListener('mouseup', this._latUpHandler);
       if (this.pingTimer) {
         clearInterval(this.pingTimer);
         this.pingTimer = null;
