@@ -157,8 +157,8 @@
                       [[ latencyAlerts.length ? latencyAlerts.length + ' 项异常' : '全部正常' ]]
                     </span>
                     <a-button size="small" icon="left" title="前一天" @click="shiftLatDay(-1)"></a-button>
-                    <a-date-picker size="small" class="lat-day-picker" :value="latDay" value-format="YYYY-MM-DD"
-                      placeholder="选择日期" :allow-clear="true" @change="applyLatDay"></a-date-picker>
+                    <a-range-picker size="small" class="lat-day-picker" v-model="latDayRange" value-format="YYYY-MM-DD"
+                      :placeholder="['开始日期', '结束日期']" :allow-clear="true" @change="applyLatDayRange"></a-range-picker>
                     <a-button size="small" icon="right" title="后一天" @click="shiftLatDay(1)"></a-button>
                     <a-radio-group v-model="latencyHours" size="small" button-style="solid"
                       @change="loadLatency">
@@ -171,6 +171,7 @@
                     <a-button size="small" icon="thunderbolt" :loading="latencyTesting"
                       @click="runLatencyNow">测</a-button>
                     <a-tag v-if="latencyRange" closable color="blue" class="lat-range-tag" @close="resetLatencyRange">自定义区间</a-tag>
+                    <a-button v-if="latZoomStack.length" size="small" class="lat-zoom-back" title="返回上一级窗口" @click="latZoomBack">返回上一级</a-button>
                     <span v-if="latencyRunNote" class="lat-run-note">[[ latencyRunNote ]]</span>
                     <a-button size="small" @click="latencyExpanded = !latencyExpanded">
                       [[ latencyExpanded ? '收起' : '展开' ]]
@@ -200,6 +201,19 @@
                             class="lat-chip" @change="e => toggleLatencyIsp(s.name)"
                             @mouseenter.native="latOnly = 'isp:' + s.name" @mouseleave.native="latOnly = null">[[ s.name ]]</a-checkbox>
                         </span>
+                        <a-popover placement="bottomRight" title="指标说明" trigger="click">
+                          <template #content>
+                            <div class="lat-help">
+                              <p><b>曲线</b>：平均 / P95 / 最大 三种口径，可在右侧切换。P95 比平均更能反映卡顿。</p>
+                              <p><b>阈值线</b>：170ms 正常、220ms 关注；超过 220ms 或丢包 ≥5% 记一次异常。</p>
+                              <p><b>丢包条带</b>：图下方色带，黄=有丢包，橙=≥3%，红=≥10% 或整轮超时。</p>
+                              <p><b>灰 ×</b>：该时段一个回包都没收到（探测超时），与"没数据"区分。</p>
+                              <p><b>消峰</b>：对曲线做滑动平均，只看趋势，不改原始数据。</p>
+                              <p><b>ICMP / TCP</b>：ICMP 走网络层（最贴近真实路径），TCP 走 CDN 节点 443 握手，两边差得远说明 ICMP 被限速。</p>
+                            </div>
+                          </template>
+                          <span class="lat-help-btn"><a-icon type="question-circle"></a-icon>指标说明</span>
+                        </a-popover>
                         <span class="lat-chart-hint">
                           <a-radio-group v-model="latencyMetric" size="small" button-style="solid">
                             <a-radio-button value="avg">平均</a-radio-button>
@@ -2092,6 +2106,8 @@ function subLinkToken(subId) {
       latSmooth: 0,
       latMode: (() => { try { return localStorage.getItem('latMode') || 'icmp'; } catch (e) { return 'icmp'; } })(),
       latOnly: null,
+      latDayRange: [],
+      latZoomStack: [],
       latBrush: null,
       latPinned: false,
       latHoverLossChart: null,
@@ -3733,6 +3749,30 @@ function subLinkToken(subId) {
         this.latencyScopeSel = Array.isArray(v) ? v.slice() : [];
         try { localStorage.setItem('latScopeSel', JSON.stringify(this.latencyScopeSel)); } catch (e) {}
       },
+      // 日期区间：多天一起看，走已有的 from/to 查询
+      applyLatDayRange(v) {
+        if (!v || v.length !== 2) {
+          this.latDayRange = [];
+          this.latZoomStack = [];
+          this.latencyRange = null;
+          this.loadLatency();
+          return;
+        }
+        const a = moment(v[0] + ' 00:00:00', 'YYYY-MM-DD HH:mm:ss');
+        const b = moment(v[1] + ' 23:59:59', 'YYYY-MM-DD HH:mm:ss');
+        if (!a.isValid() || !b.isValid()) return;
+        this.latDayRange = v.slice();
+        this.latZoomStack = [];
+        this.latencyRange = { from: a.unix(), to: b.unix() };
+        this.loadLatency();
+      },
+      // 缩放后返回上一级窗口
+      latZoomBack() {
+        if (!this.latZoomStack.length) return;
+        const prev = this.latZoomStack.pop();
+        this.latencyRange = prev || null;
+        this.loadLatency();
+      },
       // 日期跳转：整日窗口（00:00–23:59:59），走已有的 from/to 查询
       applyLatDay(day) {
         this.latDay = day || '';
@@ -4155,12 +4195,16 @@ function subLinkToken(subId) {
         const to = Math.max(b.fromTs, b.toTs);
         // 太窄当误触，忽略（小于 60 秒）
         if (to - from < 60) return;
+        this.latZoomStack.push(this.latencyRange ? Object.assign({}, this.latencyRange) : null);
+        if (this.latZoomStack.length > 8) this.latZoomStack.shift();
         this.latencyRange = { from: from, to: to };
         this.loadLatency();
       },
       // 点丢包事件：把窗口收窄到该时刻前后 10 分钟
       zoomToTs(ts) {
         if (!ts) return;
+        this.latZoomStack.push(this.latencyRange ? Object.assign({}, this.latencyRange) : null);
+        if (this.latZoomStack.length > 8) this.latZoomStack.shift();
         this.latencyRange = { from: ts - 600, to: ts + 600 };
         this.loadLatency();
       },
@@ -5611,7 +5655,15 @@ function subLinkToken(subId) {
   .inbounds-page.dark .lat-chip-group { background: rgba(255, 255, 255, .05); border-color: rgba(255, 255, 255, .12); }
   .inbounds-page.dark .lat-chip-group .ant-checkbox-wrapper { color: rgba(255, 255, 255, .65); }  .lat-clear-chip { font-size: 10px; color: #5b8ff9; cursor: pointer; padding: 0 2px; opacity: .8; }
   .lat-clear-chip:hover { opacity: 1; text-decoration: underline; }
-  .lat-day-picker { width: 118px; }
+  .lat-day-picker { width: 210px; }
+  .lat-help { max-width: 320px; font-size: 12px; line-height: 1.7; }
+  .lat-help p { margin: 0 0 4px; }
+  .lat-help b { color: rgba(0, 0, 0, .75); }
+  .lat-help-btn { display: inline-flex; align-items: center; gap: 3px; font-size: 11px;
+    color: rgba(0, 0, 0, .45); cursor: pointer; }
+  .lat-help-btn:hover { color: #5b8ff9; }
+  .lat-zoom-back { font-size: 11px; }
+  .inbounds-page.dark .lat-help-btn { color: rgba(255, 255, 255, .5); }
   .lat-day-picker .ant-input { font-size: 11px; border-radius: 999px; }
   .lat-smooth-wrap { display: inline-flex; align-items: center; gap: 6px; }
   .lat-smooth-label { font-size: 10px; color: rgba(0, 0, 0, .45); }
