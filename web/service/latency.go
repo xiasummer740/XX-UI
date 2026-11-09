@@ -270,13 +270,6 @@ func tcpPin(host, ip string) {
 func (s *LatencyService) PingTCPHost(ctx context.Context, host string, count int) LatencyProbeResult {
 	res := LatencyProbeResult{Target: host, Sent: count}
 	pinned := tcpPinned(host)
-	if pinned != "" {
-		r := s.PingTCPOnce(ctx, pinned, 443, count)
-		if r.Recv > 0 {
-			r.Target = host + " (" + pinned + ":443)"
-			return r
-		}
-	}
 	ips, err := net.LookupHost(host)
 	if err != nil || len(ips) == 0 {
 		res.LossPct = 100
@@ -291,7 +284,18 @@ func (s *LatencyService) PingTCPHost(ctx context.Context, host string, count int
 			v4 = append(v4, ip)
 		}
 	}
-	order := append(v4, v6...)
+	pref := append([]string{}, v4...)
+	pref = append(pref, v6...)
+	if pinned != "" {
+		uniq := []string{pinned}
+		for _, ip := range pref {
+			if ip != pinned {
+				uniq = append(uniq, ip)
+			}
+		}
+		pref = uniq
+	}
+	order := pref
 	for _, ip := range order {
 		// 两个端口都测，取更快的那次：个别 CDN 节点只对 443 限速（实测会到 1200ms），
 		// 80 却还是 160ms，只测 443 会把这种限速误判成「线路很差」。
