@@ -325,13 +325,14 @@
                         </svg>
                         <div v-if="latHover" class="lat-tip" :style="latHover.tipStyle" :class="{ 'lat-tip-pinned': latPinned }">
                           <span v-if="latPinned" class="lat-pinned-hint">已钉住</span>
-                          <div class="lat-tip-time">[[ latHover.time ]]<em v-if="latHoverLoss" class="lat-tip-lossall">丢包 [[ latHoverLoss ]]</em></div>
+                          <div class="lat-tip-time">[[ latHover.time ]]</div>
                           <div v-for="r in latHover.rows" :key="'tip-' + r.name" class="lat-tip-row">
                             <span class="lat-tip-name" :style="{ color: r.color }">[[ r.name ]]</span>
                             <span class="lat-tip-val">[[ r.value ]]<em>ms</em></span>
                             <span class="lat-tip-loss" v-if="r.loss > 0">丢 [[ r.loss ]]%</span>
                             <div class="lat-tip-cities">
-                              <span v-for="c in r.cities" :key="r.name + c.city">[[ c.city ]] [[ c.value ]]</span>
+                              <span v-for="c in r.cities" :key="r.name + c.city" class="lat-tip-city"
+                                :class="{ 'lat-tip-city-loss': c.loss > 0 }">[[ c.city ]] [[ c.value ]]ms<em v-if="c.loss > 0"> · 丢 [[ c.loss ]]%</em></span>
                             </div>
                           </div>
                         </div>
@@ -3889,7 +3890,7 @@ function subLinkToken(subId) {
             if (!bb) return;
             const v = Number(bb[field]) || 0;
             if (v <= 0) return;
-            cities.push({ city: c.city, value: Math.round(v) });
+            cities.push({ city: c.city, value: Math.round(v), loss: Math.round(Number(bb.lossPct) || 0) });
             const l = Number(bb.lossPct) || 0;
             if (l > lossMax) lossMax = l;
           });
@@ -5747,6 +5748,9 @@ function subLinkToken(subId) {
   .lat-tip-name { font-weight: 600; min-width: 26px; }
   .lat-tip-val { font-weight: 600; color: rgba(0, 0, 0, .85); }
   .lat-tip-val em { font-style: normal; font-size: 9px; color: #bfbfbf; margin-left: 1px; }
+  .lat-tip-city { margin-right: 6px; }
+  .lat-tip-city-loss { color: #d46b08; }
+  .lat-tip-city em { font-style: normal; font-size: 9px; }
   .lat-tip-loss { font-size: 9px; color: #cf1322; background: rgba(245, 34, 45, .10); padding: 0 3px; border-radius: 2px; }
   .lat-tip-cities { flex: 1 0 100%; color: #8c8c8c; font-size: 10px; display: flex; gap: 6px; }
   .lat-hint-text { color: #bfbfbf; }
