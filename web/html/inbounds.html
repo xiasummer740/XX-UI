@@ -509,6 +509,38 @@
                 </a-spin>
               </a-card>
             </a-col>
+            <a-col :span="24">
+              <a-card size="small" class="sys-card">
+                <template #title>
+                  <div class="sys-head">
+                    <span class="sys-title"><a-icon type="dashboard"></a-icon>服务器状态</span>
+                    <a-radio-group v-model="sysHours" size="small" button-style="solid" @change="loadSysmon">
+                      <a-radio-button :value="1">1h</a-radio-button>
+                      <a-radio-button :value="6">6h</a-radio-button>
+                      <a-radio-button :value="24">24h</a-radio-button>
+                      <a-radio-button :value="168">7d</a-radio-button>
+                    </a-radio-group>
+                  </div>
+                </template>
+                <a-spin :spinning="sysLoading">
+                  <div v-if="sysCharts.length" class="sys-grid">
+                    <div v-for="c in sysCharts" :key="'sys-' + c.key" class="sys-mini">
+                      <div class="sys-mini-head">
+                        <span class="sys-mini-name">[[ c.name ]]</span>
+                        <span class="sys-mini-val" :style="{ color: c.color }">[[ c.lastText ]]</span>
+                      </div>
+                      <svg class="sys-mini-svg" viewBox="0 0 300 72">
+                        <polygon v-if="c.area" :points="c.area" :fill="c.color" fill-opacity="0.12"></polygon>
+                        <polyline v-if="c.points" :points="c.points" fill="none" :stroke="c.color" stroke-width="1.2"
+                          stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline>
+                      </svg>
+                      <div class="sys-mini-foot">峰值 [[ c.maxText ]] · 平均 [[ c.avgText ]]</div>
+                    </div>
+                  </div>
+                  <div v-else class="lat-empty"><a-icon type="dashboard"></a-icon><span>还没有采集到数据，30 秒后自动出现</span></div>
+                </a-spin>
+              </a-card>
+            </a-col>
             <a-col>
               <a-card hoverable>
                 <template #title>
@@ -2063,6 +2095,9 @@ function subLinkToken(subId) {
       latBrush: null,
       latPinned: false,
       latHoverLossChart: null,
+      sysHours: 24,
+      sysLoading: false,
+      sysmon: { updatedAt: 0, samples: 0, series: [] },
       latCmpOpen: false,
       latCmpLoading: false,
       latCmpErr: '',
@@ -3646,6 +3681,15 @@ function subLinkToken(subId) {
           this.latencyLoading = false;
         }
       },
+      // 服务器状态曲线：CPU / 负载 / 内存 / 磁盘 / 网络 / 进程 / 连接数
+      loadSysmon() {
+        this.sysLoading = true;
+        HttpUtil.post('/panel/api/sysmon/summary', { hours: this.sysHours }).then(msg => {
+          this.sysLoading = false;
+          if (msg && msg.success && msg.obj) this.sysmon = msg.obj;
+        }).catch(() => { this.sysLoading = false; });
+      },
+
       async runLatencyNow() {
         this.latencyTesting = true;
         const t0 = Date.now();
@@ -4090,6 +4134,7 @@ function subLinkToken(subId) {
         return d === undefined ? this.latencyDashes[idx % this.latencyDashes.length] : d;
       },
 
+      // 服务器状态：把接口里的序列转成 sparkline 路径（面积 + 折线）
       // 当前视角下的 cell 集合：默认只取一个城市，选「全网」才是 12 个测点
       latencyScopedCells() {
         const cells = (this.latency && this.latency.cells) || [];
@@ -4789,6 +4834,7 @@ function subLinkToken(subId) {
       // 顶部「套餐用量」卡片：进页面就拉一次，之后跟随刷新
       this.applyLatHash();
       this.loadVpsUsage();
+      this.loadSysmon();
       // 三网延迟：进页面拉一次，之后每 60 秒跟一次
       this.loadLatency();
       this.latencyTimer = setInterval(() => this.loadLatency(), 60000);
@@ -4938,6 +4984,38 @@ function subLinkToken(subId) {
       }
     },
     computed: {
+      sysCharts() {
+        const list = (this.sysmon && this.sysmon.series) || [];
+        const colors = ['#5b8ff9', '#5ad8a6', '#f6bd16', '#7262fd', '#78d3f8', '#9661bc', '#f6903d', '#008685', '#f08bb4', '#c2c8d5'];
+        const fmt = (v, unit) => {
+          if (unit === 'B/s') {
+            const n = Number(v) || 0;
+            if (n >= 1048576) return (n / 1048576).toFixed(2) + ' MB/s';
+            if (n >= 1024) return (n / 1024).toFixed(1) + ' KB/s';
+            return Math.round(n) + ' B/s';
+          }
+          if (unit === '%') return (Number(v) || 0).toFixed(1) + '%';
+          return (Math.abs(Number(v) || 0) >= 100 ? Math.round(v) : (Number(v) || 0).toFixed(1));
+        };
+        return list.map((s, i) => {
+          const pts = (s.points || []).map(p => Number(p.value) || 0);
+          let points = '', area = '';
+          if (pts.length >= 2) {
+            const W = 300, H = 72, pad = 4;
+            const lo = Math.min.apply(null, pts), hi = Math.max.apply(null, pts);
+            const span = (hi - lo) || (hi || 1);
+            const xs = j => (j / (pts.length - 1)) * W;
+            const ys = v => H - pad - ((v - lo) / span) * (H - pad * 2);
+            points = pts.map((v, j) => xs(j).toFixed(1) + ',' + ys(v).toFixed(1)).join(' ');
+            area = '0,' + H + ' ' + points + ' ' + W + ',' + H;
+          }
+          return {
+            key: s.key, name: s.name, color: colors[i % colors.length],
+            points: points, area: area,
+            lastText: fmt(s.last, s.unit), maxText: fmt(s.max, s.unit), avgText: fmt(s.avg, s.unit),
+          };
+        });
+      },
       // 城市下拉：后端给的城市顺序优先，没有就用固定四城兜底
       latencyCityOptions() {
         const cs = ((this.latency && this.latency.cities) || []).slice();
@@ -5400,7 +5478,25 @@ function subLinkToken(subId) {
     display: flex; align-items: center; flex-wrap: wrap; gap: 4px 14px;
     margin-bottom: 2px; font-size: 11px; color: #8c8c8c;
   }
-  /* 城市选择：小胶囊按钮代替多选框，选中数量一目了然 */
+  /* 服务器状态：每个指标一张小图，标题左、当前值右 */
+  /* 页面有一层装饰背景盖在卡片上，给个显式层叠上下文，否则内容画不出来 */
+  .sys-card { position: relative; z-index: 5; }
+  .sys-card .ant-card-body { padding: 10px 12px 8px; position: relative; z-index: 1; }
+  .sys-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .sys-title { font-size: 12px; font-weight: 500; color: rgba(0, 0, 0, .72); }
+  .sys-title .anticon { margin-right: 4px; color: #5b8ff9; }
+  .sys-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .sys-mini { position: relative; z-index: 1; border: 1px solid rgba(17, 24, 39, .06); border-radius: 6px; padding: 6px 8px 4px; background: rgba(255, 255, 255, .55); }
+  .sys-mini-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+  .sys-mini-name { font-size: 11px; color: rgba(0, 0, 0, .5); }
+  .sys-mini-val { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .sys-mini-svg { width: 100%; height: 54px; display: block; margin: 2px 0 0; }
+  .sys-mini-foot { font-size: 9.5px; color: rgba(0, 0, 0, .35); font-variant-numeric: tabular-nums; }
+  .inbounds-page.dark .sys-mini { background: rgba(255, 255, 255, .04); border-color: rgba(255, 255, 255, .08); }
+  .inbounds-page.dark .sys-title { color: rgba(255, 255, 255, .8); }
+  .inbounds-page.dark .sys-mini-name, .inbounds-page.dark .sys-mini-foot { color: rgba(255, 255, 255, .4); }
+  @media (max-width: 900px) { .sys-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 560px) { .sys-grid { grid-template-columns: 1fr; } .sys-mini-svg { height: 46px; } }  /* 城市选择：小胶囊按钮代替多选框，选中数量一目了然 */
   .lat-city-drop { display: inline-flex; }
   .lat-city-btn {
     display: inline-flex; align-items: center; gap: 3px;

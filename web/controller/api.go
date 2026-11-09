@@ -67,6 +67,9 @@ func (a *APIController) initRouter(g *gin.RouterGroup, customGeo *service.Custom
 	// 三网延迟监测（城市 × 电信/联通/移动 的延迟与丢包，保留 30 天）
 	NewLatencyController(api.Group("/latency"))
 
+	// 服务器自身指标曲线（CPU/内存/磁盘/网络/进程/连接数，保留 7 天）
+	NewSysmonController(api.Group("/sysmon"))
+
 	// Remote management API (uses API key auth, not session)
 	remote := g.Group("/panel/remote")
 	remote.Use(middleware.ApiKeyAuth())

@@ -246,3 +246,22 @@ type LatencySample struct {
 	MaxMs   float64 `json:"maxMs"`
 	Jitter  float64 `json:"jitter"` // mdev，抖动
 }
+
+// SysSample 是服务器自身的运行指标采样（每 30 秒一行，保留 7 天）：
+// CPU / 负载 / 内存 / Swap / 磁盘 / 网络速率 / 进程数 / TCP-UDP 连接数。
+type SysSample struct {
+	Id      int     `json:"id" gorm:"primaryKey;autoIncrement"`
+	Ts      int64   `json:"ts" gorm:"index:idx_sys_ts"` // unix 秒
+	Cpu     float64 `json:"cpu"`                        // CPU 使用率 %
+	Load1   float64 `json:"load1"`
+	Load5   float64 `json:"load5"`
+	Load15  float64 `json:"load15"`
+	MemPct  float64 `json:"memPct"`  // 内存使用率 %
+	SwapPct float64 `json:"swapPct"` // Swap 使用率 %
+	DiskPct float64 `json:"diskPct"` // 根分区使用率 %
+	NetIn   float64 `json:"netIn"`   // 下行 B/s
+	NetOut  float64 `json:"netOut"`  // 上行 B/s
+	Procs   int     `json:"procs"`   // 进程数
+	Tcp     int     `json:"tcp"`
+	Udp     int     `json:"udp"`
+}

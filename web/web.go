@@ -397,6 +397,7 @@ func (s *Server) startTask() {
 
 	// 三网延迟监测：每分钟检查一次是否到点（实际间隔由设置决定，默认 5 分钟）
 	s.cron.AddJob("@every 1s", job.NewLatencyMonitorJob())
+	s.cron.AddJob("@every 1s", job.NewSysmonJob())
 
 	// 每天 03:00 把数据库备份发到邮箱（整机挂掉也不丢数据）
 	s.cron.AddJob("0 3 * * *", job.NewDbEmailBackupJob())
