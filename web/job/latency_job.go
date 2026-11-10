@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/XiaSummer740/XX-UI/database"
 	"github.com/XiaSummer740/XX-UI/logger"
 	"github.com/XiaSummer740/XX-UI/web/service"
 )
@@ -84,6 +85,14 @@ func (j *LatencyMonitorJob) Run() {
 			logger.Warning("三网延迟历史降采样失败:", err)
 		} else if del > 0 {
 			logger.Infof("三网延迟历史降采样：%d 行合并为 %d 行", del, add)
+		}
+	}
+
+	// 每 30 分钟顺带把 WAL 收一下：高频写入会把 -wal 撑到几十 MB，
+	// 1GB 内存的小机器上这层缓存太大反而拖慢读。
+	if rollupDue {
+		if err := database.GetDB().Exec("PRAGMA wal_checkpoint(TRUNCATE);").Error; err != nil {
+			logger.Debug("[latency] WAL checkpoint 失败: ", err)
 		}
 	}
 
