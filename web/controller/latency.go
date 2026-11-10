@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/XiaSummer740/XX-UI/logger"
 	"github.com/XiaSummer740/XX-UI/web/service"
 
 	"github.com/gin-gonic/gin"
@@ -57,6 +58,16 @@ func (a *LatencyController) summary(c *gin.Context) {
 	}
 	mode := strings.TrimSpace(c.PostForm("mode"))
 	sum, err := a.latencyService.SummaryRange(hours, from, to, mode)
+	// 排障用：把请求窗口和实际返回跨度记一行，7d/30d 不生效时能直接看出来
+	if err == nil && sum != nil {
+		spanH := 0.0
+		if len(sum.Cells) > 0 && len(sum.Cells[0].Series) > 1 {
+			s := sum.Cells[0].Series
+			spanH = float64(s[len(s)-1].Ts-s[0].Ts) / 3600
+		}
+		logger.Infof("[latency] summary hours=%d from=%d to=%d mode=%s -> 返回跨度 %.1fh 点数 %d",
+			hours, from, to, mode, spanH, len(sum.Cells))
+	}
 	jsonObj(c, sum, err)
 }
 

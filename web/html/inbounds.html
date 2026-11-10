@@ -460,6 +460,7 @@
                   </div>
                   <div class="lat-foot">
                     <span>最后采样 <b>[[ latency.updatedAt ? fmtDate(latency.updatedAt * 1000) : '—' ]]</b></span>
+                    <span class="lat-win">窗口 <b>[[ latencyWindowText ]]</b></span>
                     <span>采样间隔 <b>[[ latencyIntervalText ]]</b></span>
                     <span>测点 <b>[[ latencyTargetCount ]]</b></span>
                     <span>保留 <b>[[ latency.retentionDays ]] 天</b></span>
@@ -5303,6 +5304,22 @@ function subLinkToken(subId) {
         return this.copyClientsModal.selectedEmails.map(email => `${email}_${this.copyClientsModal.targetInboundId}`);
       },
       // 间隔文案：秒 → 「每 5 分钟」/「每 30 秒」
+      // 实际生效的窗口：请求小时数 + 数据真实覆盖的时间跨度
+      latencyWindowText() {
+        const h = Number((this.latency && this.latency.hours) || this.latencyHours) || 0;
+        let span = 0;
+        const cells = (this.latency && this.latency.cells) || [];
+        cells.forEach(c => {
+          const s = c.series || [];
+          if (s.length > 1) {
+            const d = (s[s.length - 1].ts - s[0].ts) / 3600;
+            if (d > span) span = d;
+          }
+        });
+        const ask = h >= 24 ? (h / 24).toFixed(h % 24 === 0 ? 0 : 1) + ' 天' : h + ' 小时';
+        if (!span) return ask;
+        return ask + '（数据覆盖 ' + (span >= 24 ? (span / 24).toFixed(1) + ' 天' : span.toFixed(1) + ' 小时') + '）';
+      },
       latencyIntervalText() {
         const s = Number(this.latency.interval) || 0;
         if (s <= 0) return '未启用';
