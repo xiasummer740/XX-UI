@@ -2060,7 +2060,8 @@ function subLinkToken(subId) {
       // 视角：多选城市，空 = 全部城市；默认只看本地深圳
       latencyScopeSel: (() => { try { const v = JSON.parse(localStorage.getItem('latScopeSel') || '["深圳"]'); return Array.isArray(v) ? v : ['深圳']; } catch (e) { return ['深圳']; } })(),
       latencyHidden: (() => { try { return JSON.parse(localStorage.getItem('latHidden') || '{}') || {}; } catch (e) { return {}; } })(),
-      latencyIspHidden: (() => { try { return JSON.parse(localStorage.getItem('latIspHidden') || '{}') || {}; } catch (e) { return {}; } })(),
+      // 老版本留下的运营商隐藏表，直接清掉（现在由 12 个按钮控制）
+      latencyIspHidden: (() => { try { localStorage.removeItem('latIspHidden'); } catch (e) {} return {}; })(),
       // 颜色按运营商分（电信蓝 / 联通绿 / 移动橙），线型按城市分 —— 12 条线才分得清
       latencyIspColors: { '电信': '#5B8FF9', '联通': '#38C9A6', '移动': '#F6BD16' },
       // 每个「城市 + 运营商」一个独立颜色，12 条线才分得清
@@ -4316,7 +4317,7 @@ function subLinkToken(subId) {
         const order = [];
         const groups = {};
         cells.forEach((c, i) => {
-          if (this.latencyIspHidden[c.isp]) return;
+          // 可见性完全由 12 个按钮（latencyHidden）控制，运营商级隐藏已废弃
           if (!groups[c.isp]) {
             groups[c.isp] = { order: order.length, color: this.latCellColor(c.city, c.isp, i), map: {}, bad: {}, to: {} };
             order.push(c.isp);
@@ -4355,7 +4356,7 @@ function subLinkToken(subId) {
         if (multiCity) {
           const out = [];
           cells.forEach((c, i) => {
-            if (this.latencyIspHidden[c.isp]) return;
+            // 可见性完全由 12 个按钮（latencyHidden）控制，运营商级隐藏已废弃
             const name = c.city + c.isp;
             if (this.latencyHidden[name]) return;
             const data = [], bad = [], timeouts = [];
@@ -4389,7 +4390,7 @@ function subLinkToken(subId) {
         const groups = {};
         const order = [];
         cells.forEach((c, i) => {
-          if (this.latencyIspHidden[c.isp]) return;
+          // 可见性完全由 12 个按钮（latencyHidden）控制，运营商级隐藏已废弃
           if (!groups[c.isp]) {
           groups[c.isp] = { color: this.latCellColor(c.city, c.isp, i), map: {} };
             order.push(c.isp);
@@ -5315,7 +5316,7 @@ function subLinkToken(subId) {
         const cells = this.latencyScopedCells();
         const groups = {};
         cells.forEach((c, i) => {
-          if (this.latencyIspHidden[c.isp]) return;
+          // 可见性完全由 12 个按钮（latencyHidden）控制，运营商级隐藏已废弃
           if (!c.baseline || !c.baseline.length) return;
           const g = groups[c.isp] || (groups[c.isp] = { name: c.isp, color: this.latencyColorOf(c.isp, i), hours: {}, tsSet: {} });
           c.baseline.forEach(b => { (g.hours[b.hour] = g.hours[b.hour] || []).push(b.avgMs); });
@@ -5446,7 +5447,7 @@ function subLinkToken(subId) {
       },
       // 窗口摘要：P50 / P95 / P99 / 最大 / 丢包率 / 样本数（按所有测点合并算）
       latencyWindowStats() {
-        const cells = this.latencyScopedCells().filter(c => !this.latencyIspHidden[c.isp] && !this.latencyHidden[c.city + c.isp]);
+        const cells = this.latencyScopedCells().filter(c => !this.latencyHidden[c.city + c.isp]);
         const vals = [];
         let lossSum = 0, lossN = 0, fail = 0, seen = 0;
         cells.forEach(c => (c.series || []).forEach(pt => {
@@ -5497,7 +5498,7 @@ function subLinkToken(subId) {
             if (m[pt.ts] === undefined || v > m[pt.ts]) m[pt.ts] = v;
           });
         });
-        const series = Object.keys(byIsp).filter(k => !this.latencyIspHidden[k]).map(k => {
+        const series = Object.keys(byIsp).map(k => {
           const g = byIsp[k];
           const data = Object.keys(g.data).map(Number).sort((a, b) => a - b).map(ts => [ts, g.data[ts]]);
           return { name: g.name, color: g.color, dash: g.dash, data: data };
