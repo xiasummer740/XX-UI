@@ -463,15 +463,15 @@
                         <span v-for="d in slo.days" :key="'slo-' + d.day" class="lat-slo-bar"
                           :class="'lat-slo-' + sloLevel(d.avail)"
                           :style="{ height: sloBarHeight(d.avail) }"
-                          :title="d.day + ' 可用 ' + d.avail.toFixed(2) + '%（不可用约 ' + sloHuman(d.downtime) + '）'"></span>
+                          :title="d.day + ' 可用 ' + fmt2(d.avail) + '%（不可用约 ' + sloHuman(d.downtime) + '）'"></span>
                       </div>
                       <div class="lat-slo-meta">
-                        <span class="lat-slo-title">本月可用率 <b>[[ slo.avail.toFixed(2) ]]%</b></span>
+                        <span class="lat-slo-title">本月可用率 <b>[[ fmt2(slo.avail) ]]%</b></span>
                         <span class="lat-slo-target">目标 [[ slo.target ]]%</span>
                         <span class="lat-slo-left" :class="{ 'lat-slo-left-bad': slo.leftSeconds <= 0 }">
                           剩余额度 [[ sloHuman(slo.leftSeconds) ]]
                         </span>
-                        <span class="lat-slo-used">已用 [[ Math.min(100, slo.usedPct).toFixed(0) ]]%</span>
+                        <span class="lat-slo-used">已用 [[ Math.min(100, Number(slo.usedPct) || 0).toFixed(0) ]]%</span>
                       </div>
                     </div>
                 </a-spin>
@@ -3654,6 +3654,11 @@ function subLinkToken(subId) {
         }
       },
       // 丢包统一格式化：数据可能是数字也可能是 '0%' 这种字符串，模板里绝不能直接 .toFixed
+      // 数字兜底：null/字符串都不会让模板抛错
+      fmt2(v) {
+        const n = Number(v);
+        return (isFinite(n) ? n : 0).toFixed(2);
+      },
       fmtPct(v) {
         const n = Number(v);
         return (isFinite(n) ? n : 0).toFixed(1);
@@ -4707,7 +4712,17 @@ function subLinkToken(subId) {
         this.latencyHidden = next;
         try { localStorage.setItem('latHidden', JSON.stringify(next)); } catch (e) {}
       },
+      // 全部：第一次点=全选，再点一次=全清（与按钮状态联动）
       showAllCells() {
+        const all = (this.latencyCellOptions || []).length;
+        const hidden = Object.keys(this.latencyHidden || {}).length;
+        if (all && hidden === 0) {
+          const next = {};
+          (this.latencyCellOptions || []).forEach(c => { next[c.name] = true; });
+          this.latencyHidden = next;
+          try { localStorage.setItem('latHidden', JSON.stringify(next)); } catch (e) {}
+          return;
+        }
         this.latencyHidden = {};
         try { localStorage.setItem('latHidden', '{}'); } catch (e) {}
       },
