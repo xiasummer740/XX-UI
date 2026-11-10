@@ -651,6 +651,109 @@ func (s *LatencyService) TrimToMaxRows(maxRows int) (int64, error) {
 }
 
 // Summary 汇总最近 hours 小时的数据。
+// DayAvail 是一天的可用率（包级口径：收到包数 / 发出包数）。
+type DayAvail struct {
+	Day      string  `json:"day"`
+	Sent     int     `json:"sent"`
+	Recv     int     `json:"recv"`
+	Avail    float64 `json:"avail"`
+	Downtime int     `json:"downtime"`
+	Samples  int     `json:"samples"`
+}
+
+// SloSummary 是「每日可用率 + 本月 SLO 额度」。
+type SloSummary struct {
+	Target        float64    `json:"target"`
+	Month         string     `json:"month"`
+	Avail         float64    `json:"avail"`
+	BudgetSeconds float64    `json:"budgetSeconds"`
+	UsedSeconds   float64    `json:"usedSeconds"`
+	LeftSeconds   float64    `json:"leftSeconds"`
+	UsedPct       float64    `json:"usedPct"`
+	Days          []DayAvail `json:"days"`
+}
+
+// DailyAvailability 按 +08:00 切天统计包级可用率。
+func (s *LatencyService) DailyAvailability(days int) ([]DayAvail, error) {
+	if days <= 0 {
+		days = 30
+	}
+	loc := time.FixedZone("CST", 8*3600)
+	now := time.Now().In(loc)
+	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, -(days - 1))
+	var rows []model.LatencySample
+	if err := database.GetDB().Model(&model.LatencySample{}).
+		Where("ts >= ?", start.Unix()).
+		Where("(mode IS NULL OR mode = ? OR mode = ? OR mode = ?)", "", "both", "icmp").
+		Order("ts asc").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	byDay := map[string]*DayAvail{}
+	order := []string{}
+	for _, r := range rows {
+		day := time.Unix(r.Ts, 0).In(loc).Format("2006-01-02")
+		d, ok := byDay[day]
+		if !ok {
+			d = &DayAvail{Day: day}
+			byDay[day] = d
+			order = append(order, day)
+		}
+		d.Sent += r.Sent
+		d.Recv += r.Recv
+		d.Samples++
+	}
+	out := make([]DayAvail, 0, len(order))
+	for _, day := range order {
+		d := byDay[day]
+		if d.Sent > 0 {
+			d.Avail = round2(float64(d.Recv) / float64(d.Sent) * 100)
+			d.Downtime = int(float64(d.Sent-d.Recv) / float64(d.Sent) * 86400)
+		}
+		out = append(out, *d)
+	}
+	return out, nil
+}
+
+// SloSummary 汇总本月可用率与错误预算。
+func (s *LatencyService) SloSummary(days int, target float64) (*SloSummary, error) {
+	if target <= 0 || target > 100 {
+		target = 99.5
+	}
+	list, err := s.DailyAvailability(days)
+	if err != nil {
+		return nil, err
+	}
+	loc := time.FixedZone("CST", 8*3600)
+	now := time.Now().In(loc)
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc)
+	sum := &SloSummary{Target: target, Month: monthStart.Format("2006-01"), Days: list}
+	var sent, recv int
+	for _, d := range list {
+		if d.Day < monthStart.Format("2006-01-02") {
+			continue
+		}
+		sent += d.Sent
+		recv += d.Recv
+	}
+	if sent > 0 {
+		sum.Avail = round2(float64(recv) / float64(sent) * 100)
+	}
+	monthSeconds := now.Sub(monthStart).Seconds()
+	sum.BudgetSeconds = round2(monthSeconds * (100 - target) / 100)
+	sum.UsedSeconds = round2(monthSeconds * (100 - sum.Avail) / 100)
+	if sum.UsedSeconds < 0 {
+		sum.UsedSeconds = 0
+	}
+	sum.LeftSeconds = sum.BudgetSeconds - sum.UsedSeconds
+	if sum.LeftSeconds < 0 {
+		sum.LeftSeconds = 0
+	}
+	if sum.BudgetSeconds > 0 {
+		sum.UsedPct = round2(sum.UsedSeconds / sum.BudgetSeconds * 100)
+	}
+	return sum, nil
+}
+
 func (s *LatencyService) Summary(hours int) (*LatencySummary, error) {
 	return s.SummaryRange(hours, 0, 0, "")
 }

@@ -467,6 +467,22 @@
                       阈值 <b>≤170ms</b> 正常 · <b>170–220ms</b> 关注 · <b>&gt;220ms / 丢包≥5%</b> 告警
                     </span>
                   </div>
+                    <div class="lat-slo">
+                      <div class="lat-slo-bars" v-if="slo.days.length">
+                        <span v-for="d in slo.days" :key="'slo-' + d.day" class="lat-slo-bar"
+                          :class="'lat-slo-' + sloLevel(d.avail)"
+                          :style="{ height: sloBarHeight(d.avail) }"
+                          :title="d.day + ' 可用 ' + d.avail.toFixed(2) + '%（不可用约 ' + sloHuman(d.downtime) + '）'"></span>
+                      </div>
+                      <div class="lat-slo-meta">
+                        <span class="lat-slo-title">本月可用率 <b>[[ slo.avail.toFixed(2) ]]%</b></span>
+                        <span class="lat-slo-target">目标 [[ slo.target ]]%</span>
+                        <span class="lat-slo-left" :class="{ 'lat-slo-left-bad': slo.leftSeconds <= 0 }">
+                          剩余额度 [[ sloHuman(slo.leftSeconds) ]]
+                        </span>
+                        <span class="lat-slo-used">已用 [[ Math.min(100, slo.usedPct).toFixed(0) ]]%</span>
+                      </div>
+                    </div>
                 </a-spin>
               </a-card>
             </a-col>
@@ -2034,6 +2050,7 @@ function subLinkToken(subId) {
       sysHours: 24,
       sysLoading: false,
       sysmon: { updatedAt: 0, samples: 0, series: [] },
+      slo: { target: 99.5, month: '', avail: 100, budgetSeconds: 0, usedSeconds: 0, leftSeconds: 0, usedPct: 0, days: [] },
       latCmpOpen: false,
       latCmpLoading: false,
       latCmpErr: '',
@@ -3645,6 +3662,30 @@ function subLinkToken(subId) {
         const n = Number(v);
         return (isFinite(n) ? n : 0).toFixed(1);
       },
+      // SLO：每日可用率柱 + 本月错误预算
+      loadSlo() {
+        HttpUtil.post('/panel/api/latency/slo', { days: 30, target: this.slo.target || 99.5 }).then(msg => {
+          if (msg && msg.success && msg.obj) this.slo = msg.obj;
+        }).catch(() => {});
+      },
+      sloLevel(avail) {
+        const t = Number(this.slo.target) || 99.5;
+        const v = Number(avail) || 0;
+        if (v >= t) return 'ok';
+        if (v >= t - 0.5) return 'warn';
+        return 'bad';
+      },
+      sloBarHeight(avail) {
+        const v = Number(avail) || 0;
+        const h = Math.max(6, Math.min(100, (v - 90) * 10 + 10));
+        return Math.round(h) + '%';
+      },
+      sloHuman(sec) {
+        const s = Math.max(0, Math.round(Number(sec) || 0));
+        if (s < 60) return s + ' 秒';
+        if (s < 3600) return Math.round(s / 60) + ' 分';
+        return (s / 3600).toFixed(1) + ' 小时';
+      },
       // 消峰档位文案 + 拖动结束才提交（拖动过程不重算，避免卡顿）
       latSmoothLabel(v) {
         const n = Math.max(0, Math.min(10, Number(v) || 0));
@@ -4942,6 +4983,7 @@ function subLinkToken(subId) {
       // 三网延迟：进页面拉一次，之后每 60 秒跟一次
       setTimeout(() => {
         this.loadLatency();
+        this.loadSlo();
         this.latencyTimer = setInterval(() => this.loadLatency(), 60000);
       }, 250);
       // Fetch VPS settings for the VPS info card
@@ -5819,6 +5861,20 @@ function subLinkToken(subId) {
     font-size: 11px; color: #8c8c8c; margin: 2px 0 6px;
     font-variant-numeric: tabular-nums;
   }
+
+  /* 每日可用率柱 + SLO 额度 */
+  .lat-slo { display: flex; align-items: flex-end; gap: 12px; margin: 6px 0 2px; }
+  .lat-slo-bars { display: flex; align-items: flex-end; gap: 2px; height: 34px; flex: 1 1 auto; min-width: 0; }
+  .lat-slo-bar { flex: 1 1 0; min-width: 3px; border-radius: 2px 2px 0 0; background: #d9f7be; }
+  .lat-slo-bar.lat-slo-ok { background: #52c41a; }
+  .lat-slo-bar.lat-slo-warn { background: #faad14; }
+  .lat-slo-bar.lat-slo-bad { background: #f5222d; }
+  .lat-slo-meta { display: flex; gap: 10px; align-items: center; font-size: 10.5px; color: rgba(0, 0, 0, .5);
+    flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+  .lat-slo-meta b { color: #237804; font-weight: 600; }
+  .lat-slo-left-bad { color: #cf1322; font-weight: 600; }
+  .inbounds-page.dark .lat-slo-meta { color: rgba(255, 255, 255, .5); }
+  .inbounds-page.dark .lat-slo-meta b { color: #95de64; }
   .lat-legend { font-size: 10px; gap: 2px 10px; margin-top: 4px; }
   .lat-legend { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 4px; font-size: 10px; }
   .lat-legend-more { cursor: pointer; color: #5b8ff9; }

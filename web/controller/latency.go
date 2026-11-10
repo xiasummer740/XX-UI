@@ -32,6 +32,7 @@ func (a *LatencyController) initRouter(g *gin.RouterGroup) {
 	g.POST("/run", a.runNow)
 	g.POST("/targets", a.targets)
 	g.POST("/compare", a.compare)
+	g.POST("/slo", a.slo)
 }
 
 // summary 返回最近 N 小时的三网延迟汇总（城市 × 运营商 + 曲线）。
@@ -79,6 +80,24 @@ func (a *LatencyController) compare(c *gin.Context) {
 	start := time.Now()
 	rows := a.latencyService.Compare(context.Background())
 	jsonObj(c, gin.H{"rows": rows, "tookMs": time.Since(start).Milliseconds()}, nil)
+}
+
+// slo 返回每日可用率趋势 + 本月 SLO 错误预算。
+func (a *LatencyController) slo(c *gin.Context) {
+	days := 30
+	if v := c.PostForm("days"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 90 {
+			days = n
+		}
+	}
+	target := 99.5
+	if v := c.PostForm("target"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 && f < 100 {
+			target = f
+		}
+	}
+	sum, err := a.latencyService.SloSummary(days, target)
+	jsonObj(c, sum, err)
 }
 
 // targets 返回当前生效的测点配置（前端「设置」弹窗用来回填）。
