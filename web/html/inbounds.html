@@ -156,10 +156,6 @@
                     <span class="lat-health" :class="latencyAlerts.length ? 'lat-health-bad' : 'lat-health-ok'" :title="latencyAlerts.length ? latencyAlerts.join('｜') : '全部测点在阈值内'">
                       [[ latencyAlerts.length ? latencyAlerts.length + ' 项异常' : '全部正常' ]]
                     </span>
-                    <a-button size="small" icon="left" title="前一天" @click="shiftLatDay(-1)"></a-button>
-                    <a-range-picker size="small" class="lat-day-picker" v-model="latDayRange" value-format="YYYY-MM-DD"
-                      :placeholder="['开始日期', '结束日期']" :allow-clear="true" @change="applyLatDayRange"></a-range-picker>
-                    <a-button size="small" icon="right" title="后一天" @click="shiftLatDay(1)"></a-button>
                     <a-radio-group v-model="latencyHours" size="small" button-style="solid"
                       @change="onLatHoursChange">
                       <a-radio-button :value="1">1h</a-radio-button>
