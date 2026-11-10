@@ -157,7 +157,7 @@ func InitDB(dbPath string) error {
 	// that batch of traffic permanently. WAL lets readers proceed while one writer
 	// holds the write lock, and the larger busy timeout absorbs short write bursts.
 	dsn := fmt.Sprintf(
-		"%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(10000)&_pragma=synchronous(NORMAL)",
+		"%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(10000)&_pragma=synchronous(NORMAL)&_pragma=wal_autocheckpoint(400)&_pragma=cache_size(-12000)",
 		dbPath,
 	)
 	db, err = gorm.Open(sqlite.Open(dsn), c)
