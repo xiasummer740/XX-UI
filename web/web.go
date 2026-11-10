@@ -401,7 +401,18 @@ func (s *Server) startTask() {
 	// s.cron.AddJob("@every 1s", job.NewSysmonJob())
 
 	// 每天 03:00 把数据库备份发到邮箱（整机挂掉也不丢数据）
-	s.cron.AddJob("0 3 * * *", job.NewDbEmailBackupJob())
+	// 注意：这里的 cron 实例是 WithSeconds()，表达式必须是 6 段（秒 分 时 日 月 周）。
+	// 之前写的 "0 3 * * *" 只有 5 段，AddJob 直接报错被吞掉，任务根本没注册上，
+	// 表现就是「开关开着却一直收不到邮件」。
+	backupCron := os.Getenv("XUI_BACKUP_CRON")
+	if backupCron == "" {
+		backupCron = "0 0 3 * * *"
+	}
+	if _, err := s.cron.AddJob(normalizeCronSpec(backupCron), job.NewDbEmailBackupJob()); err != nil {
+		logger.Error("注册每日邮箱备份任务失败: ", err)
+	} else {
+		logger.Info("每日邮箱备份任务已注册: ", normalizeCronSpec(backupCron))
+	}
 
 	// Xray periodic restart scheduling
 	if xrayRestartEnabled, _ := s.settingService.GetXrayRestartEnabled(); xrayRestartEnabled {
@@ -623,6 +634,16 @@ func (s *Server) GetCtx() context.Context {
 }
 
 // GetCron returns the server's cron scheduler instance.
+// normalizeCronSpec 把 5 段 cron 补成 6 段（本实例 cron.WithSeconds()），
+// 否则 5 段表达式会被判为非法，任务静默不执行。
+func normalizeCronSpec(spec string) string {
+	fields := strings.Fields(strings.TrimSpace(spec))
+	if len(fields) == 5 {
+		return "0 " + strings.Join(fields, " ")
+	}
+	return spec
+}
+
 func (s *Server) GetCron() *cron.Cron {
 	return s.cron
 }
