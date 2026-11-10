@@ -184,13 +184,15 @@
                           <a-radio-button value="tcp">TCP</a-radio-button>
                         </a-radio-group>
                         <span class="lat-chip-group">
-                          <span class="lat-clear-chip" title="全部城市" @click="latencyScopeSel = latencyCityOptions.slice(); onLatencyScopeChange(latencyScopeSel)">清空</span>
+                          <span class="lat-clear-chip" :class="{ 'lat-clear-on': !latencyScopeSel.length }"
+                            title="不筛选城市（显示全部）" @click="selectAllCities">全部</span>
                           <a-checkbox v-for="ct in latencyCityOptions" :key="'cc-' + ct" :checked="latencyScopeSel.indexOf(ct) >= 0"
                             class="lat-chip" @change="e => toggleCity(ct, e.target.checked)"
                             @mouseenter.native="latOnly = 'city:' + ct" @mouseleave.native="latOnly = null">[[ ct ]]</a-checkbox>
                         </span>
                         <span class="lat-chip-group">
-                          <span class="lat-clear-chip" title="全部恢复显示" @click="clearIspHidden">清空</span>
+                          <span class="lat-clear-chip" :class="{ 'lat-clear-on': !hiddenIspCount }"
+                            title="全部显示" @click="clearIspHidden">全部</span>
                           <a-checkbox v-for="s in latencyIspLegend" :key="'ic-' + s.name" :checked="!latencyIspHidden[s.name]"
                             class="lat-chip" @change="e => toggleLatencyIsp(s.name)"
                             @mouseenter.native="latOnly = 'isp:' + s.name" @mouseleave.native="latOnly = null">[[ s.name ]]</a-checkbox>
@@ -3808,14 +3810,22 @@ function subLinkToken(subId) {
         if (kind === 'city') return name.indexOf(key) === 0;
         return name === key;
       },
-      // 城市复选框：至少留一个，避免全空后图表无数据
+      // 城市勾选：空数组代表「全部城市」
       toggleCity(city, checked) {
-        const cur = (this.latencyScopeSel || []).slice();
-        const at = cur.indexOf(city);
-        if (checked) { if (at < 0) cur.push(city); }
-        else if (at >= 0 && cur.length > 1) { cur.splice(at, 1); }
+        let cur = (this.latencyScopeSel || []).slice();
+        if (checked) {
+          if (!cur.length) cur = [city];          // 从「全部」点某个城市 → 只看它
+          else if (cur.indexOf(city) < 0) cur.push(city);
+        } else {
+          cur = cur.filter(c => c !== city);
+          if (!cur.length) cur = [];              // 取消到最后一个 → 回到全部
+        }
         this.latencyScopeSel = cur;
         this.onLatencyScopeChange(cur);
+      },
+      selectAllCities() {
+        this.latencyScopeSel = [];
+        this.onLatencyScopeChange([]);
       },
       // ICMP / TCP 切换：只切历史视图；探测方式在服务端设置里切换
       onLatModeChange(e) {
@@ -3833,6 +3843,13 @@ function subLinkToken(subId) {
       toggleLatencyIsp(name) {
         const next = Object.assign({}, this.latencyIspHidden);
         if (next[name]) delete next[name]; else next[name] = true;
+        // 全关掉等于没图可看，直接回到全部显示
+        const all = (this.latencyIspLegend || []).length;
+        if (all && Object.keys(next).length >= all) {
+          this.latencyIspHidden = {};
+          try { localStorage.setItem('latIspHidden', '{}'); } catch (e) {}
+          return;
+        }
         this.latencyIspHidden = next;
         try { localStorage.setItem('latIspHidden', JSON.stringify(next)); } catch (e) {}
       },
@@ -5200,6 +5217,10 @@ function subLinkToken(subId) {
         return cs.length ? cs : ['深圳', '北京', '上海', '成都'];
       },
       // 视角文案：一个城市 / 多个城市 / 全部
+      // 当前隐藏了几个运营商（给「全部」高亮用）
+      hiddenIspCount() {
+        return Object.keys(this.latencyIspHidden || {}).length;
+      },
       latencyScopeLabel() {
         const sel = this.latencyScopeSel || [];
         if (!sel.length) return '全部城市';
@@ -5728,6 +5749,7 @@ function subLinkToken(subId) {
   .inbounds-page.dark .lat-chip-group { background: rgba(255, 255, 255, .05); border-color: rgba(255, 255, 255, .12); }
   .inbounds-page.dark .lat-chip-group .ant-checkbox-wrapper { color: rgba(255, 255, 255, .65); }  .lat-clear-chip { font-size: 10px; color: #5b8ff9; cursor: pointer; padding: 0 2px; opacity: .8; }
   .lat-clear-chip:hover { opacity: 1; text-decoration: underline; }
+  .lat-clear-chip.lat-clear-on { color: #fff; background: #1890ff; border-radius: 999px; padding: 1px 6px; opacity: 1; }
   .lat-day-picker { width: 210px; }
   .lat-help { max-width: 320px; font-size: 12px; line-height: 1.7; }
   .lat-help p { margin: 0 0 4px; }
