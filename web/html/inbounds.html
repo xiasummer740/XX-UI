@@ -5359,7 +5359,7 @@ function subLinkToken(subId) {
           bands: this.latencyIspBands(),
           loss: this.latencyLossSeries,
           refLines: this.latencyRefLines, typical: true, pullRef: !this.latencyTightOn, gaps: this.latencyGapMarks,
-          forceT0: this.latencyWindowRange().from, forceT1: this.latencyWindowRange().to,
+          forceT0: this.latencyWindowRange.from, forceT1: this.latencyWindowRange.to,
           baseline: this.latencyBaselineOn ? this.latencyBaselineData : [],
         });
       },
