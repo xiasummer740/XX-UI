@@ -189,7 +189,7 @@
                           <a-checkbox v-for="c in latencyCellOptions" :key="'cc-' + c.name" :checked="!latencyHidden[c.name]"
                             class="lat-chip" @change="e => toggleLatencySeries(c.name)"
                             @mouseenter.native="focusSeries(c.name)" @mouseleave.native="unfocusSeries()">
-                            <i class="lat-chip-dot" :style="{ background: c.color }"></i>[[ c.name ]]</a-checkbox>
+                            <i class="lat-chip-dot" :style="{ background: c.color }"></i>[[ c.name ]]<em class="lat-chip-ms">[[ c.ms ]]</em></a-checkbox>
                         </span>
                         <a-popover placement="bottomRight" title="指标说明" trigger="click">
                           <template #content>
@@ -3634,8 +3634,10 @@ function subLinkToken(subId) {
         }
       },
       // ===== 三网延迟监测 =====
-      async loadLatency() {
-        this.latencyLoading = true;
+      async loadLatency(opts) {
+        const silent = !!(opts && opts.silent);
+        // 定时刷新静默进行：不显示 loading，也不清空当前曲线，避免整块闪一下
+        if (!silent) this.latencyLoading = true;
         this.latHover = null;
         const seq = (this._latSeq || 0) + 1;
         this._latSeq = seq;
@@ -3651,7 +3653,7 @@ function subLinkToken(subId) {
         } catch (e) {
           console.error('加载三网延迟失败', e);
         } finally {
-          this.latencyLoading = false;
+          if (!silent) this.latencyLoading = false;
         }
       },
       // 丢包统一格式化：数据可能是数字也可能是 '0%' 这种字符串，模板里绝不能直接 .toFixed
@@ -5067,7 +5069,8 @@ function subLinkToken(subId) {
         this.latencyHours = 24;
         this.loadLatency();
         this.loadSlo();
-        this.latencyTimer = setInterval(() => this.loadLatency(), 60000);
+        if (this.latencyTimer) clearInterval(this.latencyTimer);
+        this.latencyTimer = setInterval(() => this.loadLatency({ silent: true }), 60000);
       }, 250);
       // Fetch VPS settings for the VPS info card
       HttpUtil.post('/panel/setting/all').then(msg => {
@@ -5257,10 +5260,18 @@ function subLinkToken(subId) {
       // 12 个「城市+运营商」按钮：名字、颜色都固定，点一下就切换这条线
       latencyCellOptions() {
         const cells = (this.latency && this.latency.cells) || [];
-        return cells.map((c, i) => ({
-          name: c.city + c.isp,
-          color: this.latCellColor(c.city, c.isp, i),
-        }));
+        const field = this.latencyMetricField();
+        return cells.map((c, i) => {
+          // 取这一格最后一个采样点的值，按钮上直接显示「165ms」
+          let ms = '';
+          const ser = c.series || [];
+          for (let j = ser.length - 1; j >= 0; j--) {
+            const v = Number(ser[j][field]) || 0;
+            if (v > 0) { ms = Math.round(v) + 'ms'; break; }
+          }
+          if (!ms && Number(c.lastAvgMs) > 0) ms = Math.round(c.lastAvgMs) + 'ms';
+          return { name: c.city + c.isp, color: this.latCellColor(c.city, c.isp, i), ms: ms };
+        });
       },
       hiddenCellCount() {
         return Object.keys(this.latencyHidden || {}).length;
@@ -5788,6 +5799,9 @@ function subLinkToken(subId) {
     border: 1px solid rgba(17, 24, 39, .08); border-radius: 999px; background: rgba(255, 255, 255, .6); }
   .lat-chip-group .ant-checkbox-wrapper { font-size: 11px; color: rgba(0, 0, 0, .62); margin: 0; }
   .lat-chip-group .ant-checkbox-wrapper + .ant-checkbox-wrapper { margin-left: 0; }
+  .lat-chip-ms { font-style: normal; font-size: 9.5px; color: rgba(0, 0, 0, .45); margin-left: 3px;
+    font-variant-numeric: tabular-nums; }
+  .inbounds-page.dark .lat-chip-ms { color: rgba(255, 255, 255, .45); }
   .lat-chip-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 3px; vertical-align: middle; }
   .lat-mode-group .ant-radio-button-wrapper { font-size: 11px; padding: 0 8px; height: 22px; line-height: 20px; }
   .inbounds-page.dark .lat-chip-group { background: rgba(255, 255, 255, .05); border-color: rgba(255, 255, 255, .12); }
