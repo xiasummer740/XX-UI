@@ -675,6 +675,32 @@ type SloSummary struct {
 	Days          []DayAvail `json:"days"`
 }
 
+// latencyBucketSeconds 决定 SQL 聚合的时间桶大小：
+// 目标是把每个格子的点数控制在 ~240 个，既不丢趋势，也不会把内存打爆。
+func latencyBucketSeconds(hours int, from, to int64) int64 {
+	window := int64(hours) * 3600
+	if from > 0 && to > from {
+		window = to - from
+	}
+	if window <= 0 {
+		window = 86400
+	}
+	target := int64(240)
+	b := window / target
+	if b < 60 {
+		b = 60
+	}
+	// 取整到 60 秒的倍数，时间轴看起来整齐
+	b = (b / 60) * 60
+	if b < 60 {
+		b = 60
+	}
+	if b > 3600 {
+		b = (b / 3600) * 3600
+	}
+	return b
+}
+
 // RollupOlderThan 把超过 days 天的原始采样（5 秒一个点）合并成 1 分钟一个点：
 // 平均/丢包取均值、最大取最大、发包数相加。这样 30 天历史才放得下。
 // 返回「删掉多少原始行 / 生成多少聚合行」。
@@ -929,11 +955,23 @@ func (s *LatencyService) summaryRangeUncached(hours int, from, to int64, mode st
 		Cells:         []LatencyCell{},
 	}
 
+	// 关键性能点：不要把所有原始行拉进内存再聚合。
+	// 这台机器只有 1 核，24h 有 17 万行、7d 有 30 万行，Find 出来光是分配 + GC 就要一两秒，
+	// 期间入站列表跟着卡。改成让 SQLite 先按时间桶聚合，只返回 ~3000 行。
+	bucketSec := latencyBucketSeconds(hours, from, to)
 	q := database.GetDB().Model(&model.LatencySample{}).Where("ts >= ?", since)
 	if until > 0 {
 		q = q.Where("ts <= ?", until)
 	}
-	if err := q.Order("ts asc").Find(&rows).Error; err != nil {
+	sel := "city AS city, isp AS isp, (ts/?)*? AS ts, MAX(target) AS target, " +
+		"SUM(sent) AS sent, SUM(recv) AS recv, AVG(loss_pct) AS loss_pct, " +
+		"MIN(min_ms) AS min_ms, AVG(avg_ms) AS avg_ms, MAX(max_ms) AS max_ms, AVG(jitter) AS jitter, " +
+		"SUM(tcp_sent) AS tcp_sent, SUM(tcp_recv) AS tcp_recv, AVG(tcp_loss_pct) AS tcp_loss_pct, " +
+		"MIN(tcp_min_ms) AS tcp_min_ms, AVG(tcp_avg_ms) AS tcp_avg_ms, MAX(tcp_max_ms) AS tcp_max_ms, " +
+		"MAX(tcp_target) AS tcp_target"
+	if err := q.Select(sel, bucketSec, bucketSec).
+		Group("city, isp, ts/" + fmt.Sprint(bucketSec)).
+		Order("ts asc").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	// TCP 视图：用同一行里的 TCP 字段替换，下面的聚合逻辑照旧
