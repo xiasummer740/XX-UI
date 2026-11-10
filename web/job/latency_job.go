@@ -20,6 +20,9 @@ type LatencyMonitorJob struct {
 var (
 	latencyLastRun   time.Time
 	latencyLastRunMu sync.Mutex
+	// 降采样节流：半小时一次就够
+	latencyLastRollup time.Time
+	latencyRollupMu   sync.Mutex
 )
 
 // NewLatencyMonitorJob 创建监控任务。
@@ -68,6 +71,22 @@ func (j *LatencyMonitorJob) Run() {
 	if deleted > 0 {
 		logger.Infof("清理三网延迟历史：删除 %d 行（保留 %d 天）", deleted, retention)
 	}
+	// 每 30 分钟把 2 天前的原始点（5 秒一个）压成 1 分钟一个，
+	// 否则 30 天历史早就顶到行数上限，7d/30d 只能看到最近两三天。
+	latencyRollupMu.Lock()
+	rollupDue := latencyLastRollup.IsZero() || time.Since(latencyLastRollup) >= 30*time.Minute
+	if rollupDue {
+		latencyLastRollup = time.Now()
+	}
+	latencyRollupMu.Unlock()
+	if rollupDue {
+		if del, add, err := j.latencyService.RollupOlderThan(2); err != nil {
+			logger.Warning("三网延迟历史降采样失败:", err)
+		} else if del > 0 {
+			logger.Infof("三网延迟历史降采样：%d 行合并为 %d 行", del, add)
+		}
+	}
+
 	// 间隔调到 1 秒时行数会暴涨，超过上限就丢最老的，保证库不会无限长
 	if trimmed, err := j.latencyService.TrimToMaxRows(service.LatencyMaxRows); err != nil {
 		logger.Warning("三网延迟数据裁剪失败:", err)

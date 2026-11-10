@@ -18,6 +18,7 @@ import (
 	"github.com/XiaSummer740/XX-UI/database"
 	"github.com/XiaSummer740/XX-UI/database/model"
 	"github.com/XiaSummer740/XX-UI/logger"
+	"gorm.io/gorm"
 )
 
 // 三网延迟监测
@@ -623,7 +624,7 @@ func (s *LatencyService) Prune(retentionDays int) (int64, error) {
 
 // LatencyMaxRows 是历史表行数上限。
 // 间隔调到 1 秒时一天就有 100 万行，靠保留天数兜不住，用行数硬上限封顶。
-const LatencyMaxRows = 600000
+const LatencyMaxRows = 1300000
 
 // TrimToMaxRows 超过上限时按 id 从老到新删，只留最新的 maxRows 行。
 func (s *LatencyService) TrimToMaxRows(maxRows int) (int64, error) {
@@ -671,6 +672,114 @@ type SloSummary struct {
 	LeftSeconds   float64    `json:"leftSeconds"`
 	UsedPct       float64    `json:"usedPct"`
 	Days          []DayAvail `json:"days"`
+}
+
+// RollupOlderThan 把超过 days 天的原始采样（5 秒一个点）合并成 1 分钟一个点：
+// 平均/丢包取均值、最大取最大、发包数相加。这样 30 天历史才放得下。
+// 返回「删掉多少原始行 / 生成多少聚合行」。
+func (s *LatencyService) RollupOlderThan(days int) (int64, int64, error) {
+	if days <= 0 {
+		days = 2
+	}
+	cutoff := time.Now().AddDate(0, 0, -days).Unix()
+	db := database.GetDB()
+
+	var old []model.LatencySample
+	if err := db.Where("ts < ?", cutoff).Order("ts asc").Find(&old).Error; err != nil {
+		return 0, 0, err
+	}
+	if len(old) == 0 {
+		return 0, 0, nil
+	}
+
+	type key struct {
+		city, isp, mode string
+		minute          int64
+	}
+	type agg struct {
+		target                          string
+		sent, recv, tcpSent, tcpRecv    int
+		n                               int
+		loss, avg, minV, maxV, jit      float64
+		tcpLoss, tcpAvg, tcpMin, tcpMax float64
+		tcpTarget                       string
+	}
+	groups := map[key]*agg{}
+	ids := make([]int, 0, len(old))
+	for _, r := range old {
+		k := key{city: r.City, isp: r.Isp, mode: r.Mode, minute: r.Ts / 60 * 60}
+		g, ok := groups[k]
+		if !ok {
+			g = &agg{target: r.Target, minV: r.MinMs, tcpMin: r.TcpMinMs}
+			groups[k] = g
+		}
+		g.n++
+		g.sent += r.Sent
+		g.recv += r.Recv
+		g.loss += r.LossPct
+		g.avg += r.AvgMs
+		g.jit += r.Jitter
+		if r.MinMs > 0 && (g.minV == 0 || r.MinMs < g.minV) {
+			g.minV = r.MinMs
+		}
+		if r.MaxMs > g.maxV {
+			g.maxV = r.MaxMs
+		}
+		g.tcpSent += r.TcpSent
+		g.tcpRecv += r.TcpRecv
+		g.tcpLoss += r.TcpLossPct
+		g.tcpAvg += r.TcpAvgMs
+		if r.TcpMinMs > 0 && (g.tcpMin == 0 || r.TcpMinMs < g.tcpMin) {
+			g.tcpMin = r.TcpMinMs
+		}
+		if r.TcpMaxMs > g.tcpMax {
+			g.tcpMax = r.TcpMaxMs
+		}
+		if r.TcpTarget != "" {
+			g.tcpTarget = r.TcpTarget
+		}
+		ids = append(ids, r.Id)
+	}
+
+	rows := make([]model.LatencySample, 0, len(groups))
+	for k, g := range groups {
+		n := float64(g.n)
+		rows = append(rows, model.LatencySample{
+			City: k.city, Isp: k.isp, Mode: k.mode, Ts: k.minute,
+			Target: g.target, Sent: g.sent, Recv: g.recv,
+			LossPct: round2(g.loss / n), MinMs: round2(g.minV),
+			AvgMs: round2(g.avg / n), MaxMs: round2(g.maxV), Jitter: round2(g.jit / n),
+			TcpTarget: g.tcpTarget, TcpSent: g.tcpSent, TcpRecv: g.tcpRecv,
+			TcpLossPct: round2(g.tcpLoss / n), TcpMinMs: round2(g.tcpMin),
+			TcpAvgMs: round2(g.tcpAvg / n), TcpMaxMs: round2(g.tcpMax),
+		})
+	}
+
+	err := db.Transaction(func(tx *gorm.DB) error {
+		for i := 0; i < len(ids); i += 500 {
+			end := i + 500
+			if end > len(ids) {
+				end = len(ids)
+			}
+			if err := tx.Where("id IN ?", ids[i:end]).Delete(&model.LatencySample{}).Error; err != nil {
+				return err
+			}
+		}
+		for i := 0; i < len(rows); i += 500 {
+			end := i + 500
+			if end > len(rows) {
+				end = len(rows)
+			}
+			if err := tx.Create(rows[i:end]).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, 0, err
+	}
+	return int64(len(ids)), int64(len(rows)), nil
 }
 
 // DailyAvailability 按 +08:00 切天统计包级可用率。
@@ -765,8 +874,10 @@ func (s *LatencyService) SummaryRange(hours int, from, to int64, mode string) (*
 	if hours <= 0 {
 		hours = 24
 	}
-	if hours > retention {
-		hours = retention
+	// retention 的单位是「天」，这里必须换成小时再比；
+	// 之前直接 `hours > retention` 把 168/720 都压成 30，7d 和 30d 看起来和 24h 一样。
+	if retention > 0 && hours > retention*24 {
+		hours = retention * 24
 	}
 
 	since := time.Now().Add(-time.Duration(hours) * time.Hour).Unix()
