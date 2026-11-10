@@ -5015,6 +5015,8 @@ function subLinkToken(subId) {
       setTimeout(() => this.loadSysmon(), 600);
       // 三网延迟：进页面拉一次，之后每 60 秒跟一次
       setTimeout(() => {
+        // 首屏固定用 24h：这台机器只有 1 核，一上来就查 7d/30d 会把入站列表一起拖住
+        this.latencyHours = 24;
         this.loadLatency();
         this.loadSlo();
         this.latencyTimer = setInterval(() => this.loadLatency(), 60000);

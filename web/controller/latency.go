@@ -57,7 +57,9 @@ func (a *LatencyController) summary(c *gin.Context) {
 		}
 	}
 	mode := strings.TrimSpace(c.PostForm("mode"))
+	tStart := time.Now()
 	sum, err := a.latencyService.SummaryRange(hours, from, to, mode)
+	spent := time.Since(tStart).Milliseconds()
 	// 排障用：把请求窗口和实际返回跨度记一行，7d/30d 不生效时能直接看出来
 	if err == nil && sum != nil {
 		spanH := 0.0
@@ -65,8 +67,8 @@ func (a *LatencyController) summary(c *gin.Context) {
 			s := sum.Cells[0].Series
 			spanH = float64(s[len(s)-1].Ts-s[0].Ts) / 3600
 		}
-		logger.Infof("[latency] summary hours=%d from=%d to=%d mode=%s -> 返回跨度 %.1fh 点数 %d",
-			hours, from, to, mode, spanH, len(sum.Cells))
+		logger.Infof("[latency] summary hours=%d mode=%s -> %.1fh / %d 格 / 耗时 %dms",
+			hours, mode, spanH, len(sum.Cells), spent)
 	}
 	jsonObj(c, sum, err)
 }

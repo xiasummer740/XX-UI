@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"net"
 	"os/exec"
@@ -40,7 +41,7 @@ const (
 	// 同时探测的分组数
 	latencyProbeConcurrency = 4
 	// 曲线最多返回多少个点（前端画图用，多了没意义）
-	latencyMaxSeriesPoints = 360
+	latencyMaxSeriesPoints = 240
 )
 
 // LatencyTarget 是一个「城市 + 运营商」以及它的候选测点。
@@ -869,7 +870,34 @@ func (s *LatencyService) Summary(hours int) (*LatencySummary, error) {
 
 // SummaryRange 汇总指定区间（unix 秒）。from/to 都 > 0 且 from < to 时优先于 hours，
 // 供前端框选缩放用；否则退回「最近 hours 小时」。
+// 汇总缓存：同一组参数 15 秒内直接复用，避免进页面/轮询/切视图反复扫库。
+var (
+	latSumMu  sync.Mutex
+	latSumKey string
+	latSumAt  time.Time
+	latSumVal *LatencySummary
+	latSumTTL = 15 * time.Second
+)
+
 func (s *LatencyService) SummaryRange(hours int, from, to int64, mode string) (*LatencySummary, error) {
+	ck := fmt.Sprintf("%d|%d|%d|%s", hours, from, to, mode)
+	latSumMu.Lock()
+	if latSumVal != nil && latSumKey == ck && time.Since(latSumAt) < latSumTTL {
+		v := latSumVal
+		latSumMu.Unlock()
+		return v, nil
+	}
+	latSumMu.Unlock()
+	sum, err := s.summaryRangeUncached(hours, from, to, mode)
+	if err == nil && sum != nil {
+		latSumMu.Lock()
+		latSumKey, latSumAt, latSumVal = ck, time.Now(), sum
+		latSumMu.Unlock()
+	}
+	return sum, err
+}
+
+func (s *LatencyService) summaryRangeUncached(hours int, from, to int64, mode string) (*LatencySummary, error) {
 	enabled, interval, retention, _ := s.settingService.GetLatencyConfig()
 	if hours <= 0 {
 		hours = 24
