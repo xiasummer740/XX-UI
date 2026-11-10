@@ -41,7 +41,7 @@ const (
 	// 同时探测的分组数
 	latencyProbeConcurrency = 4
 	// 曲线最多返回多少个点（前端画图用，多了没意义）
-	latencyMaxSeriesPoints = 240
+	latencyMaxSeriesPoints = 180
 )
 
 // LatencyTarget 是一个「城市 + 运营商」以及它的候选测点。
@@ -858,7 +858,33 @@ func (s *LatencyService) DailyAvailability(days int) ([]DayAvail, error) {
 }
 
 // SloSummary 汇总本月可用率与错误预算。
+// SLO 同样做 60 秒缓存：30 天的每日可用率扫库也不便宜
+var (
+	latSloMu  sync.Mutex
+	latSloAt  time.Time
+	latSloKey string
+	latSloVal *SloSummary
+)
+
 func (s *LatencyService) SloSummary(days int, target float64) (*SloSummary, error) {
+	ck := fmt.Sprintf("%d|%.2f", days, target)
+	latSloMu.Lock()
+	if latSloVal != nil && latSloKey == ck && time.Since(latSloAt) < time.Minute {
+		v := latSloVal
+		latSloMu.Unlock()
+		return v, nil
+	}
+	latSloMu.Unlock()
+	sum, err := s.sloSummaryUncached(days, target)
+	if err == nil && sum != nil {
+		latSloMu.Lock()
+		latSloKey, latSloAt, latSloVal = ck, time.Now(), sum
+		latSloMu.Unlock()
+	}
+	return sum, err
+}
+
+func (s *LatencyService) sloSummaryUncached(days int, target float64) (*SloSummary, error) {
 	if target <= 0 || target > 100 {
 		target = 99.5
 	}

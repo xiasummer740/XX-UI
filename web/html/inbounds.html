@@ -188,7 +188,7 @@
                             title="全部显示" @click="showAllCells">全部</span>
                           <a-checkbox v-for="c in latencyCellOptions" :key="'cc-' + c.name" :checked="!latencyHidden[c.name]"
                             class="lat-chip" @change="e => toggleLatencySeries(c.name)"
-                            @mouseenter.native="latOnly = 'name:' + c.name" @mouseleave.native="latOnly = null">
+                            @mouseenter.native="focusSeries(c.name)" @mouseleave.native="unfocusSeries()">
                             <i class="lat-chip-dot" :style="{ background: c.color }"></i>[[ c.name ]]</a-checkbox>
                         </span>
                         <a-popover placement="bottomRight" title="指标说明" trigger="click">
@@ -275,7 +275,7 @@
                             <polyline v-for="b in (chartTiny.baseline || [])" :key="'bl-' + b.name" :points="b.points"
                               fill="none" :stroke="b.color" stroke-opacity="0.3" stroke-width="1"
                               stroke-dasharray="3 4" vector-effect="non-scaling-stroke"></polyline>
-                            <g v-for="s in chartTiny.series" :key="'ms-' + s.name" :class="{ 'lat-dim': latOnly && !latOnlyMatch(s.name) }">
+                            <g v-for="s in chartTiny.series" :key="'ms-' + s.name" :data-series="s.name">
                               <path v-if="chartTiny.series.length <= 3" :d="s.area" :fill="'url(#latArea-' + s.name + ')'" stroke="none"></path>
                               <polyline :points="s.points" fill="none" :stroke="s.color" stroke-width="1.15" vector-effect="non-scaling-stroke"
                                 stroke-linejoin="round" stroke-linecap="round"></polyline>
@@ -429,7 +429,7 @@
                     <div class="lat-legend">
                       <span v-for="l in latencyLegendShown" :key="'lg-' + l.name" class="lat-legend-item"
                         :class="{ 'lat-off': l.hidden }" :title="l.tip"
-                        @mouseenter="latOnly = 'name:' + l.name" @mouseleave="latOnly = null"
+                        @mouseenter="focusSeries(l.name)" @mouseleave="unfocusSeries()"
                         @click="toggleLatencySeries(l.name)">
                         <svg class="lat-swatch" viewBox="0 0 18 6">
                           <line x1="1" y1="3" x2="17" y2="3" :stroke="l.color" stroke-width="1.8"
@@ -3795,6 +3795,20 @@ function subLinkToken(subId) {
         this.applyLatDay(base.add(delta, 'day').format('YYYY-MM-DD'));
       },
       // 悬停胶囊时判断某条线是否该保留
+      // 悬停某个按钮：直接把其它曲线组透明化，走 DOM，不触发重渲染
+      focusSeries(name) {
+        const box = this.$refs.latBox;
+        if (!box) return;
+        Array.prototype.forEach.call(box.querySelectorAll('g[data-series]'), g => {
+          g.style.transition = 'opacity .12s ease';
+          g.style.opacity = (g.getAttribute('data-series') === name) ? '1' : '0.06';
+        });
+      },
+      unfocusSeries() {
+        const box = this.$refs.latBox;
+        if (!box) return;
+        Array.prototype.forEach.call(box.querySelectorAll('g[data-series]'), g => { g.style.opacity = '1'; });
+      },
       latOnlyMatch(name) {
         const v = this.latOnly;
         if (!v) return true;
@@ -3876,11 +3890,13 @@ function subLinkToken(subId) {
         chart.series.forEach(s => {
           const raw = s.raw || [];
           if (!raw.length) return;
-          let best = raw[0], bestD = Infinity;
-          raw.forEach(pt => {
-            const d = Math.abs(pt[0] - ts);
-            if (d < bestD) { bestD = d; best = pt; }
-          });
+          // 点按时间升序，用二分找最近点，避免每次移动全量扫描
+          let lo = 0, hi = raw.length - 1;
+          while (hi - lo > 1) {
+            const mid = (lo + hi) >> 1;
+            if (raw[mid][0] < ts) lo = mid; else hi = mid;
+          }
+          const best = Math.abs(raw[lo][0] - ts) <= Math.abs(raw[hi][0] - ts) ? raw[lo] : raw[hi];
           marks.push({ name: s.name, color: s.color, x: xOfTs(best[0]).toFixed(1), y: yOfVal(best[1]).toFixed(1) });
           rows.push({ name: s.name, color: s.color, value: Math.round(best[1]), loss: 0, cities: [] });
         });
