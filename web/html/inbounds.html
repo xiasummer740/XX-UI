@@ -161,7 +161,7 @@
                       :placeholder="['开始日期', '结束日期']" :allow-clear="true" @change="applyLatDayRange"></a-range-picker>
                     <a-button size="small" icon="right" title="后一天" @click="shiftLatDay(1)"></a-button>
                     <a-radio-group v-model="latencyHours" size="small" button-style="solid"
-                      @change="loadLatency">
+                      @change="onLatHoursChange">
                       <a-radio-button :value="1">1h</a-radio-button>
                       <a-radio-button :value="24">24h</a-radio-button>
                       <a-radio-button :value="168">7d</a-radio-button>
@@ -2022,7 +2022,7 @@ function subLinkToken(subId) {
       },
       vpsUsage: null,
       // 三网延迟监测
-      latencyHours: 24,
+      latencyHours: (() => { try { return Number(localStorage.getItem('latHours') || 24) || 24; } catch (e) { return 24; } })(),
       latencyLoading: false,
       latencyTesting: false,
       latencyRunNote: '',
@@ -3738,6 +3738,20 @@ function subLinkToken(subId) {
       onLatencyScopeChange(v) {
         this.latencyScopeSel = Array.isArray(v) ? v.slice() : [];
         try { localStorage.setItem('latScopeSel', JSON.stringify(this.latencyScopeSel)); } catch (e) {}
+      },
+      // 点 1h/24h/7d/30d：必须先把「自定义区间 / 日期范围」清掉，
+      // 否则请求里仍然带 from/to，hours 被忽略，看起来就像点了没反应。
+      onLatHoursChange(h) {
+        const v = Number(h && h.target ? h.target.value : h) || this.latencyHours;
+        this.latencyHours = v;
+        this.latencyRange = null;
+        this.latDayRange = [];
+        this.latZoomStack = [];
+        this.latHoverTs = null;
+        this.latHoverVisible = false;
+        this.latHover = null;
+        try { localStorage.setItem('latHours', String(v)); } catch (e) {}
+        this.loadLatency();
       },
       // 日期区间：多天一起看，走已有的 from/to 查询
       applyLatDayRange(v) {
