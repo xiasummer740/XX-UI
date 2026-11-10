@@ -675,6 +675,13 @@ type SloSummary struct {
 	Days          []DayAvail `json:"days"`
 }
 
+// 基线缓存：7 天同小时均值，10 分钟内复用
+var (
+	latBaseMu    sync.Mutex
+	latBaseCache = map[string][]LatencyBaseline{}
+	latBaseAt    time.Time
+)
+
 // latencyBucketSeconds 决定 SQL 聚合的时间桶大小：
 // 目标是把每个格子的点数控制在 ~240 个，既不丢趋势，也不会把内存打爆。
 func latencyBucketSeconds(hours int, from, to int64) int64 {
@@ -1119,6 +1126,19 @@ func (s *LatencyService) summaryRangeUncached(hours int, from, to int64, mode st
 	// 基线：过去 7 天「同一小时」的均值（24 个槽），只在看 24h 这类短窗口时算，
 	// 一次 GROUP BY 只回 12×24 行，代价可控。
 	if hours <= 26 && len(sum.Cells) > 0 {
+		// 基线只随历史慢慢变化，10 分钟内直接复用，避免每次点筛选都扫一遍 7 天
+		latBaseMu.Lock()
+		if time.Since(latBaseAt) < 10*time.Minute && len(latBaseCache) > 0 {
+			for i := range sum.Cells {
+				key := sum.Cells[i].City + "|" + sum.Cells[i].Isp
+				if v, ok := latBaseCache[key]; ok {
+					sum.Cells[i].Baseline = v
+				}
+			}
+			latBaseMu.Unlock()
+			return sum, nil
+		}
+		latBaseMu.Unlock()
 		now := time.Now().Unix()
 		type baseRow struct {
 			City  string
@@ -1139,6 +1159,10 @@ func (s *LatencyService) summaryRangeUncached(hours int, from, to int64, mode st
 				key := r.City + "|" + r.Isp
 				byCell[key] = append(byCell[key], LatencyBaseline{Hour: r.Hour, AvgMs: r.AvgMs})
 			}
+			latBaseMu.Lock()
+			latBaseCache = byCell
+			latBaseAt = time.Now()
+			latBaseMu.Unlock()
 			for i := range sum.Cells {
 				key := sum.Cells[i].City + "|" + sum.Cells[i].Isp
 				if v, ok := byCell[key]; ok {
