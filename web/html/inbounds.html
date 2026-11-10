@@ -239,11 +239,13 @@
                           <span class="lat-hint-text">[[ latencyScopeHint ]]</span>
                         </span>
                       </div>
-                      <div class="lat-svg-box" ref="latBox" v-if="chartTiny.series.length" tabindex="0" @keydown="onLatKey" title="拖拽框选放大 · 点击钉住浮层 · ←/→ 移动">
+                      <div class="lat-svg-box" ref="latBox" v-if="chartTiny.series.length" tabindex="0" @keydown="onLatKey"
+                      @mousemove="onLatHover($event)" @mouseleave="unpinLatHover" @mousedown="onLatBrushStart($event)"
+                      @mouseup="onLatBrushEnd" title="拖拽框选放大 · 点击钉住浮层 · ←/→ 移动">
                         <svg class="lat-trend" viewBox="0 0 1000 200" preserveAspectRatio="none" role="img" aria-label="国内三网 RTT 趋势图"
                           @mousemove="onLatHover($event)" @mouseleave="unpinLatHover" @click="toggleLatPin"
                           @mousedown="onLatBrushStart($event)" @mouseup="onLatBrushEnd"
-                          @touchstart="onLatTouch($event)" @touchmove="onLatTouch($event)" @touchend="latHover = null">
+                          @touchstart="onLatTouch($event)" @touchmove="onLatTouch($event)" @touchend="unpinLatHover">
                           <linearGradient v-for="s in chartTiny.series" :key="'lg-' + s.name" :id="'latArea-' + s.name" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="0%" :stop-color="s.color" stop-opacity="0.10"></stop>
                             <stop offset="100%" :stop-color="s.color" stop-opacity="0"></stop>
@@ -324,16 +326,16 @@
                           <text v-for="t in chartTiny.xTicks" :key="'tx-' + t.label" :x="t.xf" y="195"
                             :text-anchor="t.anchor" class="lg-axis">[[ t.label ]]</text>
                         </svg>
-                        <div v-if="latHover" class="lat-tip" :style="latHover.tipStyle" :class="{ 'lat-tip-pinned': latPinned }">
+                        <div v-if="latHoverVisible" class="lat-tip" :style="latHoverStyle" :class="{ 'lat-tip-pinned': latPinned }">
                           <span v-if="latPinned" class="lat-pinned-hint">已钉住</span>
-                          <div class="lat-tip-time">[[ latHover.time ]]</div>
-                          <div v-for="r in latHover.rows" :key="'tip-' + r.name" class="lat-tip-row">
+                          <div class="lat-tip-time">[[ latHoverTime ]]</div>
+                          <div v-for="r in latHoverRows" :key="'tip-' + r.name" class="lat-tip-row">
                             <span class="lat-tip-name" :style="{ color: r.color }">[[ r.name ]]</span>
                             <span class="lat-tip-val">[[ r.value ]]<em>ms</em></span>
-                            <span class="lat-tip-loss" :class="{ 'lat-tip-loss-zero': !r.loss }">丢 [[ (r.loss || 0).toFixed(1) ]]%</span>
+                            <span class="lat-tip-loss" :class="{ 'lat-tip-loss-zero': !r.loss }">丢 [[ fmtPct(r.loss) ]]%</span>
                             <div class="lat-tip-cities">
                               <span v-for="c in r.cities" :key="r.name + c.city" class="lat-tip-city"
-                                :class="{ 'lat-tip-city-loss': c.loss > 0 }">[[ c.city ]] [[ c.value ]]ms<em> · 丢 [[ (c.loss || 0).toFixed(1) ]]%</em></span>
+                                :class="{ 'lat-tip-city-loss': c.loss > 0 }">[[ c.city ]] [[ c.value ]]ms<em> · 丢 [[ fmtPct(c.loss) ]]%</em></span>
                             </div>
                           </div>
                         </div>
@@ -2040,6 +2042,11 @@ function subLinkToken(subId) {
       latencyTightOn: (() => { try { return localStorage.getItem('latTight') === '1'; } catch (e) { return false; } })(),
       latencyBaselineOn: (() => { try { return localStorage.getItem('latBase') !== '0'; } catch (e) { return true; } })(),
       latHoverTs: null,
+      latHoverVisible: false,
+      latHoverTime: '',
+      latHoverX: 0,
+      latHoverRows: [],
+      latHoverStyle: {},
       latLegendOpen: false,
       // 视角：多选城市，空 = 全部城市；默认只看本地深圳
       latencyScopeSel: (() => { try { const v = JSON.parse(localStorage.getItem('latScopeSel') || '["深圳"]'); return Array.isArray(v) ? v : ['深圳']; } catch (e) { return ['深圳']; } })(),
@@ -3633,6 +3640,11 @@ function subLinkToken(subId) {
           this.latencyLoading = false;
         }
       },
+      // 丢包统一格式化：数据可能是数字也可能是 '0%' 这种字符串，模板里绝不能直接 .toFixed
+      fmtPct(v) {
+        const n = Number(v);
+        return (isFinite(n) ? n : 0).toFixed(1);
+      },
       // 消峰档位文案 + 拖动结束才提交（拖动过程不重算，避免卡顿）
       latSmoothLabel(v) {
         const n = Math.max(0, Math.min(10, Number(v) || 0));
@@ -3819,15 +3831,9 @@ function subLinkToken(subId) {
         if (this.latBrush && this.latBrush.moved) { this.onLatBrushMove(e); return; }
         // 一帧只处理一次：原来的实现每个 mousemove 都重算 12 条线并重绘浮层，
         // 鼠标一动就排队，表现就是「浮层半天不出来」。
-        this._hoverRaw = { clientX: e.clientX };
-        // 第一次进入图表立刻算一次，用户不用等下一帧
-        if (!this.latHover) { this.applyLatHover(this._hoverRaw); return; }
-        if (this._hoverRaf) return;
-        this._hoverRaf = (window.requestAnimationFrame || (fn => setTimeout(fn, 16)))(() => {
-          this._hoverRaf = null;
-          const ev = this._hoverRaw;
-          if (ev) this.applyLatHover(ev);
-        });
+        // 直接算：rAF 在切后台/高负载时会被节流，反而让浮层卡住不动；
+        // 这里靠「同一时间点只挪位置」的快速路径控制开销，实测足够跟手。
+        this.applyLatHover({ clientX: e.clientX });
       },
       applyLatHover(e) {
         const chart = this.chartTiny;
@@ -3890,32 +3896,27 @@ function subLinkToken(subId) {
             value: Math.round(best[1]),
             loss: Math.round(lossMax * 10) / 10,
             cities: this.latencyScopeSel.length > 1 ? cities : [],
-          loss: this.latHoverLoss,
           });
         });
         if (!rows.length) return;
 
         const when = new Date(Math.round(ts) * 1000);
         const pct = (xOfTs(ts) / 1000) * 100;
-        // 时间点没变（只是鼠标横向挪动）：就地更新位置，不重建浮层内容
-        if (this.latHoverTs === ts && this.latHover) {
-          this.latHover = Object.assign({}, this.latHover, {
-            x: xOfTs(ts).toFixed(1),
-            tipStyle: { left: pct + '%', transform: pct > 60 ? 'translateX(-104%)' : 'translateX(4%)' },
-          });
+        const style = { left: pct + '%', transform: pct > 60 ? 'translateX(-104%)' : 'translateX(4%)' };
+        // 时间点没变：只挪位置（内容不重建，纵向不受影响）
+        if (this.latHoverTs === ts) {
+          this.latHoverX = xOfTs(ts).toFixed(1);
+          this.latHoverStyle = style;
+          if (!this.latHoverVisible) this.latHoverVisible = true;
           return;
         }
         this.latHoverTs = ts;
-        this.latHover = {
-          x: xOfTs(ts).toFixed(1),
-          time: when.toLocaleTimeString('zh-CN', { hour12: false }),
-          marks: marks,
-          rows: rows,
-          tipStyle: {
-            left: pct + '%',
-            transform: pct > 60 ? 'translateX(-104%)' : 'translateX(4%)',
-          },
-        };
+        this.latHoverX = xOfTs(ts).toFixed(1);
+        this.latHoverTime = when.toLocaleTimeString('zh-CN', { hour12: false });
+        this.latHoverRows = rows;
+        this.latHoverStyle = style;
+        this.latHoverVisible = true;
+        this.latHover = { x: this.latHoverX, marks: marks };
       },
       fmtClock(ts) {
         const d = new Date(ts * 1000);
@@ -4003,6 +4004,7 @@ function subLinkToken(subId) {
         this.latPinned = !this.latPinned;
       },
       unpinLatHover() {
+        this.latHoverVisible = false;
         if (this.latPinned) return;
         this.latHover = null;
       },
