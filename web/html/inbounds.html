@@ -164,8 +164,6 @@
                       <a-radio-button :value="720">30d</a-radio-button>
                     </a-radio-group>
                     <a-button size="small" icon="swap" :loading="latCmpLoading" title="同时跑一遍 ICMP 和 TCP，判断高延迟/丢包是真拥塞还是 ICMP 被降级" @click="openLatCompare">ICMP/TCP</a-button>
-                    <a-button size="small" icon="thunderbolt" :loading="latencyTesting"
-                      @click="runLatencyNow">测</a-button>
                     <a-tag v-if="latencyRange" closable color="blue" class="lat-range-tag" @close="resetLatencyRange">自定义区间</a-tag>
                     <a-button v-if="latZoomStack.length" size="small" class="lat-zoom-back" title="返回上一级窗口" @click="latZoomBack">返回上一级</a-button>
                     <span v-if="latencyRunNote" class="lat-run-note">[[ latencyRunNote ]]</span>
