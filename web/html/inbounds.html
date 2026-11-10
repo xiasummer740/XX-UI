@@ -232,8 +232,8 @@
                           </a-tooltip>
                           <span class="lat-smooth-wrap" title="消峰：对曲线做滑动平均，只看趋势，不改原始数据">
                             <span class="lat-smooth-label">消峰</span>
-                            <a-slider :value="latSmooth" :min="0" :max="10" :step="1" class="lat-smooth-slider"
-                              :tip-formatter="v => latSmoothLabel(v)" @afterChange="commitLatSmooth"></a-slider>
+                            <a-slider v-model="latSmoothDrag" :min="0" :max="10" :step="1" class="lat-smooth-slider"
+                              :tip-formatter="v => latSmoothLabel(v)" @change="onSmoothDrag" @afterChange="commitLatSmooth"></a-slider>
                             <span class="lat-smooth-val">[[ latSmoothLabel(latSmooth) ]]</span>
                           </span>
                           <span class="lat-hint-text">[[ latencyScopeHint ]]</span>
@@ -2040,6 +2040,7 @@ function subLinkToken(subId) {
       latFocusName: '',
       latDay: '',
       latSmooth: (() => { try { return Number(localStorage.getItem('latSmooth') || 0) || 0; } catch (e) { return 0; } })(),
+      latSmoothDrag: (() => { try { return Number(localStorage.getItem('latSmooth') || 0) || 0; } catch (e) { return 0; } })(),
       latMode: (() => { try { return localStorage.getItem('latMode') || 'icmp'; } catch (e) { return 'icmp'; } })(),
       latOnly: null,
       latDayRange: [],
@@ -3644,10 +3645,14 @@ function subLinkToken(subId) {
       async loadLatency() {
         this.latencyLoading = true;
         this.latHover = null;
+        const seq = (this._latSeq || 0) + 1;
+        this._latSeq = seq;
         try {
           const body = { hours: this.latencyHours, mode: this.latMode };
           if (this.latencyRange) { body.from = this.latencyRange.from; body.to = this.latencyRange.to; }
           const msg = await HttpUtil.post('/panel/api/latency/summary', body);
+          // 只接受最后一次请求的结果：连点 1h/7d 时，先发的慢响应会被丢弃
+          if (seq !== this._latSeq) return;
           if (msg && msg.success && msg.obj) {
             this.latency = msg.obj;
           }
@@ -3692,9 +3697,17 @@ function subLinkToken(subId) {
         if (!n) return '关闭';
         return '窗口 ' + (n * 2 + 1);
       },
+      // 拖动中只更新显示，停手 250ms 或松手后再生效（避免每动一格都重算）
+      onSmoothDrag(v) {
+        this.latSmoothDrag = Math.max(0, Math.min(10, Number(v) || 0));
+        clearTimeout(this._smoothTimer);
+        this._smoothTimer = setTimeout(() => this.commitLatSmooth(this.latSmoothDrag), 250);
+      },
       commitLatSmooth(v) {
-        this.latSmooth = Math.max(0, Math.min(10, Number(v) || 0));
-        try { localStorage.setItem('latSmooth', String(this.latSmooth)); } catch (e) {}
+        const vv = Math.max(0, Math.min(10, Number(v) || 0));
+        this.latSmoothDrag = vv;
+        this.latSmooth = vv;
+        try { localStorage.setItem('latSmooth', String(vv)); } catch (e) {}
       },
       // 服务器状态曲线：CPU / 负载 / 内存 / 磁盘 / 网络 / 进程 / 连接数
       loadSysmon() {
