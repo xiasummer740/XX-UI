@@ -183,19 +183,13 @@
                           <a-radio-button value="icmp">ICMP</a-radio-button>
                           <a-radio-button value="tcp">TCP</a-radio-button>
                         </a-radio-group>
-                        <span class="lat-chip-group">
-                          <span class="lat-clear-chip" :class="{ 'lat-clear-on': !latencyScopeSel.length }"
-                            title="不筛选城市（显示全部）" @click="selectAllCities">全部</span>
-                          <a-checkbox v-for="ct in latencyCityOptions" :key="'cc-' + ct" :checked="latencyScopeSel.indexOf(ct) >= 0"
-                            class="lat-chip" @change="e => toggleCity(ct, e.target.checked)"
-                            @mouseenter.native="latOnly = 'city:' + ct" @mouseleave.native="latOnly = null">[[ ct ]]</a-checkbox>
-                        </span>
-                        <span class="lat-chip-group">
-                          <span class="lat-clear-chip" :class="{ 'lat-clear-on': !hiddenIspCount }"
-                            title="全部显示" @click="clearIspHidden">全部</span>
-                          <a-checkbox v-for="s in latencyIspLegend" :key="'ic-' + s.name" :checked="!latencyIspHidden[s.name]"
-                            class="lat-chip" @change="e => toggleLatencyIsp(s.name)"
-                            @mouseenter.native="latOnly = 'isp:' + s.name" @mouseleave.native="latOnly = null">[[ s.name ]]</a-checkbox>
+                        <span class="lat-chip-group lat-chip-grid">
+                          <span class="lat-clear-chip" :class="{ 'lat-clear-on': !hiddenCellCount }"
+                            title="全部显示" @click="showAllCells">全部</span>
+                          <a-checkbox v-for="c in latencyCellOptions" :key="'cc-' + c.name" :checked="!latencyHidden[c.name]"
+                            class="lat-chip" @change="e => toggleLatencySeries(c.name)"
+                            @mouseenter.native="latOnly = 'name:' + c.name" @mouseleave.native="latOnly = null">
+                            <i class="lat-chip-dot" :style="{ background: c.color }"></i>[[ c.name ]]</a-checkbox>
                         </span>
                         <a-popover placement="bottomRight" title="指标说明" trigger="click">
                           <template #content>
@@ -2065,7 +2059,7 @@ function subLinkToken(subId) {
       latLegendOpen: false,
       // 视角：多选城市，空 = 全部城市；默认只看本地深圳
       latencyScopeSel: (() => { try { const v = JSON.parse(localStorage.getItem('latScopeSel') || '["深圳"]'); return Array.isArray(v) ? v : ['深圳']; } catch (e) { return ['深圳']; } })(),
-      latencyHidden: {},
+      latencyHidden: (() => { try { return JSON.parse(localStorage.getItem('latHidden') || '{}') || {}; } catch (e) { return {}; } })(),
       latencyIspHidden: (() => { try { return JSON.parse(localStorage.getItem('latIspHidden') || '{}') || {}; } catch (e) { return {}; } })(),
       // 颜色按运营商分（电信蓝 / 联通绿 / 移动橙），线型按城市分 —— 12 条线才分得清
       latencyIspColors: { '电信': '#5B8FF9', '联通': '#38C9A6', '移动': '#F6BD16' },
@@ -4292,11 +4286,9 @@ function subLinkToken(subId) {
       // 服务器状态：把接口里的序列转成 sparkline 路径（面积 + 折线）
       // 当前视角下的 cell 集合：默认只取一个城市，选「全网」才是 12 个测点
       latencyScopedCells() {
-        const cells = (this.latency && this.latency.cells) || [];
-        const sel = this.latencyScopeSel || [];
-        if (!sel.length) return cells;
-        const one = cells.filter(c => sel.indexOf(c.city) >= 0);
-        return one.length ? one : cells;
+        // 现在由 12 个「城市+运营商」按钮控制哪条线可见，
+        // 这里直接返回全部格子，不再按城市过滤（否则会只剩 3 条）。
+        return (this.latency && this.latency.cells) || [];
       },
       latencyIspSeries() {
         const cells = this.latencyScopedCells();
@@ -4354,7 +4346,7 @@ function subLinkToken(subId) {
               if ((Number(pt.lossPct) || 0) > 0) bad.push([pt.ts, v]);
             });
             if (!data.length) return;
-            out.push({ name: name, color: this.latCellColor(c.city, c.isp, i), dash: this.latencyDashOf(c.city, i), data: smoothArr(data), bad: bad, timeouts: timeouts });
+            out.push({ name: name, color: this.latCellColor(c.city, c.isp, i), dash: '', data: smoothArr(data), bad: bad, timeouts: timeouts });
           });
           return out;
         }
@@ -4689,8 +4681,21 @@ function subLinkToken(subId) {
       toggleLatencySeries(name) {
         const next = Object.assign({}, this.latencyHidden);
         if (next[name]) { delete next[name]; } else { next[name] = true; }
+        // 全关掉会是空图，直接回到全部显示
+        const all = (this.latencyCellOptions || []).length;
+        if (all && Object.keys(next).length >= all) {
+          this.latencyHidden = {};
+          try { localStorage.setItem('latHidden', '{}'); } catch (e) {}
+          return;
+        }
         this.latencyHidden = next;
-      },      async openLatencyConfig() {
+        try { localStorage.setItem('latHidden', JSON.stringify(next)); } catch (e) {}
+      },
+      showAllCells() {
+        this.latencyHidden = {};
+        try { localStorage.setItem('latHidden', '{}'); } catch (e) {}
+      },
+      async openLatencyConfig() {
         let obj = {};
         try {
           const msg = await HttpUtil.post('/panel/api/latency/targets', {});
@@ -5217,9 +5222,16 @@ function subLinkToken(subId) {
         return cs.length ? cs : ['深圳', '北京', '上海', '成都'];
       },
       // 视角文案：一个城市 / 多个城市 / 全部
-      // 当前隐藏了几个运营商（给「全部」高亮用）
-      hiddenIspCount() {
-        return Object.keys(this.latencyIspHidden || {}).length;
+      // 12 个「城市+运营商」按钮：名字、颜色都固定，点一下就切换这条线
+      latencyCellOptions() {
+        const cells = (this.latency && this.latency.cells) || [];
+        return cells.map((c, i) => ({
+          name: c.city + c.isp,
+          color: this.latCellColor(c.city, c.isp, i),
+        }));
+      },
+      hiddenCellCount() {
+        return Object.keys(this.latencyHidden || {}).length;
       },
       latencyScopeLabel() {
         const sel = this.latencyScopeSel || [];
@@ -5229,7 +5241,7 @@ function subLinkToken(subId) {
       },
       // 选多城时才需要「按城市分线」，单城/全网自适应
       latencyMultiCity() {
-        return (this.latencyScopeSel || []).length > 1;
+        return true;
       },
       latencyScopeHint() {
         const sel = this.latencyScopeSel || [];
