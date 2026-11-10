@@ -4452,7 +4452,12 @@ function subLinkToken(subId) {
           if (v > 0) vals.push(v);
         });
         visible.forEach(s => scan(s.data));
-        visible.forEach(s => scan(s.data));
+        // 外面指定了窗口（例如选了 7d）就以窗口为准：数据不足的部分留白，
+        // 而不是把 23 小时的数据拉满整屏、看起来像「7 天没生效」。
+        if (o.forceT0 && o.forceT1 && o.forceT1 > o.forceT0) {
+          t0 = o.forceT0;
+          t1 = o.forceT1;
+        }
         // 基线也参与量程，否则基线超出范围会被压到顶端
         (o.baseline || []).forEach(b => { if (b.data && b.data.length) scan(b.data); });
         if (!isFinite(lo)) { lo = 0; hi = 100; }
@@ -5336,6 +5341,15 @@ function subLinkToken(subId) {
         return String(rows);
       },
       // 常驻趋势图：3 条运营商曲线 + 城市区间带（190px）
+      // 当前图表应覆盖的时间窗口（unix 秒）
+      latencyWindowRange() {
+        if (this.latencyRange && this.latencyRange.from && this.latencyRange.to) {
+          return { from: this.latencyRange.from, to: this.latencyRange.to };
+        }
+        const hours = Number(this.latencyHours) || 24;
+        const to = Math.floor(Date.now() / 1000);
+        return { from: to - hours * 3600, to: to };
+      },
       chartTiny() {
         return this.buildLatencyChart(this.latencyIspSeries(), {
           width: 1000, height: 190, yTicks: 4, xTicks: 5,
@@ -5343,6 +5357,7 @@ function subLinkToken(subId) {
           bands: this.latencyIspBands(),
           loss: this.latencyLossSeries,
           refLines: this.latencyRefLines, typical: true, pullRef: !this.latencyTightOn, gaps: this.latencyGapMarks,
+          forceT0: this.latencyWindowRange().from, forceT1: this.latencyWindowRange().to,
           baseline: this.latencyBaselineOn ? this.latencyBaselineData : [],
         });
       },
