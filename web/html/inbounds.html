@@ -2251,6 +2251,16 @@ function subLinkToken(subId) {
         if (!f || !f.family) return ''
         return f.family === 'both' ? 'v4+v6' : f.family
       },
+      // 运营商标签颜色：电信蓝、联通绿、移动橙、其它灰
+      ispTagColor(isp) {
+        switch (isp) {
+          case '电信': return '#1890ff'
+          case '联通': return '#52c41a'
+          case '移动': return '#fa8c16'
+          case '教育网': return '#722ed1'
+          default: return '#8c8c8c'
+        }
+      },
       clientIpFamilyTip(email) {
         const f = this.clientIpFamily(email)
         if (!f || !f.family) return ''

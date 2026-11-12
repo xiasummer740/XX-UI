@@ -5,6 +5,7 @@ import (
 	"net"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/XiaSummer740/XX-UI/database"
@@ -19,6 +20,8 @@ type ClientIPFamily struct {
 	LastIP string `json:"lastIp"` // 最近一次用到的 IP
 	LastAt int64  `json:"lastAt"` // 最近一次活跃时间（秒）
 	Family string `json:"family"` // v4 / v6 / both
+	ISP    string `json:"isp"`    // 电信 / 联通 / 移动 / 其他（按最近一次 IP 归属判断）
+	ISPOrg string `json:"ispOrg"` // 原始归属信息，鼠标悬浮时显示
 }
 
 type clientIPRecord struct {
@@ -91,6 +94,33 @@ func (s *InboundService) GetClientsIPFamily() (map[string]ClientIPFamily, error)
 		}
 		result[email] = fam
 	}
+
+	// 按最近一次 IP 判断运营商：并发查、带 24 小时缓存，查不到就留空
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	sem := make(chan struct{}, 4)
+	for email, fam := range result {
+		if fam.LastIP == "" {
+			continue
+		}
+		wg.Add(1)
+		go func(email, ip string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			org := lookupISP(ip)
+			<-sem
+			if org == "" {
+				return
+			}
+			mu.Lock()
+			f := result[email]
+			f.ISP = classifyISP(org)
+			f.ISPOrg = org
+			result[email] = f
+			mu.Unlock()
+		}(email, fam.LastIP)
+	}
+	wg.Wait()
 	return result, nil
 }
 

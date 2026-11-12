@@ -77,6 +77,16 @@
           [[ clientIpFamilyLabel(client.email) ]]
         </a-tag>
       </a-tooltip>
+      <!-- 运营商：按最近一次 IP 归属判断（电信/联通/移动） -->
+      <a-tooltip v-if="clientIpFamily(client.email) && clientIpFamily(client.email).isp">
+        <template slot="title">
+          [[ clientIpFamilyTip(client.email) ]] [[ clientIpFamily(client.email).ispOrg ]]
+        </template>
+        <a-tag :color="ispTagColor(clientIpFamily(client.email).isp)"
+               style="margin:0;font-size:11px;line-height:16px;transform:scale(0.92);transform-origin:left center">
+          [[ clientIpFamily(client.email).isp ]]
+        </a-tag>
+      </a-tooltip>
     </a-space>
   </a-space>
 </template>
