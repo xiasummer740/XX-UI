@@ -2266,9 +2266,9 @@ function subLinkToken(subId) {
         const f = this.clientIpFamily(email)
         if (!f) return ''
         const parts = []
-        if (f.location) parts.push(f.location)
+        if (f.location) parts.push(f.location.replace(/\s+/g, '·'))
         if (f.isp) parts.push(f.isp)
-        return parts.join(' ')
+        return parts.join('·')
       },
       clientIpFamilyTip(email) {
         const f = this.clientIpFamily(email)
