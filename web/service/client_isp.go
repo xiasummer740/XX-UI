@@ -12,8 +12,15 @@ import (
 
 // IP 归属查询：走 ip-api.com 免费接口（45 次/分钟），结果缓存 24 小时。
 // 客户端数量很少（几个到几十个），加上缓存后几乎不会有额外开销。
+type ipGeo struct {
+	Country  string // 中国
+	Province string // 广东
+	City     string // 深圳
+	Org      string // 中国电信 / Chinanet ...
+}
+
 type ispCacheEntry struct {
-	org string
+	geo ipGeo
 	at  time.Time
 }
 
@@ -23,48 +30,48 @@ var (
 	ispClient  = &http.Client{Timeout: 3 * time.Second}
 )
 
-// lookupISP 返回某个 IP 的归属描述（"中国电信" 等），查不到返回空串。
-func lookupISP(ip string) string {
+// lookupGeo 返回某个 IP 的省市与归属，查不到返回零值。
+func lookupGeo(ip string) ipGeo {
 	parsed := net.ParseIP(strings.TrimSpace(ip))
 	if parsed == nil {
-		return ""
+		return ipGeo{}
 	}
 	if parsed.IsPrivate() || parsed.IsLoopback() || parsed.IsLinkLocalUnicast() {
-		return ""
+		return ipGeo{}
 	}
 	ispCacheMu.Lock()
 	if e, ok := ispCache[ip]; ok && time.Since(e.at) < 24*time.Hour {
+		geo := e.geo
 		ispCacheMu.Unlock()
-		return e.org
+		return geo
 	}
 	ispCacheMu.Unlock()
 
-	url := fmt.Sprintf("http://ip-api.com/json/%s?fields=status,country,isp,as&lang=zh-CN", ip)
+	url := fmt.Sprintf("http://ip-api.com/json/%s?fields=status,country,regionName,city,isp,as&lang=zh-CN", ip)
 	resp, err := ispClient.Get(url)
 	if err != nil {
-		return ""
+		return ipGeo{}
 	}
 	defer resp.Body.Close()
 	var out struct {
-		Status  string `json:"status"`
-		Country string `json:"country"`
-		ISP     string `json:"isp"`
-		AS      string `json:"as"`
+		Status     string `json:"status"`
+		Country    string `json:"country"`
+		RegionName string `json:"regionName"`
+		City       string `json:"city"`
+		ISP        string `json:"isp"`
+		AS         string `json:"as"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || out.Status != "success" {
-		return ""
+		return ipGeo{}
 	}
-	org := strings.TrimSpace(out.ISP)
-	if org == "" {
-		org = strings.TrimSpace(out.AS)
-	}
-	if out.Country != "" && out.Country != "中国" && out.Country != "China" {
-		org = out.Country + " " + org
+	geo := ipGeo{Country: out.Country, Province: out.RegionName, City: out.City, Org: strings.TrimSpace(out.ISP)}
+	if geo.Org == "" {
+		geo.Org = strings.TrimSpace(out.AS)
 	}
 	ispCacheMu.Lock()
-	ispCache[ip] = ispCacheEntry{org: org, at: time.Now()}
+	ispCache[ip] = ispCacheEntry{geo: geo, at: time.Now()}
 	ispCacheMu.Unlock()
-	return org
+	return geo
 }
 
 // classifyISP 把归属描述归到三家运营商。
@@ -88,4 +95,16 @@ func classifyISP(org string) string {
 	default:
 		return "其他"
 	}
+}
+
+// shortRegion 把「广东省」「广西壮族自治区」这类名字压缩成「广东」「广西」。
+func shortRegion(s string) string {
+	s = strings.TrimSpace(s)
+	for _, suffix := range []string{"壮族自治区", "回族自治区", "维吾尔自治区", "自治区", "特别行政区", "省", "市"} {
+		if strings.HasSuffix(s, suffix) && len(s) > len(suffix) {
+			s = strings.TrimSuffix(s, suffix)
+			break
+		}
+	}
+	return s
 }

@@ -15,13 +15,16 @@ import (
 
 // ClientIPFamily 描述某个客户端最近是用 IPv4 还是 IPv6 连进来的。
 type ClientIPFamily struct {
-	V4     int    `json:"v4"`     // 记录过的 IPv4 地址个数
-	V6     int    `json:"v6"`     // 记录过的 IPv6 地址个数
-	LastIP string `json:"lastIp"` // 最近一次用到的 IP
-	LastAt int64  `json:"lastAt"` // 最近一次活跃时间（秒）
-	Family string `json:"family"` // v4 / v6 / both
-	ISP    string `json:"isp"`    // 电信 / 联通 / 移动 / 其他（按最近一次 IP 归属判断）
-	ISPOrg string `json:"ispOrg"` // 原始归属信息，鼠标悬浮时显示
+	V4       int    `json:"v4"`       // 记录过的 IPv4 地址个数
+	V6       int    `json:"v6"`       // 记录过的 IPv6 地址个数
+	LastIP   string `json:"lastIp"`   // 最近一次用到的 IP
+	LastAt   int64  `json:"lastAt"`   // 最近一次活跃时间（秒）
+	Family   string `json:"family"`   // v4 / v6 / both
+	ISP      string `json:"isp"`      // 电信 / 联通 / 移动 / 其他（按最近一次 IP 归属判断）
+	ISPOrg   string `json:"ispOrg"`   // 原始归属信息，鼠标悬浮时显示
+	Province string `json:"province"` // 广东
+	City     string `json:"city"`     // 深圳
+	Location string `json:"location"` // 广东 深圳（省市，供列表直接显示）
 }
 
 type clientIPRecord struct {
@@ -107,15 +110,24 @@ func (s *InboundService) GetClientsIPFamily() (map[string]ClientIPFamily, error)
 		go func(email, ip string) {
 			defer wg.Done()
 			sem <- struct{}{}
-			org := lookupISP(ip)
+			geo := lookupGeo(ip)
 			<-sem
-			if org == "" {
+			if geo.Org == "" && geo.Province == "" && geo.City == "" {
 				return
 			}
 			mu.Lock()
 			f := result[email]
-			f.ISP = classifyISP(org)
-			f.ISPOrg = org
+			f.ISP = classifyISP(geo.Org)
+			f.ISPOrg = geo.Org
+			f.Province = shortRegion(geo.Province)
+			f.City = shortRegion(geo.City)
+			if f.Province != "" && f.City != "" && f.Province != f.City {
+				f.Location = f.Province + " " + f.City
+			} else if f.Province != "" {
+				f.Location = f.Province
+			} else {
+				f.Location = f.City
+			}
 			result[email] = f
 			mu.Unlock()
 		}(email, fam.LastIP)

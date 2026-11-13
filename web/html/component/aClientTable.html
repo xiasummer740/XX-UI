@@ -84,7 +84,7 @@
         </template>
         <a-tag :color="ispTagColor(clientIpFamily(client.email).isp)"
                style="margin:0;font-size:11px;line-height:16px;transform:scale(0.92);transform-origin:left center">
-          [[ clientIpFamily(client.email).isp ]]
+          [[ regionIspText(client.email) ]]
         </a-tag>
       </a-tooltip>
     </a-space>

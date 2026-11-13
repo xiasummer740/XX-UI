@@ -2261,6 +2261,15 @@ function subLinkToken(subId) {
           default: return '#8c8c8c'
         }
       },
+      // 「广东 深圳 电信」这种写法：省市 + 运营商
+      regionIspText(email) {
+        const f = this.clientIpFamily(email)
+        if (!f) return ''
+        const parts = []
+        if (f.location) parts.push(f.location)
+        if (f.isp) parts.push(f.isp)
+        return parts.join(' ')
+      },
       clientIpFamilyTip(email) {
         const f = this.clientIpFamily(email)
         if (!f || !f.family) return ''
