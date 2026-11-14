@@ -312,7 +312,9 @@ func (s *ShopService) ApproveOrder(id int, adminId int64) (*model.Order, error) 
 	if err != nil {
 		return nil, err
 	}
-	if order.Status != orderPending {
+	// pending 正常开通；expired 也允许——钱可能晚到或走的是静态码，
+	// 管理员在面板里手动确认时要能救回来。
+	if order.Status != orderPending && order.Status != orderExpired {
 		return nil, fmt.Errorf("订单已处理过（当前状态：%s）", order.Status)
 	}
 

@@ -92,7 +92,24 @@
             <a-tag v-if="text === 'approved'" color="green">✅ 已开通</a-tag>
             <a-tag v-else-if="text === 'revoked'" color="purple">↩️ 已撤销</a-tag>
             <a-tag v-else-if="text === 'rejected'" color="red">❌ 已拒绝</a-tag>
+            <a-tag v-else-if="text === 'expired'" color="default">⌛ 已超时</a-tag>
             <a-tag v-else color="orange">⏳ 待确认</a-tag>
+          </template>
+          <template slot="orderAction" slot-scope="text, record">
+            <a-space :size="4" v-if="record.status === 'pending' || record.status === 'expired'">
+              <a-popconfirm title="确认这笔钱已经到账？确认后会立刻开通并把节点发给买家。"
+                ok-text="确认开通" cancel-text="再想想" @confirm="approveShopOrder(record.id)">
+                <a-button size="small" type="primary" ghost>确认到账</a-button>
+              </a-popconfirm>
+              <a-tooltip title="立刻向 BufPay 查一次单，已付款会自动开通">
+                <a-button size="small" :loading="shopRecheckId === record.id" @click="recheckShopOrder(record.id)">查单</a-button>
+              </a-tooltip>
+              <a-popconfirm title="确认没收到钱，直接驳回？" ok-text="驳回" cancel-text="算了"
+                @confirm="rejectShopOrder(record.id)">
+                <a-button size="small" danger ghost>驳回</a-button>
+              </a-popconfirm>
+            </a-space>
+            <span v-else style="color: #bfbfbf;">—</span>
           </template>
         </a-table>
 

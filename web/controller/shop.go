@@ -31,6 +31,9 @@ func (a *ShopController) initRouter(g *gin.RouterGroup) {
 	g.GET("/orders", a.getOrders)
 	g.POST("/clear-orders", a.clearOrders)
 	g.POST("/test-bufpay", a.testBufPay)
+	g.POST("/orders/approve", a.approveOrder)
+	g.POST("/orders/reject", a.rejectOrder)
+	g.POST("/orders/recheck", a.recheckOrder)
 }
 
 // getStats 返回经营看板数据。
@@ -43,6 +46,61 @@ func (a *ShopController) getStats(c *gin.Context) {
 func (a *ShopController) getOrders(c *gin.Context) {
 	orders, err := a.shopService.ListOrdersForPanel(200)
 	jsonObj(c, orders, err)
+}
+
+// approveOrder 面板里手动确认到账并开通（钱可能走的是静态码，BufPay 不知道）。
+func (a *ShopController) approveOrder(c *gin.Context) {
+	id, _ := strconv.Atoi(c.PostForm("id"))
+	if id <= 0 {
+		jsonObj(c, nil, fmt.Errorf("订单号不对"))
+		return
+	}
+	var bot service.Tgbot
+	bot.ApproveShopOrderFromPanel(id)
+	order, err := a.shopService.GetOrder(id)
+	jsonObj(c, order, err)
+}
+
+// rejectOrder 面板里驳回订单（没收到钱）。
+func (a *ShopController) rejectOrder(c *gin.Context) {
+	id, _ := strconv.Atoi(c.PostForm("id"))
+	if id <= 0 {
+		jsonObj(c, nil, fmt.Errorf("订单号不对"))
+		return
+	}
+	reason := strings.TrimSpace(c.PostForm("reason"))
+	if reason == "" {
+		reason = "管理员驳回"
+	}
+	order, err := a.shopService.RejectOrder(id, 0, reason)
+	jsonObj(c, order, err)
+}
+
+// recheckOrder 立即向 BufPay 查一次单：已付款就自动开通，否则返回当前状态。
+func (a *ShopController) recheckOrder(c *gin.Context) {
+	id, _ := strconv.Atoi(c.PostForm("id"))
+	if id <= 0 {
+		jsonObj(c, nil, fmt.Errorf("订单号不对"))
+		return
+	}
+	order, err := a.shopService.GetOrder(id)
+	if err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	var buf service.BufPayService
+	status, qerr := buf.QueryOrder(order.Aoid)
+	if qerr != nil {
+		jsonObj(c, gin.H{"status": "", "paid": false, "err": qerr.Error()}, nil)
+		return
+	}
+	paid := service.IsPayedStatus(status)
+	if paid {
+		var bot service.Tgbot
+		bot.ApproveShopOrderFromPanel(id)
+		logger.Info("[shop] 面板手动查单：订单 #", id, " BufPay 状态 ", status, "，已开通")
+	}
+	jsonObj(c, gin.H{"status": status, "paid": paid}, nil)
 }
 
 // clearOrders 清空全部订单记录（自测数据）。

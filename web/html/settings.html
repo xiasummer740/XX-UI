@@ -157,6 +157,7 @@
       qrPasteTarget: 'wechat',
       shopStats: null,
       shopOrders: [],
+      shopRecheckId: null,
       shopTestLoading: false,
       mailBackupTesting: false,
       shopOrderColumns: [
@@ -167,6 +168,7 @@
         { title: '支付', dataIndex: 'remark', width: 90 },
         { title: '状态', dataIndex: 'status', width: 110, scopedSlots: { customRender: 'status' } },
         { title: '下单时间', dataIndex: 'createdAt', width: 150, scopedSlots: { customRender: 'time' } },
+        { title: '操作', key: 'orderAction', width: 210, scopedSlots: { customRender: 'orderAction' } },
       ],
       shopPlanColumns: [
         { title: '流量 (GB)', dataIndex: 'gb', key: 'gb', scopedSlots: { customRender: 'gb' }, width: 120 },
@@ -478,12 +480,60 @@
           this.shopTestLoading = false;
         }
       },
+      // 面板里手动确认到账并开通（钱可能走静态码，BufPay 不知道）
+      async approveShopOrder(id) {
+        try {
+          const msg = await HttpUtil.post('/panel/api/shop/orders/approve', { id: id });
+          if (msg && msg.success) {
+            this.$message.success('已开通，节点已发给买家（订单 #' + id + '）');
+            this.loadShopReport && this.loadShopReport();
+            this.loadShopReport && this.loadShopReport();
+          } else {
+            this.$message.error((msg && msg.msg) || '开通失败');
+          }
+        } catch (e) {
+          this.$message.error('开通失败：' + e);
+        }
+      },
+      // 立刻向 BufPay 查一次单
+      async recheckShopOrder(id) {
+        this.shopRecheckId = id;
+        try {
+          const msg = await HttpUtil.post('/panel/api/shop/orders/recheck', { id: id });
+          const obj = (msg && msg.obj) || {};
+          if (obj.err) {
+            this.$message.error('查单失败：' + obj.err);
+          } else if (obj.paid) {
+            this.$message.success('BufPay 显示已付款，已自动开通（状态：' + obj.status + '）');
+          } else {
+            this.$message.warning('BufPay 侧状态：' + (obj.status || '未知') + '（还没收到钱）');
+          }
+          this.loadShopReport && this.loadShopReport();
+        } catch (e) {
+          this.$message.error('查单失败：' + e);
+        } finally {
+          this.shopRecheckId = null;
+        }
+      },
+      async rejectShopOrder(id) {
+        try {
+          const msg = await HttpUtil.post('/panel/api/shop/orders/reject', { id: id, reason: '管理员驳回' });
+          if (msg && msg.success) {
+            this.$message.success('已驳回（订单 #' + id + '）');
+            this.loadShopReport && this.loadShopReport();
+          } else {
+            this.$message.error((msg && msg.msg) || '驳回失败');
+          }
+        } catch (e) {
+          this.$message.error('驳回失败：' + e);
+        }
+      },
       async clearShopOrders() {
         const msg = await HttpUtil.post("/panel/api/shop/clear-orders", {});
         if (msg.success) {
           this.$message.success("已清空 " + (msg.obj && msg.obj.deleted ? msg.obj.deleted : 0) + " 条订单记录");
           this.loadShopReport();
-          this.loadShopOrders && this.loadShopOrders();
+          this.loadShopReport && this.loadShopReport();
         } else {
           this.$message.error(msg.msg || "清空失败");
         }

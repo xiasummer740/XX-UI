@@ -940,6 +940,12 @@ func (t *Tgbot) AutoApproveShopOrder(orderId int) {
 	t.approveShopOrder(0, 0, orderId)
 }
 
+// ApproveShopOrderFromPanel 面板里点「确认到账并开通」时调用：
+// 开通 + 把节点链接/二维码发给买家（和自动到账走同一套）。
+func (t *Tgbot) ApproveShopOrderFromPanel(orderId int) {
+	t.approveShopOrder(0, 0, orderId)
+}
+
 // cancelShopOrderByBuyer 买家自己取消还没确认的订单，避免「没付款却先点了我已付款」把自己卡住。
 func (t *Tgbot) cancelShopOrderByBuyer(chatId int64, orderId int) {
 	shop := ShopService{}
