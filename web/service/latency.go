@@ -976,7 +976,7 @@ var (
 	latSumKey string
 	latSumAt  time.Time
 	latSumVal *LatencySummary
-	latSumTTL = 30 * time.Second
+	latSumTTL = 55 * time.Second
 )
 
 func (s *LatencyService) SummaryRange(hours int, from, to int64, mode string) (*LatencySummary, error) {
@@ -1040,7 +1040,7 @@ func (s *LatencyService) summaryRangeUncached(hours int, from, to int64, mode st
 	}
 	sel := "city AS city, isp AS isp, (ts/?)*? AS ts, MAX(target) AS target, " +
 		"SUM(sent) AS sent, SUM(recv) AS recv, AVG(loss_pct) AS loss_pct, " +
-		"MIN(min_ms) AS min_ms, AVG(avg_ms) AS avg_ms, MAX(max_ms) AS max_ms, AVG(jitter) AS jitter, " +
+		"AVG(avg_ms) AS avg_ms, MAX(max_ms) AS max_ms, AVG(jitter) AS jitter, " +
 		"SUM(tcp_sent) AS tcp_sent, SUM(tcp_recv) AS tcp_recv, AVG(tcp_loss_pct) AS tcp_loss_pct, " +
 		"MIN(tcp_min_ms) AS tcp_min_ms, AVG(tcp_avg_ms) AS tcp_avg_ms, MAX(tcp_max_ms) AS tcp_max_ms, " +
 		"MAX(tcp_target) AS tcp_target"
