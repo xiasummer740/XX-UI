@@ -479,11 +479,17 @@
                           :style="{ height: '100%' }"
                           :title="d.day + ' 可用 ' + fmt2(d.avail) + '%（不可用约 ' + sloHuman(d.downtime) + '）'"></span>
                       </div>
+                      <div class="lat-slo-axis" v-if="slo.days.length > 1">
+                        <span>[[ sloDayLabel(0) ]]</span>
+                        <span class="lat-slo-worst" v-if="sloWorstLabel()">最差 [[ sloWorstLabel() ]]</span>
+                        <span>[[ sloDayLabel(-1) ]]</span>
+                      </div>
                       <div class="lat-slo-meta">
                         <span class="lat-slo-title">本月可用率 <b>[[ fmt2(slo.avail) ]]%</b></span>
                         <span class="lat-slo-target">目标 [[ slo.target ]]%</span>
-                        <span class="lat-slo-left" :class="{ 'lat-slo-left-bad': slo.leftSeconds <= 0 }">
-                          剩余额度 [[ sloHuman(slo.leftSeconds) ]]
+                        <span class="lat-slo-left" :class="{ 'lat-slo-left-bad': slo.leftSeconds <= 0 }"
+                          :title="slo.overSeconds > 0 ? '本月允许的不可用时间已经用完，超出部分就是超支' : '本月还剩多少不可用时间'">
+                          [[ slo.overSeconds > 0 ? '已超支 ' + sloHuman(slo.overSeconds) : '剩余额度 ' + sloHuman(slo.leftSeconds) ]]
                         </span>
                         <span class="lat-slo-used" :class="{ 'lat-slo-left-bad': Number(slo.usedPct) > 100 }">已用 [[ (Number(slo.usedPct) || 0).toFixed(0) ]]%</span>
                       </div>
@@ -3717,6 +3723,38 @@ function subLinkToken(subId) {
         const h = Math.max(6, Math.min(100, (v - 90) * 10 + 10));
         return Math.round(h) + '%';
       },
+      // 本月最差的一天（给 SLO 柱下面那行提示用）
+      // 取第 idx 天的 MM-DD；idx<0 表示倒数第 |idx| 天
+      sloDayLabel(idx) {
+        const days = (this.slo && this.slo.days) || [];
+        const d = idx < 0 ? days[days.length + idx] : days[idx];
+        if (!d || typeof d.day !== 'string') return '';
+        return d.day.length >= 10 ? d.day.slice(5) : d.day;
+      },
+      // 本月最差一天的文字（日期 + 可用率），没有数据返回空串
+      sloWorstLabel() {
+        const days = (this.slo && this.slo.days) || [];
+        let worst = null;
+        days.forEach(d => {
+          const v = Number(d.avail);
+          if (!isFinite(v)) return;
+          if (!worst || v < Number(worst.avail)) worst = d;
+        });
+        if (!worst || typeof worst.day !== 'string') return '';
+        const day = worst.day.length >= 10 ? worst.day.slice(5) : worst.day;
+        return day + ' · ' + (Number(worst.avail) || 0).toFixed(1) + '%';
+      },
+      sloWorstDay() {
+        const days = (this.slo && this.slo.days) || [];
+        if (!days.length) return null;
+        let worst = null;
+        days.forEach(d => {
+          const v = Number(d.avail);
+          if (!isFinite(v)) return;
+          if (!worst || v < Number(worst.avail)) worst = d;
+        });
+        return worst;
+      },
       sloHuman(sec) {
         const s = Math.max(0, Math.round(Number(sec) || 0));
         if (s < 60) return s + ' 秒';
@@ -6061,6 +6099,11 @@ function subLinkToken(subId) {
   .lat-slo-bar.lat-slo-ok { background: #52c41a; }
   .lat-slo-bar.lat-slo-warn { background: #faad14; }
   .lat-slo-bar.lat-slo-bad { background: #f5222d; }
+  .lat-slo-axis { display: flex; justify-content: space-between; align-items: center;
+    font-size: 9.5px; color: rgba(0, 0, 0, .3); margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .lat-slo-worst { color: rgba(0, 0, 0, .42); }
+  .inbounds-page.dark .lat-slo-axis { color: rgba(255, 255, 255, .32); }
+  .inbounds-page.dark .lat-slo-worst { color: rgba(255, 255, 255, .45); }
   .lat-slo-meta { display: flex; gap: 10px; align-items: center; font-size: 10.5px; color: rgba(0, 0, 0, .5);
     flex: 0 0 auto; font-variant-numeric: tabular-nums; }
   .lat-slo-meta b { color: #237804; font-weight: 600; }

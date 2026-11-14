@@ -671,6 +671,7 @@ type SloSummary struct {
 	BudgetSeconds float64    `json:"budgetSeconds"`
 	UsedSeconds   float64    `json:"usedSeconds"`
 	LeftSeconds   float64    `json:"leftSeconds"`
+	OverSeconds   float64    `json:"overSeconds"` // 超支的不可用时间（额度用完时为正值）
 	UsedPct       float64    `json:"usedPct"`
 	Days          []DayAvail `json:"days"`
 }
@@ -924,6 +925,8 @@ func (s *LatencyService) sloSummaryUncached(days int, target float64) (*SloSumma
 	}
 	sum.LeftSeconds = sum.BudgetSeconds - sum.UsedSeconds
 	if sum.LeftSeconds < 0 {
+		// 额度用完：记录超支多少，前端显示「已超支 X」而不是笼统的「剩余 0 秒」
+		sum.OverSeconds = -sum.LeftSeconds
 		sum.LeftSeconds = 0
 	}
 	if sum.BudgetSeconds > 0 {
