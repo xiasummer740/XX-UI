@@ -60,21 +60,21 @@ type LatencyTarget struct {
 // 每格尽量配 2 个候选，主用挂了自动切备用。
 var defaultLatencyTargets = []LatencyTarget{
 	// 深圳
-	{City: "深圳", Isp: "电信", Candidates: []string{"202.96.134.133", "58.60.188.1"}},
-	{City: "深圳", Isp: "联通", Candidates: []string{"210.21.196.6", "119.145.0.1"}},
-	{City: "深圳", Isp: "移动", Candidates: []string{"211.136.192.6", "120.196.0.1"}},
+	{City: "深圳", Isp: "电信", Candidates: []string{"223.5.5.5", "202.96.134.133"}},
+	{City: "深圳", Isp: "联通", Candidates: []string{"210.21.196.6", "119.145.0.1"}}, // 实测均 0% 丢包
+	{City: "深圳", Isp: "移动", Candidates: []string{"211.136.192.6", "211.136.17.107"}},
 	// 北京
-	{City: "北京", Isp: "电信", Candidates: []string{"123.125.81.6", "219.141.147.210"}},
+	{City: "北京", Isp: "电信", Candidates: []string{"219.141.147.210", "223.6.6.6"}},
 	{City: "北京", Isp: "联通", Candidates: []string{"123.123.123.123", "202.106.195.68"}},
-	{City: "北京", Isp: "移动", Candidates: []string{"211.136.17.107", "211.140.0.1"}},
+	{City: "北京", Isp: "移动", Candidates: []string{"211.136.17.107", "211.136.112.200"}},
 	// 上海
-	{City: "上海", Isp: "电信", Candidates: []string{"61.152.81.193", "202.96.209.133"}},
-	{City: "上海", Isp: "联通", Candidates: []string{"140.207.1.1", "210.22.70.3"}},
-	{City: "上海", Isp: "移动", Candidates: []string{"211.136.112.200", "120.196.0.1"}},
+	{City: "上海", Isp: "电信", Candidates: []string{"223.6.6.6", "61.152.81.193"}},
+	{City: "上海", Isp: "联通", Candidates: []string{"140.207.1.1", "123.123.123.123"}},
+	{City: "上海", Isp: "移动", Candidates: []string{"211.136.112.200", "211.136.192.6"}},
 	// 成都
-	{City: "成都", Isp: "电信", Candidates: []string{"61.139.2.69", "171.221.0.1"}},
-	{City: "成都", Isp: "联通", Candidates: []string{"119.6.6.6", "113.56.60.1"}},
-	{City: "成都", Isp: "移动", Candidates: []string{"211.137.96.205", "218.205.0.1"}},
+	{City: "成都", Isp: "电信", Candidates: []string{"119.29.29.29", "61.139.2.69"}},
+	{City: "成都", Isp: "联通", Candidates: []string{"119.6.6.6", "140.207.1.1"}},
+	{City: "成都", Isp: "移动", Candidates: []string{"218.205.0.1", "211.137.96.205"}},
 }
 
 // latencyChosen 缓存每格当前可用的测点，避免每轮都去试所有候选。
@@ -584,14 +584,10 @@ func (s *LatencyService) RunOnce() (int, error) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			// ICMP 也优先用 CDN 双栈节点：运营商省级 DNS（202.96.x / 61.139.x）
-			// 在晚上会对 ICMP 限速，导致面板上出现 13–20% 的假丢包；
-			// 换成同城市同运营商的 CDN 节点后，晚高峰实测 0% 丢包，且与 TCP 口径一致。
-			target := t
-			if ip := s.resolveTcpIP(t); ip != "" {
-				target = LatencyTarget{City: t.City, Isp: t.Isp, Candidates: []string{ip}}
-			}
-			base, _ := s.probeTarget(ctx, target)
+			// ICMP 用自己的候选表：省级 DNS 晚高峰会限速 ICMP（实测 13–20% 假丢包），
+			// 而 CDN 节点有的根本不回 ICMP（实测 100%），两边都不能盲用，
+			// 所以按候选顺序找「能回包的稳定目标」，具体见 defaultLatencyTargets。
+			base, _ := s.probeTarget(ctx, t)
 			res := base
 			// ICMP 与 TCP 用不同目标：TCP 走 CDN 双栈节点，规避运营商封 53
 			tcpRes := s.PingTCPHost(ctx, tcpHostFor(t), latencyTcpCount)
