@@ -229,6 +229,11 @@
                           <span class="lat-hint-text">[[ latencyScopeHint ]]</span>
                         </span>
                       </div>
+                      <div class="lat-empty-hint" v-if="!chartTiny.series.length"
+                        style="display:flex;align-items:center;justify-content:center;gap:6px;height:clamp(150px,17vw,230px);font-size:12px;color:rgba(0,0,0,.35);border:1px dashed rgba(0,0,0,.1);border-radius:8px">
+                        <a-icon type="eye-invisible"></a-icon>
+                        已隐藏全部曲线 —— 点上面的「全部」恢复，或勾选任意一个城市
+                      </div>
                       <div class="lat-svg-box" ref="latBox" v-if="chartTiny.series.length" tabindex="0" @keydown="onLatKey"
                       @mousemove="onLatHover($event)" @mouseleave="unpinLatHover" @mousedown="onLatBrushStart($event)"
                       @mouseup="onLatBrushEnd" title="拖拽框选放大 · 点击钉住浮层 · ←/→ 移动">
@@ -291,7 +296,15 @@
                             </path>
                           </g>
                           <!-- 丢包条带：一格代表一个采样桶，颜色分级 -->
-                          <text v-if="chartTiny.lossStrip.length" x="40" y="194" text-anchor="end" class="lat-loss-label">丢包</text>
+                          <text v-if="chartTiny.lossStrip.length" x="40" y="190" text-anchor="end" class="lat-loss-label">丢包</text>
+                          <g v-if="chartTiny.lossStrip.length" class="lat-loss-legend">
+                            <rect x="14" y="193" width="5" height="4" rx="1" fill="#f2c94c"></rect>
+                            <text x="21" y="197" class="lat-loss-legend-text">有丢包</text>
+                            <rect x="48" y="193" width="5" height="4" rx="1" fill="#f2994a"></rect>
+                            <text x="55" y="197" class="lat-loss-legend-text">≥3%</text>
+                            <rect x="79" y="193" width="5" height="4" rx="1" fill="#eb5757"></rect>
+                            <text x="86" y="197" class="lat-loss-legend-text">≥10%/超时</text>
+                          </g>
                           <g>
                             <rect v-for="(l, li) in chartTiny.lossStrip" :key="'ls-' + li"
                               :x="l.x" :y="l.y" :width="l.w" :height="l.h" :fill="l.color"
@@ -5496,7 +5509,14 @@ function subLinkToken(subId) {
           { label: '最大', value: Math.round(vals[vals.length - 1]) + ' ms', tip: '窗口内单次最大 RTT；超出纵轴量程的尖峰会裁到顶端并用 ▲ 标数值' },
           { label: '平均丢包', value: lossAvg.toFixed(lossAvg >= 1 ? 1 : 2) + '%',
             tip: '窗口内所有测点丢包率的平均；等于「100% − 可用率」' },
-          { label: '点数', value: seen + '' },
+          { label: '每格点数', value: (() => {
+              let mx = 0;
+              this.latencyScopedCells().forEach(c => {
+                const n = (c.series || []).length;
+                if (n > mx) mx = n;
+              });
+              return mx ? mx + ' 点' : '—';
+            })(), tip: '每一条曲线在当前窗口里的采样点数（服务端已按时间桶聚合）' },
           // 可用率与 SLO / 每日可用率同口径：包级 = 100% − 平均丢包，
           // 之前按「整轮超时」计，会出现「丢包 5.1% 但可用率 100%」这种自相矛盾
           { label: '可用率', value: seen ? (100 - lossAvg).toFixed(2) + '%' : '—',
@@ -5961,6 +5981,12 @@ function subLinkToken(subId) {
   .inbounds-page.dark .lat-ev-time,
   .inbounds-page.dark .lat-thr,
   .inbounds-page.dark .lat-thr b { color: rgba(255, 255, 255, .45); }  .lat-loss-label { font-size: 9px; fill: #c8c8c8; letter-spacing: .2px; }
+  .lat-loss-legend-text { font-size: 6.5px; fill: rgba(0, 0, 0, .35); }
+  .inbounds-page.dark .lat-loss-legend-text { fill: rgba(255, 255, 255, .35); }
+  .lat-empty-hint { display: flex; align-items: center; justify-content: center; gap: 6px;
+    height: clamp(150px, 17vw, 230px); font-size: 12px; color: rgba(0, 0, 0, .35);
+    border: 1px dashed rgba(0, 0, 0, .1); border-radius: 8px; }
+  .inbounds-page.dark .lat-empty-hint { color: rgba(255, 255, 255, .4); border-color: rgba(255, 255, 255, .12); }
   .lat-ref-away { font-size: 9px; fill: rgba(212, 140, 10, .8); }
   .lat-run-note { font-size: 10px; color: #8c8c8c; font-variant-numeric: tabular-nums; }
   .lat-legend-chip { cursor: pointer; transition: opacity .15s ease; }
