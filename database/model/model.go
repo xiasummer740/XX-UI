@@ -233,14 +233,15 @@ type ShopNotice struct {
 // 用来自检「这条线路对国内哪个城市/哪家运营商好」，
 // 延迟大小、丢包、抖动都能看出来。
 type LatencySample struct {
-	Id      int     `json:"id" gorm:"primaryKey;autoIncrement"`
-	City    string  `json:"city" gorm:"index:idx_lat_cell_ts,priority:1"` // 深圳 / 北京 / 上海 / 成都
-	Isp     string  `json:"isp" gorm:"index:idx_lat_cell_ts,priority:2"`  // 电信 / 联通 / 移动
-	Target  string  `json:"target"`                                       // 实际探测到的测点 IP
-	Ts      int64   `json:"ts" gorm:"index:idx_lat_cell_ts,priority:3"`   // unix 秒
-	Sent    int     `json:"sent"`                                         // 发出的包数
-	Recv    int     `json:"recv"`                                         // 收到的包数
-	LossPct float64 `json:"lossPct"`                                      // 丢包率 %
+	Id     int    `json:"id" gorm:"primaryKey;autoIncrement"`
+	City   string `json:"city" gorm:"index:idx_lat_cell_ts,priority:1"`                // 深圳 / 北京 / 上海 / 成都
+	Isp    string `json:"isp" gorm:"index:idx_lat_cell_ts,priority:2"`                 // 电信 / 联通 / 移动
+	Target string `json:"target"`                                                      // 实际探测到的测点 IP
+	Ts     int64  `json:"ts" gorm:"index:idx_lat_cell_ts,priority:3;index:idx_lat_ts"` // unix 秒
+	// 单独的 ts 索引：汇总查询只按时间过滤（WHERE ts >= ?），没有它就得全表扫 30 万行
+	Sent    int     `json:"sent"`    // 发出的包数
+	Recv    int     `json:"recv"`    // 收到的包数
+	LossPct float64 `json:"lossPct"` // 丢包率 %
 	MinMs   float64 `json:"minMs"`
 	AvgMs   float64 `json:"avgMs"`
 	MaxMs   float64 `json:"maxMs"`
