@@ -258,7 +258,7 @@
                           <line v-for="r in chartTiny.refLines" :key="'rf-' + r.v" x1="44" :y1="r.y"
                             x2="992" :y2="r.y" :stroke="r.color" class="lat-ref-line"></line>
                           <text v-for="(r, ri) in chartTiny.refLines" :key="'rft-' + r.v" x="990"
-                            :y="Number(r.y) - 3 - (ri % 3) * 9" text-anchor="end" class="lat-ref-label">[[ r.label ]]</text>
+                            :y="Number(r.y) - 3 - ri * 8" text-anchor="end" class="lat-ref-label">[[ r.label ]]</text>
                           <text v-for="(r, ri) in chartTiny.refAway" :key="'rfa-' + r.v" x="990"
                             :y="14 + ri * 11" text-anchor="end" class="lat-ref-away">[[ r.dir === 'up' ? '▲' : '▼' ]][[ r.v ]]</text>
                           <rect v-if="chartTiny.typicalBand" x="44" :y="chartTiny.typicalBand.y1" width="948"
@@ -300,12 +300,12 @@
                           <!-- 丢包条带：一格代表一个采样桶，颜色分级 -->
                           <text v-if="chartTiny.lossStrip.length" x="40" y="190" text-anchor="end" class="lat-loss-label">丢包</text>
                           <g v-if="chartTiny.lossStrip.length" class="lat-loss-legend">
-                            <rect x="14" y="193" width="5" height="4" rx="1" fill="#f2c94c"></rect>
-                            <text x="21" y="197" class="lat-loss-legend-text">有丢包</text>
-                            <rect x="48" y="193" width="5" height="4" rx="1" fill="#f2994a"></rect>
-                            <text x="55" y="197" class="lat-loss-legend-text">≥3%</text>
-                            <rect x="79" y="193" width="5" height="4" rx="1" fill="#eb5757"></rect>
-                            <text x="86" y="197" class="lat-loss-legend-text">≥10%/超时</text>
+                            <rect x="22" y="187" width="5" height="4" rx="1" fill="#f2c94c"></rect>
+                            <text x="29" y="191" class="lat-loss-legend-text">有丢包</text>
+                            <rect x="56" y="187" width="5" height="4" rx="1" fill="#f2994a"></rect>
+                            <text x="63" y="191" class="lat-loss-legend-text">≥3%</text>
+                            <rect x="88" y="187" width="5" height="4" rx="1" fill="#eb5757"></rect>
+                            <text x="95" y="191" class="lat-loss-legend-text">≥10%/超时</text>
                           </g>
                           <g>
                             <rect v-for="(l, li) in chartTiny.lossStrip" :key="'ls-' + li"
@@ -473,7 +473,7 @@
                       阈值 <b>≤170ms</b> 正常 · <b>170–220ms</b> 关注 · <b>&gt;220ms / 丢包≥5%</b> 告警
                     </span>
                   </div>
-                    <div class="lat-slo">
+                    <div class="lat-slo lat-slo-stack">
                       <div class="lat-slo-bars" v-if="slo.days.length">
                         <span v-for="d in slo.days" :key="'slo-' + d.day" class="lat-slo-bar"
                           :class="'lat-slo-' + sloLevel(d.avail)"
@@ -4670,10 +4670,13 @@ function subLinkToken(subId) {
 
         // 阈值参考线：量程内画虚线（170 黄、220 红），量程外的在右上角留标
         const refIn = (o.refLines || []).filter(v => v > 0);
-        const refLines = refIn.filter(v => v >= lo && v <= hi).map(v => ({
-          v: v, y: yOf(v).toFixed(1), label: v,
-          color: v >= 220 ? 'rgba(244,102,74,.5)' : 'rgba(246,189,22,.55)',
-        }));
+        // 按数值从大到小排，标签依次错行，避免 170/178/180 三个标签叠在一起
+        const refLines = refIn.filter(v => v >= lo && v <= hi)
+          .sort((a, b) => b - a)
+          .map((v, i) => ({
+            v: v, y: yOf(v).toFixed(1), label: v, idx: i,
+            color: v >= 220 ? 'rgba(244,102,74,.5)' : 'rgba(246,189,22,.55)',
+          }));
         const refAway = refIn.filter(v => v > hi).map(v => ({ v: v, dir: 'up' }))
           .concat(refIn.filter(v => v < lo).map(v => ({ v: v, dir: 'down' })));
 
@@ -5676,8 +5679,11 @@ function subLinkToken(subId) {
         const cells = (this.latency && this.latency.cells) || [];
         const out = [];
         cells.forEach(c => {
-          // 用「最近 3 个采样桶」的平均值判断，避免单个坏点一闪就报警（抖动）
-          const ser = (c.series || []).slice(-3);
+          // 用「最近 3 个已完成采样桶」判断：
+          // 最后一个桶还在累积（刚写进 1-2 个点），丢包率会短暂显示 100%，必须排除，
+          // 否则每次刷新都会看到十几项异常。
+          const all = c.series || [];
+          const ser = all.length > 1 ? all.slice(0, -1).slice(-3) : all.slice(-3);
           if (!ser.length) return;
           let msSum = 0, msN = 0, lossSum = 0;
           ser.forEach(pt => {
@@ -6109,6 +6115,9 @@ function subLinkToken(subId) {
 
   /* 每日可用率柱 + SLO 额度 */
   .lat-slo { display: flex; align-items: flex-end; gap: 12px; margin: 6px 0 2px; }
+  .lat-slo.lat-slo-stack { flex-direction: column; align-items: stretch; gap: 3px; }
+  .lat-slo-stack .lat-slo-bars { height: 22px; }
+  .lat-slo-stack .lat-slo-meta { justify-content: flex-end; }
   .lat-slo-bars { display: flex; align-items: flex-end; gap: 2px; height: 34px; flex: 1 1 auto; min-width: 0; }
   .lat-slo-bar { flex: 1 1 0; min-width: 3px; border-radius: 2px 2px 0 0; background: #d9f7be; }
   .lat-slo-bar.lat-slo-ok { background: #52c41a; }

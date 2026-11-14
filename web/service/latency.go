@@ -237,6 +237,28 @@ func tcpHostFor(t LatencyTarget) string {
 	return regionOf(t.City) + "-" + ispCode(t.Isp) + "-dualstack.ip.zstaticcdn.com"
 }
 
+// resolveTcpIP 返回该格子当前使用的 CDN 节点 IPv4（优先用已缓存的），
+// 让 ICMP 与 TCP 打同一个目标，避免两套口径打架。
+func (s *LatencyService) resolveTcpIP(t LatencyTarget) string {
+	host := tcpHostFor(t)
+	if ip := tcpPinned(host); ip != "" {
+		return ip
+	}
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return ""
+	}
+	for _, ip := range ips {
+		if v4 := ip.To4(); v4 != nil {
+			return v4.String()
+		}
+	}
+	for _, ip := range ips {
+		return ip.String()
+	}
+	return ""
+}
+
 // tcpPinnedIP 记住每台主机上一次解析到的 IPv4，30 分钟内不再重解析。
 // CDN 的 anycast 会漂节点，每次重解析会让曲线突然从 160ms 跳到 1200ms，
 // 那种跳变是「换了节点」不是线路变差。
@@ -562,8 +584,14 @@ func (s *LatencyService) RunOnce() (int, error) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			// 同一轮 ICMP / TCP 都采：ICMP 走 ping，TCP 走 53 端口握手
-			base, _ := s.probeTarget(ctx, t)
+			// ICMP 也优先用 CDN 双栈节点：运营商省级 DNS（202.96.x / 61.139.x）
+			// 在晚上会对 ICMP 限速，导致面板上出现 13–20% 的假丢包；
+			// 换成同城市同运营商的 CDN 节点后，晚高峰实测 0% 丢包，且与 TCP 口径一致。
+			target := t
+			if ip := s.resolveTcpIP(t); ip != "" {
+				target = LatencyTarget{City: t.City, Isp: t.Isp, Candidates: []string{ip}}
+			}
+			base, _ := s.probeTarget(ctx, target)
 			res := base
 			// ICMP 与 TCP 用不同目标：TCP 走 CDN 双栈节点，规避运营商封 53
 			tcpRes := s.PingTCPHost(ctx, tcpHostFor(t), latencyTcpCount)
