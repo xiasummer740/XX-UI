@@ -41,7 +41,7 @@ const (
 	// 同时探测的分组数
 	latencyProbeConcurrency = 4
 	// 曲线最多返回多少个点（前端画图用，多了没意义）
-	latencyMaxSeriesPoints = 150
+	latencyMaxSeriesPoints = 120
 )
 
 // LatencyTarget 是一个「城市 + 运营商」以及它的候选测点。
@@ -129,21 +129,16 @@ type LatencyDaily struct {
 
 // LatencyCell 是「某个城市某个运营商」在查询窗口内的汇总。
 type LatencyCell struct {
-	City        string  `json:"city"`
-	Isp         string  `json:"isp"`
-	Target      string  `json:"target"`
-	LastTs      int64   `json:"lastTs"`
-	LastAvgMs   float64 `json:"lastAvgMs"`
-	LastLossPct float64 `json:"lastLossPct"`
-	AvgMs       float64 `json:"avgMs"`
-	P50Ms       float64 `json:"p50Ms"`
-	P95Ms       float64 `json:"p95Ms"`
-	P99Ms       float64 `json:"p99Ms"`
-	MinMs       float64 `json:"minMs"`
-	MaxMs       float64 `json:"maxMs"`
-	LossPct     float64 `json:"lossPct"`
-	AvgJitter   float64 `json:"avgJitter"`
-	Samples     int     `json:"samples"`
+	City      string  `json:"city"`
+	Isp       string  `json:"isp"`
+	Target    string  `json:"target"`
+	LastAvgMs float64 `json:"lastAvgMs"`
+	AvgMs     float64 `json:"avgMs"`
+	P95Ms     float64 `json:"p95Ms"`
+	MaxMs     float64 `json:"maxMs"`
+	LossPct   float64 `json:"lossPct"`
+	AvgJitter float64 `json:"avgJitter"`
+	Samples   int     `json:"samples"`
 	// 探针失败 / 慢请求计数（对应 Grafana 那种 Probe failures / >300ms count 面板）
 	FailCount int `json:"failCount"`
 	Slow300   int `json:"slow300"`
@@ -1146,12 +1141,8 @@ func (s *LatencyService) summaryRangeUncached(hours int, from, to int64, mode st
 
 		last := b.rows[len(b.rows)-1]
 		cell.Target = last.Target
-		cell.LastTs = last.Ts
 		cell.LastAvgMs = last.AvgMs
-		cell.LastLossPct = last.LossPct
 		cell.Samples = len(b.rows)
-		cell.MinMs = last.MinMs
-		cell.MaxMs = last.MaxMs
 		if b.sent > 0 {
 			cell.LossPct = round2(float64(b.sent-b.recv) / float64(b.sent) * 100)
 		}
@@ -1184,11 +1175,8 @@ func (s *LatencyService) summaryRangeUncached(hours int, from, to int64, mode st
 			sorted := append([]float64(nil), b.avg...)
 			sort.Float64s(sorted)
 			cell.AvgMs = round2(avgOf(sorted))
-			cell.MinMs = round2(sorted[0])
 			cell.MaxMs = round2(sorted[len(sorted)-1])
-			cell.P50Ms = round2(percentile(sorted, 50))
 			cell.P95Ms = round2(percentile(sorted, 95))
-			cell.P99Ms = round2(percentile(sorted, 99))
 		}
 
 		// 曲线：按桶聚合（桶内取平均 / P95 / 最大 / 丢包 / 抖动）
