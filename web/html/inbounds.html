@@ -190,7 +190,8 @@
                           <a-checkbox v-for="c in latencyCellOptions" :key="'cc-' + c.name" :checked="!latencyHidden[c.name]"
                             class="lat-chip" :class="{ 'lat-chip-off': latencyHidden[c.name] }" @change="e => toggleLatencySeries(c.name)"
                             @mouseenter.native="focusSeries(c.name)" @mouseleave.native="unfocusSeries()">
-                            <i class="lat-chip-dot" :style="{ background: c.color }"></i>[[ c.name ]]<em class="lat-chip-ms">[[ c.ms ]]</em></a-checkbox>
+                            <span :title="cellTip(c.name)" style="cursor: pointer;"><i class="lat-chip-dot"
+                                :style="{ background: c.color }"></i>[[ c.name ]]<em class="lat-chip-ms">[[ c.ms ]]</em></span></a-checkbox>
                         </span>
                         <a-popover placement="bottomRight" title="指标说明" trigger="click">
                           <template #content>
@@ -4786,6 +4787,18 @@ function subLinkToken(subId) {
         this.latencyHidden = next;
         try { localStorage.setItem('latHidden', JSON.stringify(next)); } catch (e) {}
       },
+      // 按钮悬浮提示：这一格的窗口统计
+      cellTip(name) {
+        const cell = ((this.latency && this.latency.cells) || []).find(c => (c.city + c.isp) === name);
+        if (!cell) return '';
+        const parts = [];
+        if (cell.avgMs) parts.push('平均 ' + Math.round(cell.avgMs) + 'ms');
+        if (cell.p95Ms) parts.push('P95 ' + Math.round(cell.p95Ms) + 'ms');
+        if (cell.maxMs) parts.push('最大 ' + Math.round(cell.maxMs) + 'ms');
+        parts.push('丢包 ' + (Number(cell.lossPct) || 0).toFixed(1) + '%');
+        if (cell.failCount) parts.push('失败 ' + cell.failCount + ' 轮');
+        return name + '｜' + parts.join(' · ');
+      },
       // 全部：第一次点=全选，再点一次=全清（与按钮状态联动）
       showAllCells() {
         const all = (this.latencyCellOptions || []).length;
@@ -5674,8 +5687,10 @@ function subLinkToken(subId) {
           });
           const ms = msN ? msSum / msN : 0;
           const loss = lossSum / ser.length;
+          const burst = ser.some(pt => (Number(pt.lossPct) || 0) >= 20);
           if (ms === 0) out.push(c.city + c.isp + ' 不通');
           else if (loss >= 5) out.push(c.city + c.isp + ' 丢包 ' + loss.toFixed(0) + '%');
+          else if (burst) out.push(c.city + c.isp + ' 突发丢包');
           else if (ms >= 220) out.push(c.city + c.isp + ' ' + Math.round(ms) + 'ms');
         });
         return out;
