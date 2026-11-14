@@ -34,7 +34,7 @@ import (
 
 const (
 	// 每轮每个测点发几个包。5 个包足够算丢包率，又不会把对端打疼。
-	latencyPingCount = 5
+	latencyPingCount = 4
 	latencyTcpCount  = 3
 	// 单个测点整体超时
 	latencyProbeTimeout = 12 * time.Second
@@ -195,7 +195,7 @@ func (s *LatencyService) PingOnce(ctx context.Context, ip string, count int) Lat
 	if runtime.GOOS == "windows" {
 		args = []string{"-n", strconv.Itoa(count), "-w", "2000", ip}
 	} else {
-		args = []string{"-n", "-q", "-c", strconv.Itoa(count), "-i", "0.3", "-W", "2", ip}
+		args = []string{"-n", "-q", "-c", strconv.Itoa(count), "-i", "1", "-W", "2", ip}
 	}
 	cmd := exec.CommandContext(cctx, "ping", args...)
 	out, _ := cmd.CombinedOutput()
@@ -235,28 +235,6 @@ func tcpHostFor(t LatencyTarget) string {
 		return t.TCPHost
 	}
 	return regionOf(t.City) + "-" + ispCode(t.Isp) + "-dualstack.ip.zstaticcdn.com"
-}
-
-// resolveTcpIP 返回该格子当前使用的 CDN 节点 IPv4（优先用已缓存的），
-// 让 ICMP 与 TCP 打同一个目标，避免两套口径打架。
-func (s *LatencyService) resolveTcpIP(t LatencyTarget) string {
-	host := tcpHostFor(t)
-	if ip := tcpPinned(host); ip != "" {
-		return ip
-	}
-	ips, err := net.LookupIP(host)
-	if err != nil {
-		return ""
-	}
-	for _, ip := range ips {
-		if v4 := ip.To4(); v4 != nil {
-			return v4.String()
-		}
-	}
-	for _, ip := range ips {
-		return ip.String()
-	}
-	return ""
 }
 
 // tcpPinnedIP 记住每台主机上一次解析到的 IPv4，30 分钟内不再重解析。
