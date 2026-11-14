@@ -153,7 +153,8 @@
                 </template>
                 <template #extra>
                   <a-space :size="6">
-                    <span class="lat-health" :class="latencyAlerts.length ? 'lat-health-bad' : 'lat-health-ok'" :title="latencyAlerts.length ? latencyAlerts.join('｜') : '全部测点在阈值内'">
+                    <span class="lat-health" :class="latencyAlerts.length ? 'lat-health-bad' : 'lat-health-ok'"
+                      :title="(latencyAlerts.length ? latencyAlerts.join('｜') : '全部测点在阈值内') + '（按最近 3 个采样判断）'">
                       [[ latencyAlerts.length ? latencyAlerts.length + ' 项异常' : '全部正常' ]]
                     </span>
                     <a-radio-group v-model="latencyHours" size="small" button-style="solid"
@@ -5624,8 +5625,17 @@ function subLinkToken(subId) {
         const cells = (this.latency && this.latency.cells) || [];
         const out = [];
         cells.forEach(c => {
-          const ms = Number(c.lastAvgMs) || 0;
-          const loss = Number(c.lastLossPct) || 0;
+          // 用「最近 3 个采样桶」的平均值判断，避免单个坏点一闪就报警（抖动）
+          const ser = (c.series || []).slice(-3);
+          if (!ser.length) return;
+          let msSum = 0, msN = 0, lossSum = 0;
+          ser.forEach(pt => {
+            const v = Number(pt.avgMs) || 0;
+            if (v > 0) { msSum += v; msN++; }
+            lossSum += Number(pt.lossPct) || 0;
+          });
+          const ms = msN ? msSum / msN : 0;
+          const loss = lossSum / ser.length;
           if (ms === 0) out.push(c.city + c.isp + ' 不通');
           else if (loss >= 5) out.push(c.city + c.isp + ' 丢包 ' + loss.toFixed(0) + '%');
           else if (ms >= 220) out.push(c.city + c.isp + ' ' + Math.round(ms) + 'ms');

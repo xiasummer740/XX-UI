@@ -895,7 +895,16 @@ func (s *LatencyService) sloSummaryUncached(days int, target float64) (*SloSumma
 	loc := time.FixedZone("CST", 8*3600)
 	now := time.Now().In(loc)
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc)
-	sum := &SloSummary{Target: target, Month: monthStart.Format("2006-01"), Days: list}
+	// 只保留「本月」的天数：以前返回最近 30 天，跨月时柱子里会混进上个月，
+	// 标签写着「本月可用率」却把上个月也画出来，对不上。
+	monthDays := make([]DayAvail, 0, len(list))
+	monthPrefix := monthStart.Format("2006-01")
+	for _, d := range list {
+		if strings.HasPrefix(d.Day, monthPrefix) {
+			monthDays = append(monthDays, d)
+		}
+	}
+	sum := &SloSummary{Target: target, Month: monthPrefix, Days: monthDays}
 	var sent, recv int
 	for _, d := range list {
 		if d.Day < monthStart.Format("2006-01-02") {
