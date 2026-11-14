@@ -187,7 +187,7 @@
                           <span class="lat-clear-chip" :class="{ 'lat-clear-on': !hiddenCellCount }"
                             title="全部显示" @click="showAllCells">全部</span>
                           <a-checkbox v-for="c in latencyCellOptions" :key="'cc-' + c.name" :checked="!latencyHidden[c.name]"
-                            class="lat-chip" @change="e => toggleLatencySeries(c.name)"
+                            class="lat-chip" :class="{ 'lat-chip-off': latencyHidden[c.name] }" @change="e => toggleLatencySeries(c.name)"
                             @mouseenter.native="focusSeries(c.name)" @mouseleave.native="unfocusSeries()">
                             <i class="lat-chip-dot" :style="{ background: c.color }"></i>[[ c.name ]]<em class="lat-chip-ms">[[ c.ms ]]</em></a-checkbox>
                         </span>
@@ -250,8 +250,8 @@
                           <!-- 阈值参考线：落在量程内画虚线，超出量程的右上角留标 -->
                           <line v-for="r in chartTiny.refLines" :key="'rf-' + r.v" x1="44" :y1="r.y"
                             x2="992" :y2="r.y" :stroke="r.color" class="lat-ref-line"></line>
-                          <text v-for="r in chartTiny.refLines" :key="'rft-' + r.v" x="990"
-                            :y="r.y - 3" text-anchor="end" class="lat-ref-label">[[ r.label ]]</text>
+                          <text v-for="(r, ri) in chartTiny.refLines" :key="'rft-' + r.v" x="990"
+                            :y="Number(r.y) - 3 - (ri % 3) * 9" text-anchor="end" class="lat-ref-label">[[ r.label ]]</text>
                           <text v-for="(r, ri) in chartTiny.refAway" :key="'rfa-' + r.v" x="990"
                             :y="14 + ri * 11" text-anchor="end" class="lat-ref-away">[[ r.dir === 'up' ? '▲' : '▼' ]][[ r.v ]]</text>
                           <rect v-if="chartTiny.typicalBand" x="44" :y="chartTiny.typicalBand.y1" width="948"
@@ -462,7 +462,7 @@
                       <div class="lat-slo-bars" v-if="slo.days.length">
                         <span v-for="d in slo.days" :key="'slo-' + d.day" class="lat-slo-bar"
                           :class="'lat-slo-' + sloLevel(d.avail)"
-                          :style="{ height: sloBarHeight(d.avail) }"
+                          :style="{ height: '100%' }"
                           :title="d.day + ' 可用 ' + fmt2(d.avail) + '%（不可用约 ' + sloHuman(d.downtime) + '）'"></span>
                       </div>
                       <div class="lat-slo-meta">
@@ -471,7 +471,7 @@
                         <span class="lat-slo-left" :class="{ 'lat-slo-left-bad': slo.leftSeconds <= 0 }">
                           剩余额度 [[ sloHuman(slo.leftSeconds) ]]
                         </span>
-                        <span class="lat-slo-used">已用 [[ Math.min(100, Number(slo.usedPct) || 0).toFixed(0) ]]%</span>
+                        <span class="lat-slo-used" :class="{ 'lat-slo-left-bad': Number(slo.usedPct) > 100 }">已用 [[ (Number(slo.usedPct) || 0).toFixed(0) ]]%</span>
                       </div>
                     </div>
                 </a-spin>
@@ -5306,11 +5306,8 @@ function subLinkToken(subId) {
         return true;
       },
       latencyScopeHint() {
-        const sel = this.latencyScopeSel || [];
-        const total = (this.latency.cities || []).length || 4;
-        if (!sel.length || sel.length >= total) return '全部城市平均 · 阴影 = 该运营商区间 · 悬停看全部测点';
-        if (sel.length === 1) return sel[0] + ' 单城市 · 悬停看该时刻三网明细';
-        return sel.join('/') + ' · 阴影 = 所选城市区间';
+        // 现在由 12 个按钮控制可见曲线，这里只说明配色和阴影的含义
+        return '每条线 = 一个城市+运营商 · 悬停看该时刻全部测点';
       },
       // 悬停时刻的最大丢包率（百分比字符串），没有就是 —
       latHoverLoss() {
@@ -5497,9 +5494,13 @@ function subLinkToken(subId) {
           { label: 'P95', value: Math.round(q(0.95)) + ' ms' },
           { label: 'P99', value: Math.round(q(0.99)) + ' ms' },
           { label: '最大', value: Math.round(vals[vals.length - 1]) + ' ms', tip: '窗口内单次最大 RTT；超出纵轴量程的尖峰会裁到顶端并用 ▲ 标数值' },
-          { label: '平均丢包', value: lossAvg.toFixed(lossAvg >= 1 ? 1 : 2) + '%' },
-          { label: '采样点', value: seen + '' },
-          { label: '可用率', value: seen ? ((seen - fail) / seen * 100).toFixed(2) + '%' : '—' },
+          { label: '平均丢包', value: lossAvg.toFixed(lossAvg >= 1 ? 1 : 2) + '%',
+            tip: '窗口内所有测点丢包率的平均；等于「100% − 可用率」' },
+          { label: '点数', value: seen + '' },
+          // 可用率与 SLO / 每日可用率同口径：包级 = 100% − 平均丢包，
+          // 之前按「整轮超时」计，会出现「丢包 5.1% 但可用率 100%」这种自相矛盾
+          { label: '可用率', value: seen ? (100 - lossAvg).toFixed(2) + '%' : '—',
+            tip: '包级可用率：收包数 ÷ 发包数，与下方本月可用率、每日可用率同口径' },
         ];
       },
       // 图上方的运营商图例（带当前值）
@@ -5818,6 +5819,7 @@ function subLinkToken(subId) {
     border: 1px solid rgba(17, 24, 39, .08); border-radius: 999px; background: rgba(255, 255, 255, .6); }
   .lat-chip-group .ant-checkbox-wrapper { font-size: 11px; color: rgba(0, 0, 0, .62); margin: 0; }
   .lat-chip-group .ant-checkbox-wrapper + .ant-checkbox-wrapper { margin-left: 0; }
+  .lat-chip.lat-chip-off { opacity: .38; }
   .lat-chip-ms { font-style: normal; font-size: 9.5px; color: rgba(0, 0, 0, .45); margin-left: 3px;
     font-variant-numeric: tabular-nums; }
   .inbounds-page.dark .lat-chip-ms { color: rgba(255, 255, 255, .45); }
