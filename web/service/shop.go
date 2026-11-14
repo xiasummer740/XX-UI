@@ -1027,7 +1027,16 @@ func (s *ShopService) ReconcilePendingOrders(bot *Tgbot) {
 		}
 		logger.Info("[shop] 主动查单发现订单 #", o.Id, " 已付款（", status, "），自动开通")
 		bot.AutoApproveShopOrder(o.Id)
+		_ = s.MarkOrderNote(o.Id, "BufPay 自动到账")
 	}
+}
+
+// MarkOrderNote 改写订单的支付备注（面板手动确认 / 查单确认时用）。
+func (s *ShopService) MarkOrderNote(id int, note string) error {
+	if id <= 0 || strings.TrimSpace(note) == "" {
+		return nil
+	}
+	return database.GetDB().Model(&model.Order{}).Where("id = ?", id).Update("remark", note).Error
 }
 
 // PendingTTL 返回未付款订单的自动关闭时长，默认 3 分钟（面板可调）。

@@ -57,6 +57,10 @@ func (a *ShopController) approveOrder(c *gin.Context) {
 	}
 	var bot service.Tgbot
 	bot.ApproveShopOrderFromPanel(id)
+	// 备注改成「管理员确认」，否则列表里还挂着「超时未付款」的旧文案
+	if err := a.shopService.MarkOrderNote(id, "管理员手动确认到账"); err != nil {
+		logger.Warning("[shop] 更新订单备注失败: ", err)
+	}
 	order, err := a.shopService.GetOrder(id)
 	jsonObj(c, order, err)
 }
@@ -98,6 +102,7 @@ func (a *ShopController) recheckOrder(c *gin.Context) {
 	if paid {
 		var bot service.Tgbot
 		bot.ApproveShopOrderFromPanel(id)
+		_ = a.shopService.MarkOrderNote(id, "BufPay 查单确认到账")
 		logger.Info("[shop] 面板手动查单：订单 #", id, " BufPay 状态 ", status, "，已开通")
 	}
 	jsonObj(c, gin.H{"status": status, "paid": paid}, nil)
