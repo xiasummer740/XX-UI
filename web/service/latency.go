@@ -680,8 +680,42 @@ type SloSummary struct {
 var (
 	latBaseMu    sync.Mutex
 	latBaseCache = map[string][]LatencyBaseline{}
-	latBaseAt    time.Time
 )
+
+// RefreshBaseline 预计算「过去 7 天同一小时」的均值，结果放内存供接口读取。
+// 由三网延迟任务每 10 分钟调一次，避免接口在缓存过期时同步扫 7 天数据。
+func (s *LatencyService) RefreshBaseline() error {
+	now := time.Now().Unix()
+	type baseRow struct {
+		City  string
+		Isp   string
+		Hour  int
+		AvgMs float64
+	}
+	var brs []baseRow
+	hourExpr := "CAST(strftime('%H', ts + 28800, 'unixepoch') AS INTEGER)"
+	if err := database.GetDB().Model(&model.LatencySample{}).
+		Select("city, isp, "+hourExpr+" AS hour, AVG(avg_ms) AS avg_ms").
+		Where("ts >= ? AND ts < ?", now-7*86400, now-86400).
+		Group("city, isp, " + hourExpr).
+		Scan(&brs).Error; err != nil {
+		return err
+	}
+	byCell := map[string][]LatencyBaseline{}
+	for _, r := range brs {
+		key := r.City + "|" + r.Isp
+		byCell[key] = append(byCell[key], LatencyBaseline{Hour: r.Hour, AvgMs: r.AvgMs})
+	}
+	for k := range byCell {
+		v := byCell[k]
+		sort.Slice(v, func(a, b int) bool { return v[a].Hour < v[b].Hour })
+		byCell[k] = v
+	}
+	latBaseMu.Lock()
+	latBaseCache = byCell
+	latBaseMu.Unlock()
+	return nil
+}
 
 // latencyBucketSeconds 决定 SQL 聚合的时间桶大小：
 // 目标是把每个格子的点数控制在 ~240 个，既不丢趋势，也不会把内存打爆。
@@ -1161,50 +1195,16 @@ func (s *LatencyService) summaryRangeUncached(hours int, from, to int64, mode st
 		sum.Cells = append(sum.Cells, cell)
 	}
 
-	// 基线：过去 7 天「同一小时」的均值（24 个槽），只在看 24h 这类短窗口时算，
-	// 一次 GROUP BY 只回 12×24 行，代价可控。
+	// 基线：过去 7 天「同一小时」的均值。改由定时任务 RefreshBaseline 预先算好放内存，
+	// 请求里只读缓存——以前缓存过期那一刻会同步扫 7 天数据，导致偶发 2.5s 的慢响应。
 	if hours <= 26 && len(sum.Cells) > 0 {
-		// 基线只随历史慢慢变化，10 分钟内直接复用，避免每次点筛选都扫一遍 7 天
 		latBaseMu.Lock()
-		if time.Since(latBaseAt) < 10*time.Minute && len(latBaseCache) > 0 {
-			for i := range sum.Cells {
-				key := sum.Cells[i].City + "|" + sum.Cells[i].Isp
-				if v, ok := latBaseCache[key]; ok {
-					sum.Cells[i].Baseline = v
-				}
-			}
-			latBaseMu.Unlock()
-			return sum, nil
-		}
+		cache := latBaseCache
 		latBaseMu.Unlock()
-		now := time.Now().Unix()
-		type baseRow struct {
-			City  string
-			Isp   string
-			Hour  int
-			AvgMs float64
-		}
-		var brs []baseRow
-		hourExpr := "CAST(strftime('%H', ts + 28800, 'unixepoch') AS INTEGER)"
-		err := database.GetDB().Model(&model.LatencySample{}).
-			Select("city, isp, "+hourExpr+" AS hour, AVG(avg_ms) AS avg_ms").
-			Where("ts >= ? AND ts < ?", now-7*86400, since).
-			Group("city, isp, " + hourExpr).
-			Scan(&brs).Error
-		if err == nil && len(brs) > 0 {
-			byCell := map[string][]LatencyBaseline{}
-			for _, r := range brs {
-				key := r.City + "|" + r.Isp
-				byCell[key] = append(byCell[key], LatencyBaseline{Hour: r.Hour, AvgMs: r.AvgMs})
-			}
-			latBaseMu.Lock()
-			latBaseCache = byCell
-			latBaseAt = time.Now()
-			latBaseMu.Unlock()
+		if len(cache) > 0 {
 			for i := range sum.Cells {
 				key := sum.Cells[i].City + "|" + sum.Cells[i].Isp
-				if v, ok := byCell[key]; ok {
-					sort.Slice(v, func(a, b int) bool { return v[a].Hour < v[b].Hour })
+				if v, ok := cache[key]; ok {
 					sum.Cells[i].Baseline = v
 				}
 			}

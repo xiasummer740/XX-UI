@@ -76,6 +76,12 @@ func (j *LatencyMonitorJob) Run() {
 	// 否则 30 天历史早就顶到行数上限，7d/30d 只能看到最近两三天。
 	latencyRollupMu.Lock()
 	rollupDue := latencyLastRollup.IsZero() || time.Since(latencyLastRollup) >= 30*time.Minute
+	// 基线（7 天同一小时均值）也在这里预热，接口只读内存
+	if rollupDue {
+		if err := j.latencyService.RefreshBaseline(); err != nil {
+			logger.Warning("三网延迟基线预计算失败:", err)
+		}
+	}
 	if rollupDue {
 		latencyLastRollup = time.Now()
 	}
