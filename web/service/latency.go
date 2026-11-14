@@ -1038,6 +1038,7 @@ func (s *LatencyService) summaryRangeUncached(hours int, from, to int64, mode st
 	// 这台机器只有 1 核，24h 有 17 万行、7d 有 30 万行，Find 出来光是分配 + GC 就要一两秒，
 	// 期间入站列表跟着卡。改成让 SQLite 先按时间桶聚合，只返回 ~3000 行。
 	bucketSec := latencyBucketSeconds(hours, from, to)
+	tSQL := time.Now()
 	q := database.GetDB().Model(&model.LatencySample{}).Where("ts >= ?", since)
 	if until > 0 {
 		q = q.Where("ts <= ?", until)
@@ -1053,6 +1054,9 @@ func (s *LatencyService) summaryRangeUncached(hours int, from, to int64, mode st
 		Order("ts asc").Find(&rows).Error; err != nil {
 		return nil, err
 	}
+	sqlCost := time.Since(tSQL)
+	tBuild := time.Now()
+
 	// TCP 视图：用同一行里的 TCP 字段替换，下面的聚合逻辑照旧
 	if strings.ToLower(strings.TrimSpace(mode)) == "tcp" {
 		kept := rows[:0]
@@ -1193,6 +1197,11 @@ func (s *LatencyService) summaryRangeUncached(hours int, from, to int64, mode st
 		cell.Daily = dailyStats(b.rows)
 
 		sum.Cells = append(sum.Cells, cell)
+	}
+
+	if cost := time.Since(tBuild); cost > 250*time.Millisecond || sqlCost > 150*time.Millisecond {
+		logger.Infof("[latency] 汇总耗时拆分 hours=%d mode=%s sql=%dms 组装=%dms 行数=%d",
+			hours, mode, sqlCost.Milliseconds(), cost.Milliseconds(), len(rows))
 	}
 
 	// 基线：过去 7 天「同一小时」的均值。改由定时任务 RefreshBaseline 预先算好放内存，

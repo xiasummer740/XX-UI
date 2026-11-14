@@ -67,7 +67,7 @@ func (a *LatencyController) summary(c *gin.Context) {
 			s := sum.Cells[0].Series
 			spanH = float64(s[len(s)-1].Ts-s[0].Ts) / 3600
 		}
-		logger.Infof("[latency] summary hours=%d mode=%s -> %.1fh / %d 格 / 耗时 %dms",
+		logger.Infof("[latency] summary hours=%d mode=%s -> %.1fh / %d 格 / 耗时 %dms（含序列化前的服务端计算）",
 			hours, mode, spanH, len(sum.Cells), spent)
 	}
 	jsonObj(c, sum, err)
