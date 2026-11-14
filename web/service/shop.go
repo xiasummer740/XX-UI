@@ -1039,20 +1039,20 @@ func (s *ShopService) MarkOrderNote(id int, note string) error {
 	return database.GetDB().Model(&model.Order{}).Where("id = ?", id).Update("remark", note).Error
 }
 
-// PendingTTL 返回未付款订单的自动关闭时长，默认 3 分钟（面板可调）。
+// PendingTTL 返回未付款订单的自动关闭时长，默认 10 分钟（面板可调）。
 func (s *ShopService) PendingTTL() time.Duration {
 	v, err := s.settingService.getString("shopPendingTTL")
 	if err != nil {
-		return 3 * time.Minute
+		return 10 * time.Minute
 	}
 	return parsePendingTTL(v)
 }
 
-// parsePendingTTL 把面板里填的分钟数解析成时长，非法值回落到 3 分钟。
+// parsePendingTTL 把面板里填的分钟数解析成时长，非法值回落到 10 分钟。
 func parsePendingTTL(raw string) time.Duration {
 	n, err := strconv.Atoi(strings.TrimSpace(raw))
 	if err != nil || n <= 0 || n > 240 {
-		return 3 * time.Minute
+		return 10 * time.Minute
 	}
 	return time.Duration(n) * time.Minute
 }
