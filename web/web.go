@@ -212,7 +212,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	engine.Use(gzip.Gzip(gzip.DefaultCompression))
+	engine.Use(gzip.Gzip(gzip.BestSpeed)) // 1 核机器：JSON 压缩用最快档，省 CPU 换一点带宽
 	assetsBasePath := basePath + "assets/"
 
 	store := cookie.NewStore(secret)
