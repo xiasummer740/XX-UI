@@ -34,6 +34,9 @@ const (
 	orderPending  = "pending"
 	orderApproved = "approved"
 	orderRejected = "rejected"
+	// orderReview 表示「系统没收到到账，但买家说付了」——挂起等人工核对，
+	// 不再直接当过期作废，避免钱付了单子却消失。
+	orderReview = "review"
 
 	cycleMonth   = "month"
 	cycleQuarter = "quarter"
@@ -314,7 +317,7 @@ func (s *ShopService) ApproveOrder(id int, adminId int64) (*model.Order, error) 
 	}
 	// pending 正常开通；expired 也允许——钱可能晚到或走的是静态码，
 	// 管理员在面板里手动确认时要能救回来。
-	if order.Status != orderPending && order.Status != orderExpired {
+	if order.Status != orderPending && order.Status != orderExpired && order.Status != orderReview {
 		return nil, fmt.Errorf("订单已处理过（当前状态：%s）", order.Status)
 	}
 
@@ -1008,7 +1011,7 @@ func (s *ShopService) ReconcilePendingOrders(bot *Tgbot) {
 	}
 	orders := make([]*model.Order, 0)
 	err := database.GetDB().
-		Where("status IN (?, ?) AND aoid <> '' AND created_at > ?", orderPending, orderExpired, time.Now().Unix()-24*3600).
+		Where("status IN (?, ?, ?) AND aoid <> '' AND created_at > ?", orderPending, orderExpired, orderReview, time.Now().Unix()-24*3600).
 		Order("id asc").Limit(20).Find(&orders).Error
 	if err != nil || len(orders) == 0 {
 		return
@@ -1029,6 +1032,16 @@ func (s *ShopService) ReconcilePendingOrders(bot *Tgbot) {
 		bot.AutoApproveShopOrder(o.Id)
 		_ = s.MarkOrderNote(o.Id, "BufPay 自动到账")
 	}
+}
+
+// MarkOrderReview 把订单挂到「待人工核对」，不改开通状态，也不占买家名额。
+func (s *ShopService) MarkOrderReview(id int) error {
+	if id <= 0 {
+		return nil
+	}
+	return database.GetDB().Model(&model.Order{}).
+		Where("id = ? AND status IN (?, ?, ?)", id, orderPending, orderExpired, orderReview).
+		Updates(map[string]any{"status": orderReview, "remark": "买家称已付款，待人工核对"}).Error
 }
 
 // MarkOrderNote 改写订单的支付备注（面板手动确认 / 查单确认时用）。
@@ -1062,8 +1075,8 @@ func (s *ShopService) ExpirePendingOrder(id int) error {
 	return database.GetDB().Model(&model.Order{}).
 		Where("id = ? AND status = ?", id, orderPending).
 		Updates(map[string]any{
-			"status":     orderExpired,
-			"remark":     "超时未付款，自动关闭",
+			"status":     orderReview,
+			"remark":     "超时未收到到账，待人工核对",
 			"handled_at": time.Now().Unix(),
 		}).Error
 }

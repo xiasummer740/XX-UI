@@ -120,6 +120,11 @@ func (t *Tgbot) handleShopCallback(callbackQuery *telego.CallbackQuery, chatId i
 			id, _ := strconv.Atoi(args[1])
 			t.checkShopOrder(chatId, id)
 		}
+	case "urgent":
+		if len(args) >= 2 {
+			id, _ := strconv.Atoi(args[1])
+			t.urgentShopOrder(chatId, id)
+		}
 	case "back":
 		t.sendShopMenu(chatId)
 	case "node_qr":
@@ -935,6 +940,33 @@ func (t *Tgbot) checkShopOrder(chatId int64, orderId int) {
 	}
 }
 
+// urgentShopOrder 买家点「我确实付了」：把单子挂到待人工核对，并立刻提醒管理员。
+func (t *Tgbot) urgentShopOrder(chatId int64, orderId int) {
+	shop := ShopService{}
+	order, err := shop.GetOrder(orderId)
+	if err != nil || order.ChatId != chatId {
+		t.SendMsgToTgbot(chatId, "找不到这个订单 🤔 发 /buy 重新下一单吧")
+		return
+	}
+	switch order.Status {
+	case orderApproved:
+		t.SendMsgToTgbot(chatId, "✅ 这单已经开通了，节点在上面的消息里。")
+		return
+	case orderRejected, orderRevoked:
+		t.SendMsgToTgbot(chatId, "这单已经关闭了，发 /buy 重新下一单就好 🛒")
+		return
+	}
+	if err := shop.MarkOrderReview(order.Id); err != nil {
+		t.SendMsgToTgbot(chatId, "登记失败："+err.Error())
+		return
+	}
+	shop.PingAdminsAboutPendingOrder(order)
+	t.SendMsgToTgbot(chatId, fmt.Sprintf(
+		"📮 <b>已记下：订单 #%d 等你付款的核对</b>\n\n"+
+			"我这边会尽快人工核对（通常几分钟，夜里可能慢一点），核对完直接把节点和二维码发给你，不用再点别的。",
+		order.Id))
+}
+
 // AutoApproveShopOrder 供 BufPay 回调调用：钱到了 → 自动开通 + 通知买卖双方。
 func (t *Tgbot) AutoApproveShopOrder(orderId int) {
 	t.approveShopOrder(0, 0, orderId)
@@ -1022,10 +1054,16 @@ func (t *Tgbot) NotifyShopOrderExpired(order *model.Order) {
 			mins = int(d.Minutes())
 		}
 	}
+	kb := tu.InlineKeyboard(
+		tu.InlineKeyboardRow(
+			tu.InlineKeyboardButton("✅ 我确实付了，帮我核对").WithCallbackData(fmt.Sprintf("shop_urgent %d", order.Id)),
+			tu.InlineKeyboardButton("🛒 重新下一单").WithCallbackData("shop_back"),
+		),
+	)
 	t.SendMsgToTgbot(order.ChatId, fmt.Sprintf(
-		"⏳ <b>订单 #%d 已自动关闭</b>\n\n"+
-			"%d 分钟没收到到账通知，我先把它关掉了，免得占着你「一人只能有一单在等」的名额。\n\n"+
+		"⏳ <b>订单 #%d 暂时挂起，等你确认</b>\n\n"+
+			"%d 分钟没收到到账通知，先把它从「占名额」里放出来了（不会丢单）。\n\n"+
 			"▫️ <b>确实还没付</b>：发 <b>/buy</b> 重新下一单就好 🛒\n"+
-			"▫️ <b>其实已经付了</b>：把付款截图发我，我核对后立刻给你开通 🙏",
-		order.Id, mins))
+			"▫️ <b>其实已经付了</b>：点下面的按钮，我立刻人工核对给你开通 🙏",
+		order.Id, mins), kb)
 }
