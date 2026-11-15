@@ -1104,6 +1104,9 @@ func (s *ShopService) ExpireStalePendingOrders(bot *Tgbot) {
 		}
 		logger.Info("[shop] 订单 #", o.Id, " 超过 ", ttl, " 未付款，已自动关闭")
 		bot.NotifyShopOrderExpired(o)
+		// 关单同时提醒管理员：BufPay 一直说没付，但买家可能真付了（扫了静态码 / BufPay 挂机掉线）。
+		// 面板里一键「确认到账」就能补开。
+		s.PingAdminsAboutPendingOrder(o)
 	}
 }
 

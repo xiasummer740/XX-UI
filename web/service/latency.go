@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"os"
 	"os/exec"
 	"regexp"
 	"runtime"
@@ -198,7 +199,10 @@ func (s *LatencyService) PingOnce(ctx context.Context, ip string, count int) Lat
 		args = []string{"-n", "-q", "-c", strconv.Itoa(count), "-i", "1", "-W", "2", ip}
 	}
 	cmd := exec.CommandContext(cctx, "ping", args...)
-	out, _ := cmd.CombinedOutput()
+	out, err := cmd.CombinedOutput()
+	if os.Getenv("XUI_PING_DEBUG") != "" {
+		logger.Info("[latency-debug] ip=", ip, " err=", err, " out=", strings.ReplaceAll(string(out), "\n", " | "))
+	}
 	return parsePingOutput(string(out), ip, count, runtime.GOOS == "windows")
 }
 
