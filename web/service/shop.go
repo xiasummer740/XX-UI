@@ -293,7 +293,7 @@ func buildShopClient(protocol model.Protocol, email string, gb int, days int, ch
 		"tgId":       chatId,
 		"subId":      randomSubId(),
 		"reset":      0,
-		"comment":    shopClientComment(orderId, tgName),
+		"comment":    shopClientComment(orderId, tgName, chatId),
 	}
 	switch strings.ToLower(string(protocol)) {
 	case "trojan":
@@ -311,17 +311,21 @@ func buildShopClient(protocol model.Protocol, email string, gb int, days int, ch
 
 // shopClientComment 生成客户端备注：订单号 + TG 用户名，方便在列表里认人。
 // TgName 形如「fe(@feyuu0)」或只有昵称，这里只取 @用户名部分。
-func shopClientComment(orderId int, tgName string) string {
+func shopClientComment(orderId int, tgName string, chatId int64) string {
 	base := fmt.Sprintf("bot订单#%d", orderId)
 	tgName = strings.TrimSpace(tgName)
-	if tgName == "" {
-		return base
-	}
 	if i := strings.Index(tgName, "@"); i >= 0 && i+1 < len(tgName) {
-		handle := strings.TrimRight(tgName[i:], ") ")
-		return base + " " + handle
+		// 有用户名就只显示 @handle（最好认）
+		return base + " " + strings.TrimRight(tgName[i:], ") ")
 	}
-	return base + " " + tgName
+	// 没有用户名时，补上 TG 数字 ID，免得同名/无法辨认
+	if tgName != "" {
+		return fmt.Sprintf("%s %s (tg%d)", base, tgName, chatId)
+	}
+	if chatId > 0 {
+		return fmt.Sprintf("%s (tg%d)", base, chatId)
+	}
+	return base
 }
 
 // ApproveOrder 标记订单已到账并真正开通客户端，返回订单（含客户端 email）。
@@ -404,7 +408,7 @@ func (s *ShopService) extendExistingClient(inbound *model.Inbound, email string,
 	client.Enable = true
 	// 续费也把备注刷成最新一单，方便认人
 	if orderId > 0 {
-		client.Comment = shopClientComment(orderId, tgName)
+		client.Comment = shopClientComment(orderId, tgName, client.TgID)
 	}
 
 	bs, err := json.Marshal(client)
