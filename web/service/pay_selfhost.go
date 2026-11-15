@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -148,10 +147,4 @@ func signParamsMD5(params map[string]string, key string) string {
 	}
 	b.WriteString(key)
 	return md5Hex(b.String())
-}
-
-// 兼容：把字符串金额转成浮点（回调里字段可能是 "15.00"）
-func parsePrice(v string) float64 {
-	f, _ := strconv.ParseFloat(strings.TrimSpace(v), 64)
-	return f
 }
