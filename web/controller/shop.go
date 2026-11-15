@@ -34,6 +34,7 @@ func (a *ShopController) initRouter(g *gin.RouterGroup) {
 	g.POST("/orders/approve", a.approveOrder)
 	g.POST("/orders/reject", a.rejectOrder)
 	g.POST("/orders/recheck", a.recheckOrder)
+	// 回调走 api.go 的免登录组，这里不重复注册
 }
 
 // getStats 返回经营看板数据。
@@ -46,6 +47,43 @@ func (a *ShopController) getStats(c *gin.Context) {
 func (a *ShopController) getOrders(c *gin.Context) {
 	orders, err := a.shopService.ListOrdersForPanel(200)
 	jsonObj(c, orders, err)
+}
+
+// selfPayNotify 是自建第四方收款的到账回调（公网可达、免登录，靠签名校验）。
+func (a *ShopController) SelfPayNotify(c *gin.Context) {
+	// 必须先解析表单：不然 PostForm 是空的，验签会一直报「回调缺少签名」
+	_ = c.Request.ParseForm()
+	form := map[string]string{}
+	for k, v := range c.Request.PostForm {
+		if len(v) > 0 {
+			form[k] = v[0]
+		}
+	}
+	cfg := a.shopService.GetSelfPayConfig()
+	var svc service.SelfPayService
+	paid, err := svc.VerifyNotify(cfg, form)
+	if err != nil {
+		logger.Warning("[shop] 自建收款回调校验失败: ", err)
+		c.String(200, "fail")
+		return
+	}
+	if !paid {
+		c.String(200, "success")
+		return
+	}
+	outTradeNo := strings.TrimSpace(form["out_trade_no"])
+	idStr := strings.TrimPrefix(outTradeNo, "xxui-")
+	id, _ := strconv.Atoi(idStr)
+	if id <= 0 {
+		logger.Warning("[shop] 自建收款回调订单号异常: ", outTradeNo)
+		c.String(200, "fail")
+		return
+	}
+	var bot service.Tgbot
+	bot.ApproveShopOrderFromPanel(id)
+	_ = a.shopService.MarkOrderNote(id, "自建收款到账")
+	logger.Info("[shop] 自建收款回调：订单 #", id, " 已开通")
+	c.String(200, "success")
 }
 
 // approveOrder 面板里手动确认到账并开通（钱可能走的是静态码，BufPay 不知道）。

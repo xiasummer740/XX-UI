@@ -84,6 +84,8 @@ func (a *APIController) initRouter(g *gin.RouterGroup, customGeo *service.Custom
 	// BufPay 支付回调：由 BufPay 服务器直接访问，不能要求登录态，
 	// 安全性由 MD5 签名 + 金额比对保证，所以放在 api 组之外注册。
 	g.POST("/panel/api/shop/bufpay/notify", a.shopController.BufPayNotify)
+	// 自建第四方收款的回调：同样免登录，靠 MD5 签名校验
+	g.POST("/panel/api/shop/selfpay/notify", a.shopController.SelfPayNotify)
 }
 
 // BackuptoTgbot sends a backup of the panel data to Telegram bot admins.

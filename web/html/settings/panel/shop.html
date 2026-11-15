@@ -239,7 +239,37 @@
         <a-radio-button value="auto">BufPay 自动到账</a-radio-button>
       </a-radio-group>
 
-      <a-row :gutter="16" v-if="allSetting.shopPayMode === 'auto'">
+      <div v-if="allSetting.shopPayMode === 'auto'" style="margin-bottom: 12px;">
+        <div style="font-weight: 600; margin-bottom: 6px;">支付通道</div>
+        <a-radio-group v-model="allSetting.shopPayProvider">
+          <a-radio-button value="bufpay">BufPay（第三方聚合）</a-radio-button>
+          <a-radio-button value="selfpay">自建第四方（免费，用自己的收款码）</a-radio-button>
+        </a-radio-group>
+      </div>
+
+      <a-row :gutter="16" v-if="allSetting.shopPayMode === 'auto' && allSetting.shopPayProvider === 'selfpay'">
+        <a-col :span="12">
+          <div style="font-weight: 600; margin-bottom: 6px;">自建网关地址</div>
+          <a-input v-model="allSetting.shopSelfPayApi" placeholder="例如 http://127.0.0.1:8088"></a-input>
+        </a-col>
+        <a-col :span="6">
+          <div style="font-weight: 600; margin-bottom: 6px;">商户号 pid</div>
+          <a-input v-model="allSetting.shopSelfPayPid" placeholder="网关启动日志里打印"></a-input>
+        </a-col>
+        <a-col :span="6">
+          <div style="font-weight: 600; margin-bottom: 6px;">支付方式</div>
+          <a-select v-model="allSetting.shopSelfPayWay" style="width: 100%;">
+            <a-select-option value="alipay">支付宝</a-select-option>
+            <a-select-option value="wxpay">微信</a-select-option>
+          </a-select>
+        </a-col>
+        <a-col :span="24">
+          <div style="font-weight: 600; margin: 10px 0 6px;">网关密钥 key</div>
+          <a-input-password v-model="allSetting.shopSelfPayKey" placeholder="网关启动时打印的 key"></a-input-password>
+        </a-col>
+      </a-row>
+
+      <a-row :gutter="16" v-if="allSetting.shopPayMode === 'auto' && allSetting.shopPayProvider !== 'selfpay'">
         <a-col :span="10">
           <div style="font-weight: 600; margin-bottom: 6px;">应用 aid</div>
           <a-input v-model="allSetting.shopBufAid" placeholder="例如 107376"></a-input>

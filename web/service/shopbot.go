@@ -298,12 +298,19 @@ func (t *Tgbot) sendShopConfirm(chatId int64, from *telego.User, gb int, cycle s
 // sendShopPayQR 第 4 步：发对应收款码 + 「我已付款」按钮。
 func (t *Tgbot) sendShopPayQR(chatId int64, from *telego.User, gb int, cycle string, method string) {
 	shop := ShopService{}
-	// BufPay 自动到账模式：直接生成一笔支付，付完自动开通
-	if shop.GetPayMode() == "auto" && shop.GetBufAid() != "" && shop.GetBufSecret() != "" {
-		if t.sendShopBufPayQR(chatId, from, gb, cycle, method) {
-			return
+	// 自动到账模式：按面板选择的通道创建支付
+	if shop.GetPayMode() == "auto" {
+		if shop.PayProvider() == "selfpay" {
+			if t.sendShopSelfPayQR(chatId, from, gb, cycle, method) {
+				return
+			}
+			t.SendMsgToTgbot(chatId, "自建收款暂时不可用，先按扫码 + 人工确认的方式给你开通 👇")
+		} else if shop.GetBufAid() != "" && shop.GetBufSecret() != "" {
+			if t.sendShopBufPayQR(chatId, from, gb, cycle, method) {
+				return
+			}
+			t.SendMsgToTgbot(chatId, "自动收款暂时不可用，先按扫码 + 人工确认的方式给你开通 👇")
 		}
-		t.SendMsgToTgbot(chatId, "自动收款暂时不可用，先按扫码 + 人工确认的方式给你开通 👇")
 	}
 	price, ok := shop.PriceOf(gb, cycle)
 	if !ok {
@@ -826,6 +833,67 @@ func shopStatusLabel(status string) string {
 
 // sendShopBufPayQR 自动到账模式：先建订单，再向 BufPay 申请支付二维码。
 // 返回 true 表示已经处理完（成功或已经给买家发了说明），false 表示需要回落到人工流程。
+// sendShopSelfPayQR 用自建第四方收款开单：把网关的付款页地址画成二维码发给买家。
+func (t *Tgbot) sendShopSelfPayQR(chatId int64, from *telego.User, gb int, cycle, method string) bool {
+	shop := ShopService{}
+	price, ok := shop.PriceOf(gb, cycle)
+	if !ok {
+		t.SendMsgToTgbot(chatId, "这个组合暂时不可购买，回套餐里重新选一个吧 🙏")
+		return true
+	}
+	seller := shop.GetSelfPayConfig()
+	if method == "wxpay" {
+		seller.Way = "wxpay"
+	} else if method == "alipay" {
+		seller.Way = "alipay"
+	}
+	name := "朋友"
+	if from != nil {
+		name = from.FirstName
+		if from.Username != "" {
+			name += "(@" + from.Username + ")"
+		}
+	}
+	if ok, why := shop.ShopReady(); !ok {
+		t.SendMsgToTgbot(chatId, "🛠 <b>店铺正在维护</b>\n\n"+why+"，暂时没法开通，先别付款 🙏")
+		return true
+	}
+	methodLabel := "支付宝"
+	if seller.Way == "wxpay" {
+		methodLabel = "微信支付"
+	}
+	order, err := shop.CreateOrder(chatId, name, gb, cycle, methodLabel)
+	if err != nil {
+		t.SendMsgToTgbot(chatId, "❌ "+err.Error())
+		return true
+	}
+	var svc SelfPayService
+	notifyURL := shop.GetSelfPayNotifyURL()
+	payURL, tradeNo, err := svc.Create(seller, fmt.Sprintf("%dGB %s", gb, cycleLabel(cycle)), price,
+		"xxui-"+strconv.Itoa(order.Id), notifyURL)
+	if err != nil {
+		_ = shop.AbandonPendingOrder(order.Id, "自建收款下单失败："+err.Error())
+		logger.Warning("[shop] 自建收款下单失败: ", err)
+		return false
+	}
+	_ = shop.SaveOrderAoid(order.Id, tradeNo)
+
+	t.SendMsgToTgbot(chatId, fmt.Sprintf(
+		"💳 <b>第 4 步</b>：扫码付 ¥%s，付完点下面的「✅ 我已付款」👇\n\n"+
+			"套餐：<b>%d GB</b>　%s\n订单号：<code>#%d</code>\n\n"+
+			"<i>用 %s 扫码；付款金额不要改，否则对不上账。</i>",
+		formatPrice(price), gb, cycleLabel(cycle), order.Id, methodLabel))
+	t.sendContentQR(chatId, payURL, "💳 这是你的付款二维码（"+methodLabel+"），扫码支付 ¥"+formatPrice(price))
+	kb := tu.InlineKeyboard(
+		tu.InlineKeyboardRow(
+			tu.InlineKeyboardButton("✅ 我已付款").WithCallbackData(fmt.Sprintf("shop_check %d", order.Id)),
+			tu.InlineKeyboardButton("⬅️ 返回套餐").WithCallbackData("shop_back"),
+		),
+	)
+	t.SendMsgToTgbot(chatId, fmt.Sprintf("付完点这里 👇 订单 #%d", order.Id), kb)
+	return true
+}
+
 func (t *Tgbot) sendShopBufPayQR(chatId int64, from *telego.User, gb int, cycle, method string) bool {
 	shop := ShopService{}
 	price, ok := shop.PriceOf(gb, cycle)

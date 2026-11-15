@@ -747,6 +747,12 @@ func (s *ShopService) GetBufSecret() string {
 }
 
 // GetNotifyURL 拼出 BufPay 回调地址（必须是公网可访问的地址）。
+// GetSelfPayNotifyURL 自建第四方收款用的回调地址（路径和 BufPay 不同）。
+func (s *ShopService) GetSelfPayNotifyURL() string {
+	u := s.GetNotifyURL()
+	return strings.Replace(u, "/panel/api/shop/bufpay/notify", "/panel/api/shop/selfpay/notify", 1)
+}
+
 func (s *ShopService) GetNotifyURL() string {
 	domain, _ := s.settingService.GetWebDomain()
 	domain = strings.TrimSpace(domain)
@@ -810,7 +816,14 @@ func (s *ShopService) VerifyBufPayNotify(aoid, orderId, orderUid, price, payPric
 		logger.Warning("[bufpay] 验签明细 ", buf.DiagnoseBufPaySign(secret, aoid, orderId, orderUid, price, payPrice, sign))
 		return nil, fmt.Errorf("签名校验失败")
 	}
-	id, err := strconv.Atoi(strings.TrimSpace(orderId))
+	// BufPay 回调里的 order_id 是我们下单时传的 "xxui-13" 这种带前缀的字符串，
+	// 这里必须先把前缀/非数字去掉再转 int —— 之前直接 Atoi 导致回调全部失败，
+	// 只能靠 20 秒轮询补开（表现为 BufPay 后台「已支付(通知失败)」）。
+	rawID := strings.TrimSpace(orderId)
+	if i := strings.LastIndexAny(rawID, "-_"); i >= 0 && i+1 < len(rawID) {
+		rawID = rawID[i+1:]
+	}
+	id, err := strconv.Atoi(rawID)
 	if err != nil {
 		return nil, fmt.Errorf("订单号异常: %s", orderId)
 	}
@@ -1018,8 +1031,21 @@ func (s *ShopService) ReconcilePendingOrders(bot *Tgbot) {
 	}
 
 	var buf BufPayService
+	var self SelfPayService
+	selfCfg := s.GetSelfPayConfig()
+	provider := s.PayProvider()
 	for _, o := range orders {
-		status, qerr := buf.QueryOrder(o.Aoid)
+		var status string
+		var qerr error
+		if provider == "selfpay" {
+			var paid bool
+			paid, status, qerr = self.Query(selfCfg, "xxui-"+itoa(o.Id))
+			if paid {
+				status = "payed"
+			}
+		} else {
+			status, qerr = buf.QueryOrder(o.Aoid)
+		}
 		if qerr != nil {
 			s.noteQueryFailure(qerr)
 			continue
@@ -1098,8 +1124,21 @@ func (s *ShopService) ExpireStalePendingOrders(bot *Tgbot) {
 	}
 
 	var buf BufPayService
+	var self2 SelfPayService
+	selfCfg2 := s.GetSelfPayConfig()
+	provider2 := s.PayProvider()
 	for _, o := range orders {
-		status, qerr := buf.QueryOrder(o.Aoid)
+		var status string
+		var qerr error
+		if provider2 == "selfpay" {
+			var paid bool
+			paid, status, qerr = self2.Query(selfCfg2, "xxui-"+itoa(o.Id))
+			if paid {
+				status = "payed"
+			}
+		} else {
+			status, qerr = buf.QueryOrder(o.Aoid)
+		}
 		if qerr != nil {
 			// 查不到就别乱关，下一轮再试
 			s.noteQueryFailure(qerr)
@@ -1204,4 +1243,9 @@ func (s *ShopService) TestBufPayConnection(aid, secret string) (map[string]strin
 		result["qr"] = "missing"
 	}
 	return result, nil
+}
+
+// itoa 把订单号转字符串（自建收款用 out_trade_no 标识）
+func itoa(v int) string {
+	return strconv.Itoa(v)
 }

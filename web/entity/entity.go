@@ -161,6 +161,12 @@ type AllSetting struct {
 	ShopPayMode        string `json:"shopPayMode" form:"shopPayMode"`               // manual=人工确认 / auto=BufPay 自动到账
 	ShopBufAid         string `json:"shopBufAid" form:"shopBufAid"`                 // BufPay 应用 aid
 	ShopBufSecret      string `json:"shopBufSecret" form:"shopBufSecret"`           // BufPay 应用 secret
+	// 支付通道：bufpay=第三方聚合（默认）/ selfpay=自建第四方收款
+	ShopPayProvider string `json:"shopPayProvider" form:"shopPayProvider"`
+	ShopSelfPayApi  string `json:"shopSelfPayApi" form:"shopSelfPayApi"`   // 自建网关地址，例如 http://127.0.0.1:8088
+	ShopSelfPayPid  string `json:"shopSelfPayPid" form:"shopSelfPayPid"`   // 网关商户号
+	ShopSelfPayKey  string `json:"shopSelfPayKey" form:"shopSelfPayKey"`   // 网关密钥
+	ShopSelfPayWay  string `json:"shopSelfPayWay" form:"shopSelfPayWay"`   // alipay / wxpay
 	ShopNotifyHTTPPort int    `json:"shopNotifyHTTPPort" form:"shopNotifyHTTPPort"` // 回调兜底端口（默认 80，0=关闭）
 	ShopInboundId      int    `json:"shopInboundId" form:"shopInboundId"`           // 开通时投放到哪个入站
 	ShopDailyLimit     int    `json:"shopDailyLimit" form:"shopDailyLimit"`         // 每人每天最多下几单
