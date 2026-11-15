@@ -878,11 +878,6 @@ func (t *Tgbot) sendShopSelfPayQR(chatId int64, from *telego.User, gb int, cycle
 	}
 	_ = shop.SaveOrderAoid(order.Id, tradeNo)
 
-	// 自动到账模式下也要让管理员看到「有人在付款」，否则只能等开通通知
-	t.SendMsgToTgbotAdmins(fmt.Sprintf(
-		"🛒 <b>新订单（等付款）</b>\n\n订单：#%d\n买家：%s\n套餐：%d GB / %s\n金额：¥%s\nBufPay 单号：<code>%s</code>\n\n付款到账会自动开通并再通知你一次。",
-		order.Id, name, order.PlanGb, cycleLabel(order.Cycle), formatPrice(price), tradeNo))
-
 	t.SendMsgToTgbot(chatId, fmt.Sprintf(
 		"💳 <b>第 4 步</b>：扫码付 ¥%s，付完点下面的「✅ 我已付款」👇\n\n"+
 			"套餐：<b>%d GB</b>　%s\n订单号：<code>#%d</code>\n\n"+
