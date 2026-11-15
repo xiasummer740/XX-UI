@@ -32,7 +32,11 @@ func (s *Server) startShopNotifyProxy() {
 	}
 	basePath, _ := s.settingService.GetBasePath()
 	basePath = "/" + strings.Trim(basePath, "/")
-	notifyPath := basePath + "/panel/api/shop/bufpay/notify"
+	// 支持两条回调路径：BufPay 与自建收款（切换通道后不用改端口配置）
+	notifyPaths := map[string]string{
+		basePath + "/panel/api/shop/bufpay/notify":  basePath + "/panel/api/shop/bufpay/notify",
+		basePath + "/panel/api/shop/selfpay/notify": basePath + "/panel/api/shop/selfpay/notify",
+	}
 
 	client := &http.Client{
 		Timeout: 25 * time.Second,
@@ -44,12 +48,14 @@ func (s *Server) startShopNotifyProxy() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if strings.TrimSuffix(r.URL.Path, "/") != strings.TrimSuffix(notifyPath, "/") {
+		path := strings.TrimSuffix(r.URL.Path, "/")
+		targetPath, known := notifyPaths[path]
+		if !known {
 			http.NotFound(w, r)
 			return
 		}
 		body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-		target := fmt.Sprintf("https://127.0.0.1:%d%s", webPort, notifyPath)
+		target := fmt.Sprintf("https://127.0.0.1:%d%s", webPort, targetPath)
 		req, perr := http.NewRequest(http.MethodPost, target, bytes.NewReader(body))
 		if perr != nil {
 			http.Error(w, "fail", http.StatusInternalServerError)
@@ -86,5 +92,5 @@ func (s *Server) startShopNotifyProxy() {
 	go func() {
 		_ = srv.Serve(ln)
 	}()
-	logger.Info("[shop] 回调兜底入口已启动: http://0.0.0.0:", port, notifyPath)
+	logger.Info("[shop] 回调兜底入口已启动: http://0.0.0.0:", port, " → ", basePath, "/panel/api/shop/{bufpay,selfpay}/notify")
 }
