@@ -281,7 +281,7 @@ func (s *ShopService) ListOrders(limit int) ([]*model.Order, error) {
 }
 
 // buildShopClient 生成新客户端的 JSON。
-func buildShopClient(protocol model.Protocol, email string, gb int, days int, chatId int64, orderId int, limitIp int) map[string]any {
+func buildShopClient(protocol model.Protocol, email string, gb int, days int, chatId int64, orderId int, limitIp int, tgName string) map[string]any {
 	now := time.Now()
 	expiry := now.AddDate(0, 0, days).UnixMilli()
 	client := map[string]any{
@@ -293,7 +293,7 @@ func buildShopClient(protocol model.Protocol, email string, gb int, days int, ch
 		"tgId":       chatId,
 		"subId":      randomSubId(),
 		"reset":      0,
-		"comment":    fmt.Sprintf("bot订单#%d", orderId),
+		"comment":    shopClientComment(orderId, tgName),
 	}
 	switch strings.ToLower(string(protocol)) {
 	case "trojan":
@@ -307,6 +307,21 @@ func buildShopClient(protocol model.Protocol, email string, gb int, days int, ch
 		client["flow"] = ""
 	}
 	return client
+}
+
+// shopClientComment 生成客户端备注：订单号 + TG 用户名，方便在列表里认人。
+// TgName 形如「fe(@feyuu0)」或只有昵称，这里只取 @用户名部分。
+func shopClientComment(orderId int, tgName string) string {
+	base := fmt.Sprintf("bot订单#%d", orderId)
+	tgName = strings.TrimSpace(tgName)
+	if tgName == "" {
+		return base
+	}
+	if i := strings.Index(tgName, "@"); i >= 0 && i+1 < len(tgName) {
+		handle := strings.TrimRight(tgName[i:], ") ")
+		return base + " " + handle
+	}
+	return base + " " + tgName
 }
 
 // ApproveOrder 标记订单已到账并真正开通客户端，返回订单（含客户端 email）。
@@ -335,7 +350,7 @@ func (s *ShopService) ApproveOrder(id int, adminId int64) (*model.Order, error) 
 	_, existClient, _ := s.inboundService.GetClientByEmail(email)
 	needRestart := false
 	if existClient != nil {
-		extended, extErr := s.extendExistingClient(inbound, email, order.PlanGb, order.Days)
+		extended, extErr := s.extendExistingClient(inbound, email, order.PlanGb, order.Days, order.Id, order.TgName)
 		if extErr == nil && extended {
 			order.Status = orderApproved
 			order.ClientEmail = email
@@ -346,7 +361,7 @@ func (s *ShopService) ApproveOrder(id int, adminId int64) (*model.Order, error) 
 		// 叠加失败就退回新建，别把已付款的单卡住
 	}
 
-	clientMap := buildShopClient(inbound.Protocol, email, order.PlanGb, order.Days, order.ChatId, order.Id, s.GetShopLimitIP())
+	clientMap := buildShopClient(inbound.Protocol, email, order.PlanGb, order.Days, order.ChatId, order.Id, s.GetShopLimitIP(), order.TgName)
 	clientJSON, err := json.Marshal(clientMap)
 	if err != nil {
 		return nil, err
@@ -374,7 +389,7 @@ func (s *ShopService) ApproveOrder(id int, adminId int64) (*model.Order, error) 
 }
 
 // extendExistingClient 在已有客户端上叠加流量与时长（同一买家续费/加量，订阅链接不变）。
-func (s *ShopService) extendExistingClient(inbound *model.Inbound, email string, gb int, days int) (bool, error) {
+func (s *ShopService) extendExistingClient(inbound *model.Inbound, email string, gb int, days int, orderId int, tgName string) (bool, error) {
 	traffic, client, err := s.inboundService.GetClientByEmail(email)
 	if err != nil || client == nil || traffic == nil {
 		return false, fmt.Errorf("client not found")
@@ -387,6 +402,10 @@ func (s *ShopService) extendExistingClient(inbound *model.Inbound, email string,
 	client.ExpiryTime = base + int64(days)*24*60*60*1000
 	client.TotalGB += int64(gb) * 1024 * 1024 * 1024
 	client.Enable = true
+	// 续费也把备注刷成最新一单，方便认人
+	if orderId > 0 {
+		client.Comment = shopClientComment(orderId, tgName)
+	}
 
 	bs, err := json.Marshal(client)
 	if err != nil {
